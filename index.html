@@ -52,7 +52,7 @@
   :root:not([data-theme="dark"]) {
     color-scheme: light;
     --bg: #f7eee6; --surface: #fffaf5; --surface-2: #f1e1d4; --line: #e2cabb;
-    --fg: #2a1317; --muted: #75564f; --orange: #d4600a; --orange-ink: #fff8f1;
+    --fg: #2a1317; --muted: #75564f; --orange: #a94d0a; --orange-ink: #fff8f1;
     --burgundy: #7d1830; --burgundy-text: #8a1c35; --on-burgundy: #fff1ea;
     --green: #3d6a3b; --alarm: #d62828; --shadow: rgba(80,30,20,.22);
   }
@@ -60,7 +60,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #f7eee6; --surface: #fffaf5; --surface-2: #f1e1d4; --line: #e2cabb;
-  --fg: #2a1317; --muted: #75564f; --orange: #d4600a; --orange-ink: #fff8f1;
+  --fg: #2a1317; --muted: #75564f; --orange: #a94d0a; --orange-ink: #fff8f1;
   --burgundy: #7d1830; --burgundy-text: #8a1c35; --on-burgundy: #fff1ea;
   --green: #3d6a3b; --alarm: #d62828; --shadow: rgba(80,30,20,.22);
 }
@@ -612,7 +612,7 @@ body.editing .tool-card { cursor: default; }
 .lib-score.sm { font-size: .85rem; margin-left: auto; }
 .lib-flash { animation: soc-flash 1.6s ease-out; }
 @keyframes soc-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--orange), 0 0 40px color-mix(in srgb, var(--orange) 40%, transparent); } 100% { box-shadow: none; } }
-@keyframes soc-pop { from { transform: scale(0); } to { transform: none; } }
+@keyframes soc-pop { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes soc-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 .soc-ov { position: fixed; inset: 0; z-index: 55; background: var(--bg); overflow: hidden; transform: translateX(100%); transition: transform .34s cubic-bezier(.22,1,.36,1); box-shadow: -20px 0 60px -20px var(--shadow); }
@@ -728,7 +728,7 @@ button.soc-who:active { transform: scale(.98); background: color-mix(in srgb, va
 .tg-head-sub { border-bottom: 1px solid var(--line); }
 .tg-head-t { font-weight: 700; font-size: 1.05rem; flex: 1; text-align: center; margin-right: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tg-ic { position: relative; flex: none; width: 42px; height: 42px; border-radius: 13px; border: 0; background: var(--surface); color: var(--fg); display: grid; place-items: center; font-size: 1.2rem; transition: transform .15s; }
-.tg-ic:active, .tg-row:active, .tg-fab:active { transform: scale(.94); }
+.tg-ic:active, .tg-fab:active { transform: scale(.94); }
 .tg-burger i, .tg-burger i::before, .tg-burger i::after { display: block; width: 20px; height: 2px; border-radius: 2px; background: currentColor; content: ''; }
 .tg-burger i { position: relative; } .tg-burger i::before { position: absolute; top: -6px; } .tg-burger i::after { position: absolute; top: 6px; }
 .tg-dot { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--orange); color: var(--orange-ink); font: 700 .66rem/18px var(--f-body); box-shadow: 0 0 0 2px var(--bg); animation: soc-pop .4s cubic-bezier(.34,1.56,.64,1); }
@@ -892,6 +892,48 @@ button.soc-who:active { transform: scale(.98); background: color-mix(in srgb, va
 .soc-skill:focus-within { outline: none; }
 .soc-skill input[type=range] { width: 100%; accent-color: var(--orange); padding: 0; border: 0; background: none; }
 .soc-skill em { font-style: normal; color: var(--muted); font-size: .85em; }
+
+/* ===== полировка по Apple HIG и Emil Kowalski ===== */
+:root { --ease-out: cubic-bezier(.23, 1, .32, 1); --ease-io: cubic-bezier(.77, 0, .175, 1); --ease-drawer: cubic-bezier(.32, .72, 0, 1);
+  --sc-top: #3fb24f; --sc-good: #8fc13a; --sc-low: #ff6b4a; --sc-bad: #ff5a5f; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --sc-top: #2a7a36; --sc-good: #5c7d1f; --sc-low: #c0262d; --sc-bad: #a3201f; } }
+:root[data-theme="light"] { --sc-top: #2a7a36; --sc-good: #5c7d1f; --sc-low: #c0262d; --sc-bad: #a3201f; }
+/* нажатие чувствуется: кнопки чуть проседают, строки списка подсвечиваются, как в iOS */
+.nav-btn, .ghost-btn, .tg-chip, .soc-send, .set-tab, .tg-back { transition: transform 160ms var(--ease-out), background-color .2s, color .2s, border-color .2s; }
+.nav-btn:active, .ghost-btn:active, .tg-chip:active, .soc-send:active { transform: scale(.97); }
+.tg-row { transition: background-color .15s; }
+.tg-row:active { background-color: color-mix(in srgb, var(--fg) 7%, var(--bg)); }
+/* пальцу удобно: зоны нажатия не меньше 40–44 pt */
+.tg-chip { min-height: 40px; }
+.tg-x, .soc-x { min-width: 44px; min-height: 44px; }
+.lib-link { min-height: 36px; }
+/* большой заголовок сжимается при прокрутке, как в iOS */
+.tg-head { transition: box-shadow .2s, border-color .2s; border-bottom: 1px solid transparent; }
+.tg-head .lib-title { transform-origin: left center; transition: transform 220ms var(--ease-out); will-change: transform; }
+.lib-ov.scrolled .tg-head:not(.tg-head-sub) { border-bottom-color: var(--line); }
+.lib-ov.scrolled .tg-head .lib-title { transform: scale(.74); }
+/* список въезжает лесенкой при входе */
+.tg-screen.stagger .tg-li { animation: row-in 320ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 32ms); }
+@keyframes row-in { from { opacity: 0; transform: translateY(8px); } }
+.tg-screen.in-fwd { animation-duration: .26s; animation-timing-function: var(--ease-out); }
+.tg-screen.in-back { animation-duration: .26s; animation-timing-function: var(--ease-out); }
+.dr-panel { transition-timing-function: var(--ease-drawer); }
+.soc-ov, .soc-wrap { transition-timing-function: var(--ease-drawer); }
+/* шторка снизу: ручка и смахивание вниз */
+.set-grab { display: block; width: 38px; height: 5px; border-radius: 3px; margin: -6px auto 10px; background: color-mix(in srgb, var(--fg) 25%, transparent); }
+.set-panel { transition: transform .32s var(--ease-drawer); touch-action: pan-y; }
+/* меню по удержанию: иконки как в iOS */
+.ctx-it { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ctx-it svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
+.ctx-card { transform-origin: center; }
+@media (hover: hover) and (pointer: fine) { .tg-row:hover { background-color: color-mix(in srgb, var(--fg) 4%, var(--bg)); } }
+@media (prefers-reduced-motion: reduce) {
+  .tg-screen.stagger .tg-li { animation: none; }
+  .tg-head .lib-title, .set-panel, .nav-btn, .ghost-btn, .tg-chip { transition: none; }
+  .lib-ov.scrolled .tg-head .lib-title { transform: none; }
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .tg-new { background: #b07d00; box-shadow: 0 0 0 3px color-mix(in srgb, #b07d00 18%, transparent); } }
+.ctx-it:focus { outline: none; } .ctx-it:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
 </style>
 
 <div id="app">

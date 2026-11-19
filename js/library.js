@@ -59,7 +59,7 @@
     try { sessionStorage.setItem('kuking:skipHome', '1'); } catch (e) {}
     location.reload();
   }
-  function open() { view = 'list'; render(); ov.hidden = false; ov.scrollTop = 0; }
+  function open() { view = 'list'; stagger = true; render(); ov.hidden = false; ov.scrollTop = 0; }
   function close() { if (!active) return; ov.hidden = true; if (btn) btn.focus(); }
 
   function SOC() { return window.KukingSocial || { enabled: false, badge: function () { return 0; }, thread: function () { return ''; }, bindThreads: function () {}, admin: function () { return null; }, me: function () { return null; }, open: function () {} }; }
@@ -106,18 +106,19 @@
   }
 
   /* ---------- экраны: list | detail | create | edit ---------- */
-  var view = 'list', detailId = null, listY = 0, dir = '';
+  var view = 'list', detailId = null, listY = 0, dir = '', stagger = false;
   function go(v, id, back) {
     if (view === 'list') listY = ov.scrollTop;
-    dir = back ? 'back' : 'fwd'; view = v; if (id !== undefined) detailId = id;
+    dir = back ? 'back' : 'fwd'; view = v; if (id !== undefined) detailId = id; if (v === 'list' && !back) stagger = true;
     render(); ov.scrollTop = v === 'list' ? listY : 0;
   }
 
   function render() {
     autoPurge();
     var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : listHTML();
-    ov.innerHTML = '<div class="tg-screen' + (dir ? ' in-' + dir : '') + '">' + html + '</div>';
-    dir = '';
+    ov.innerHTML = '<div class="tg-screen' + (dir ? ' in-' + dir : '') + (stagger && view === 'list' ? ' stagger' : '') + '">' + html + '</div>';
+    dir = ''; stagger = false;
+    ov.querySelectorAll('.tg-li').forEach(function (li, i) { if (i < 12) li.style.setProperty('--i', i); });
     bind();
   }
   function burger() {
@@ -426,10 +427,12 @@
   function menu(id) {
     var r = byId(id); if (!r) return;
     var m = document.createElement('div'); m.className = 'ctx-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', r.title);
+    var IC = { open: '<path d="M4 12s3-7 8-7 8 7 8 7-3 7-8 7-8-7-8-7z"/><circle cx="12" cy="12" r="3"/>', cook: '<path d="M7 4v16l13-8z"/>',
+      pin: '<path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', del: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>' };
     var items = [['open', 'Открыть'], ['cook', active && active.id === id ? 'Продолжить готовку' : 'Готовим это'], ['pin', isPin(id) ? 'Открепить' : 'Закрепить наверху'],
       r.manual ? ['edit', 'Править'] : null, ['del', 'Удалить']].filter(Boolean);
     m.innerHTML = '<div class="ctx-card"><div class="ctx-head"><span class="tg-av m-' + esc(r.mode || 'self') + '">' + emoji(r) + '</span><b>' + esc(r.title) + '</b></div>' +
-      items.map(function (x) { return '<button type="button" class="ctx-it' + (x[0] === 'del' ? ' danger' : '') + '" data-c="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+      items.map(function (x) { return '<button type="button" class="ctx-it' + (x[0] === 'del' ? ' danger' : '') + '" data-c="' + x[0] + '"><span>' + x[1] + '</span><svg viewBox="0 0 24 24" aria-hidden="true">' + IC[x[0]] + '</svg></button>'; }).join('') + '</div>';
     document.body.appendChild(m); requestAnimationFrame(function () { m.classList.add('on'); var f = m.querySelector('.ctx-it'); if (f) f.focus(); });
     function shut() { m.classList.remove('on'); setTimeout(function () { m.remove(); }, 220); }
     m.addEventListener('click', function (e) {
@@ -544,6 +547,7 @@
     }, { passive: true });
   })();
 
+  ov.addEventListener('scroll', function () { ov.classList.toggle('scrolled', ov.scrollTop > 12); }, { passive: true });
   if (btn) btn.addEventListener('click', open);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden && view !== 'list') go('list', undefined, true); });
 

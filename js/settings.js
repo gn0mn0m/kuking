@@ -50,7 +50,7 @@
     return '<ol class="set-steps"><li>Открой эту страницу в <b>Safari</b>.</li><li>Нажми <b>Поделиться</b> — квадрат со стрелкой вверх.</li><li>Выбери <b>«На экран „Домой“»</b> → «Добавить».</li><li>Запускай «Кукинг» с иконки — на весь экран и без интернета.</li></ol>';
   }
   function render() {
-    el.innerHTML = '<div class="set-panel"><div class="set-head"><h2 id="setTitle" class="set-title">Настройки</h2>' +
+    el.innerHTML = '<div class="set-panel"><span class="set-grab" aria-hidden="true"></span><div class="set-head"><h2 id="setTitle" class="set-title">Настройки</h2>' +
       '<button type="button" class="ghost-btn" data-a="close">Готово</button></div>' +
       '<div class="set-tabs" role="tablist">' + [['account', 'Аккаунт'], ['look', 'Вид'], ['ai', 'Нейросеть'], ['install', 'Установка']].map(function (t) {
         return '<button type="button" role="tab" class="set-tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + '</button>';
@@ -120,6 +120,13 @@
   function open(t) { last = document.activeElement; if (t) tab = t; render(); el.hidden = false; requestAnimationFrame(function () { el.classList.add('on'); }); var b = el.querySelector('.set-tab[aria-selected=true]'); if (b) b.focus(); }
   function close() { el.classList.remove('on'); setTimeout(function () { el.hidden = true; }, 260); try { localStorage.setItem('kuking:welcomed', '1'); } catch (e) {} if (last && last.focus) last.focus(); }
   el.addEventListener('click', function (e) { if (e.target === el) close(); });
+  /* смахнуть шторку вниз */
+  (function () {
+    var y0 = null, dy = 0, panel = null;
+    el.addEventListener('touchstart', function (e) { panel = el.querySelector('.set-panel'); if (!panel || panel.scrollTop > 0) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
+    el.addEventListener('touchmove', function (e) { if (y0 == null) return; dy = Math.max(0, e.touches[0].clientY - y0); if (dy > 4) { panel.style.transition = 'none'; panel.style.transform = 'translateY(' + dy + 'px)'; } }, { passive: true });
+    el.addEventListener('touchend', function () { if (y0 == null || !panel) return; panel.style.transition = ''; if (dy > 110) { panel.style.transform = 'translateY(100%)'; close(); setTimeout(function () { panel.style.transform = ''; }, 320); } else panel.style.transform = ''; y0 = null; });
+  })();
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !el.hidden) close(); });
 
   window.KukingSettings = { open: open, close: close };

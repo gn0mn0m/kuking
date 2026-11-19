@@ -1,6 +1,7 @@
 // Кукинг: пуши на днюху. Supabase → Edge Functions → функция birthday-push.
 // action "init" — отдать публичный ключ пушей (создаёт ключи при первом вызове);
 // action "run"  — раз в день по расписанию: поздравить именинника (только его самого);
+// action "tasks" — каждые 10 минут: напоминания плана, которым пора;
 // action "test" — пробный пуш себе (нужен вход).
 import webpush from 'npm:web-push@3.6.7';
 import postgres from 'npm:postgres@3.4.4';
@@ -27,7 +28,7 @@ async function keys() {
   webpush.setVapidDetails('mailto:kuking@example.com', pub!, priv!);
   return pub!;
 }
-async function send(userIds: string[], msg: { title: string; body: string; url?: string }) {
+async function send(userIds: string[], msg: { title: string; body: string; url?: string; tag?: string }) {
   if (!userIds.length) return 0;
   const subs = await sql`select endpoint, sub from public.push_subs where user_id = any(${sql.array(userIds)}::uuid[])`;
   let ok = 0;
@@ -58,6 +59,17 @@ Deno.serve(async (req) => {
       await keys();
       const n = await send([me.id], { title: '🔥 Кукинг на связи', body: 'Уведомления работают.' });
       return json({ sent: n });
+    }
+
+    if (action === 'tasks') { // каждые 10 минут: напоминания из «Плана», которым пора
+      if (req.headers.get('x-cron') !== (await setting('cron_secret'))) return json({ error: 'nope' }, 403);
+      await keys();
+      const due = await sql`update public.plan_tasks set sent = true
+        where not sent and at <= now() and at > now() - interval '3 hours'
+        returning user_id, key, title, body`;
+      let n = 0;
+      for (const t of due) n += await send([t.user_id], { title: t.title, body: t.body || '', tag: 'plan-' + t.key, url: './' });
+      return json({ due: due.length, sent: n });
     }
 
     if (action === 'run') {

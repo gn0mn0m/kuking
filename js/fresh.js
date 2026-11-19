@@ -57,8 +57,17 @@
     var sig = ctx.signals(), key = hash(IDEAS_V + JSON.stringify(sig));
     return Promise.resolve(window.claude && window.claude.use ? window.claude.use('sample') : null).then(function (sample) {
       if (!sample) throw { code: 'not_granted' };
-      return sample.json(ideasPrompt(sig), { modelTier: 'default', cache: false, signal: ui.signal, temperature: 0.9,
-        onText: function (u) { ui.sub.textContent = 'Набросал ' + Math.min(10, (u.text.match(/"title"/g) || []).length) + ' из 10'; } });
+      function ask(note) {
+        var pr = ideasPrompt(sig); if (note) pr.user += '\n\nПрошлый ответ не прочитался (' + note + '). Пришли ТОЛЬКО JSON-массив из 10 объектов, без текста вокруг.';
+        return sample.json(pr, { modelTier: 'default', cache: false, signal: ui.signal, temperature: note ? 0.6 : 0.9,
+          onText: function (u) { ui.sub.textContent = 'Набросал ' + Math.min(10, (u.text.match(/"title"/g) || []).length) + ' из 10'; } })
+          .then(function (v) {
+            var arr = Array.isArray(v) ? v : v && typeof v === 'object' ? (v.ideas || v.items || v.dishes || Object.keys(v).map(function (k) { return v[k]; }).filter(Array.isArray)[0]) : null;
+            if (!arr || arr.filter(function (x) { return x && x.title; }).length < 3) throw { code: 'invalid_json', message: 'меньше трёх идей' };
+            return arr;
+          });
+      }
+      return ask().catch(function (e) { if (e && (e.code === 'cancelled' || e.code === 'not_granted' || e.code === 'bad_key' || e.code === 'network')) throw e; return ask(e && e.message || 'кривой JSON'); });
     }).then(function (arr) {
       var items = (Array.isArray(arr) ? arr : []).filter(function (x) { return x && x.title; }).slice(0, 10).map(function (x) {
         return { title: String(x.title), pitch: String(x.pitch || ''), mode: MODE_RU[x.mode] ? x.mode : 'friends', protein: String(x.protein || ''), drink: String(x.drink || ''), why: String(x.why || '') };
@@ -77,7 +86,7 @@
     var c = e && e.code;
     return c === 'not_granted' ? 'Нейросеть не настроена — добавь свой ключ' : c === 'bad_key' ? 'Ключ не подошёл — проверь в настройках' :
       c === 'bad_model' ? 'Такой модели у провайдера нет' : c === 'rate_limited' ? 'Лимит у провайдера, попробуй позже' :
-      c === 'network' ? 'Нет связи с нейросетью' : c === 'invalid_json' ? 'Модель прислала кривой рецепт — попробуй ещё или модель посильнее' : 'Шеф накосячил';
+      c === 'network' ? 'Нет связи с нейросетью' : c === 'invalid_json' ? 'Нейросеть ответила неразборчиво даже со второй попытки — попробуй ещё или модель посильнее' : 'Шеф накосячил';
   }
   window.KukingAIMsg = aiMsg;
 

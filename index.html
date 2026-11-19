@@ -6,10 +6,11 @@
 <title>Кукинг</title>
 <meta name="description" content="Книга рецептов-слайдшоу: продукты, посуда, шаги на двоих поваров, таймеры и подача.">
 <meta name="theme-color" content="#140a0d">
+<script src="js/haptic.js"></script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<script>try{var a=localStorage.getItem("kuking:accent");if(a&&a!=="saffron")document.documentElement.setAttribute("data-accent",a)}catch(e){}</script>
+<script>try{var a=localStorage.getItem("kuking:accent");if(a&&a!=="saffron"){document.documentElement.setAttribute("data-accent",a);addEventListener("DOMContentLoaded",function(){var m=document.querySelector("meta[name=theme-color]");if(m)m.setAttribute("content",getComputedStyle(document.documentElement).getPropertyValue("--bg").trim())})}}catch(e){}</script>
 <meta name="apple-mobile-web-app-title" content="Кукинг">
 <meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="manifest.webmanifest">
@@ -700,18 +701,21 @@ button.soc-who:active { transform: scale(.98); background: color-mix(in srgb, va
 .soc-facts dd { margin: 0; overflow-wrap: anywhere; }
 
 /* ===== акцентный цвет (Настройки → Вид) ===== */
-:root[data-accent="orange"] { --orange: #ff8c32; --orange-ink: #2a1206; }
-:root[data-accent="burgundy"] { --orange: #e8607a; --orange-ink: #2a0710; }
-:root[data-accent="green"] { --orange: #8fcf6a; --orange-ink: #12230a; }
-:root[data-accent="blue"] { --orange: #5aa9ff; --orange-ink: #06182b; }
-:root[data-accent="violet"] { --orange: #b48cff; --orange-ink: #1a0d33; }
+/* акцент красит всё приложение: фон, карточки, линии, вино в шапках */
+:root[data-accent="orange"] { --orange: #ff8c32; --orange-ink: #2a1206; --bg: #170c06; --surface: #23140b; --surface-2: #301c10; --line: #46291a; --wine: #7a3410; --muted: #bfa392; }
+:root[data-accent="burgundy"] { --orange: #f0708a; --orange-ink: #2a0710; --bg: #18070f; --surface: #26101a; --surface-2: #331624; --line: #4c2234; --wine: #84133a; --muted: #c09ba6; }
+:root[data-accent="green"] { --orange: #95d470; --orange-ink: #12230a; --bg: #0b120a; --surface: #141d12; --surface-2: #1c2819; --line: #2c3c27; --wine: #2d5a22; --muted: #a2b39a; }
+:root[data-accent="blue"] { --orange: #62aefc; --orange-ink: #06182b; --bg: #090f18; --surface: #111a27; --surface-2: #192435; --line: #28374c; --wine: #1c4278; --muted: #9eabbe; }
+:root[data-accent="violet"] { --orange: #b996ff; --orange-ink: #1a0d33; --bg: #0f0a19; --surface: #191327; --surface-2: #231a35; --line: #36294d; --wine: #4d2a8a; --muted: #ad9fc2; }
 @media (prefers-color-scheme: light) {
-  :root[data-accent="orange"]:not([data-theme="dark"]) { --orange: #a94d0a; --orange-ink: #fff8f1; }
-  :root[data-accent="burgundy"]:not([data-theme="dark"]) { --orange: #9a1d3a; --orange-ink: #fff1ea; }
-  :root[data-accent="green"]:not([data-theme="dark"]) { --orange: #3d7a35; --orange-ink: #f2fbef; }
-  :root[data-accent="blue"]:not([data-theme="dark"]) { --orange: #1f62c4; --orange-ink: #eef5ff; }
-  :root[data-accent="violet"]:not([data-theme="dark"]) { --orange: #6a3fc4; --orange-ink: #f5f0ff; }
+  :root[data-accent="orange"]:not([data-theme="dark"]) { --orange: #a94d0a; --orange-ink: #fff8f1; --bg: #f8eee4; --surface: #fffaf4; --surface-2: #f1e1d1; --line: #e8d1bd; --wine: #a84a14; }
+  :root[data-accent="burgundy"]:not([data-theme="dark"]) { --orange: #9a1d3a; --orange-ink: #fff1ea; --bg: #f7ecee; --surface: #fff9fa; --surface-2: #efdde2; --line: #e5ccd3; --wine: #8e1a3c; }
+  :root[data-accent="green"]:not([data-theme="dark"]) { --orange: #3d7a35; --orange-ink: #f2fbef; --bg: #eef3ea; --surface: #fbfdf9; --surface-2: #dfe9d9; --line: #ccdcc4; --wine: #3a6e2c; }
+  :root[data-accent="blue"]:not([data-theme="dark"]) { --orange: #1f62c4; --orange-ink: #eef5ff; --bg: #ecf1f8; --surface: #fafcff; --surface-2: #dce5f2; --line: #c8d5e8; --wine: #22508f; }
+  :root[data-accent="violet"]:not([data-theme="dark"]) { --orange: #6a3fc4; --orange-ink: #f5f0ff; --bg: #f1edf8; --surface: #fcfaff; --surface-2: #e5ddf3; --line: #d6cbea; --wine: #5a33a3; }
 }
+/* смена цвета — плавно, а не щелчком */
+html.acc-swap, html.acc-swap body, html.acc-swap *:not(.tg-screen):not(.set-sheet) { transition: background-color .45s var(--ease-out), border-color .45s var(--ease-out), color .45s var(--ease-out), fill .45s, stroke .45s !important; }
 .set-acc { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
 .set-sw { display: grid; justify-items: center; gap: 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: .72rem; padding: 4px 0; }
 .set-sw i { width: 44px; height: 44px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(255,255,255,.12); transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s; }
@@ -918,8 +922,22 @@ button.soc-who:active { transform: scale(.98); background: color-mix(in srgb, va
 /* список въезжает лесенкой при входе */
 .tg-screen.stagger .tg-li { animation: row-in 320ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 32ms); }
 @keyframes row-in { from { opacity: 0; transform: translateY(8px); } }
-.tg-screen.in-fwd { animation-duration: .26s; animation-timing-function: var(--ease-out); }
-.tg-screen.in-back { animation-duration: .26s; animation-timing-function: var(--ease-out); }
+.tg-screen.in-fwd { animation: tg-push-in .42s var(--ease-drawer) both; }
+.tg-screen.in-back { animation: tg-pop-in .42s var(--ease-drawer) both; }
+@keyframes tg-push-in { from { transform: translateX(100%); box-shadow: -18px 0 40px var(--shadow); } to { transform: none; box-shadow: -18px 0 40px transparent; } }
+@keyframes tg-pop-in { from { transform: translateX(-28%); filter: brightness(.7); } to { transform: none; filter: none; } }
+.tg-out { position: fixed; z-index: 40; pointer-events: none; background: var(--bg); will-change: transform; }
+.tg-out.out-back { animation: tg-pop-out .42s var(--ease-drawer) both; box-shadow: -18px 0 40px var(--shadow); }
+.tg-out.out-fwd { z-index: 0; animation: tg-push-out .42s var(--ease-drawer) both; }
+@keyframes tg-pop-out { to { transform: translateX(100%); } }
+@keyframes tg-push-out { to { transform: translateX(-28%); filter: brightness(.7); } }
+.lib-ov { overflow-x: hidden; }
+/* тап по рецепту: живой отклик */
+.tg-li .tg-row { transition: transform .16s var(--ease-out), background-color .15s; }
+.tg-li .tg-row:active, .tg-li .tg-row.tap { transform: scale(.97); }
+.tg-li .tg-row.tap .tg-av { animation: tap-pop .32s var(--ease-out); }
+@keyframes tap-pop { 40% { transform: scale(1.12) rotate(-4deg); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tg-screen.in-fwd, .tg-screen.in-back { animation: tg-fade .2s both; } .tg-out { display: none; } .tg-li .tg-row.tap .tg-av { animation: none; } }
 .dr-panel { transition-timing-function: var(--ease-drawer); }
 .soc-ov, .soc-wrap { transition-timing-function: var(--ease-drawer); }
 /* шторка снизу: ручка и смахивание вниз */
@@ -1086,6 +1104,7 @@ html.hero-on .sb-strip { opacity: 0; }
 .pl-intro { display: grid; justify-items: center; text-align: center; gap: 12px; padding: 18px 8px 8px; }
 .pl-intro h3 { margin: 6px 0 0; font-family: var(--f-display); font-weight: 400; font-size: 1.7rem; line-height: 1.15; }
 .pl-intro .small { margin: 0; max-width: 32ch; }
+.pl-start { position: sticky; bottom: calc(var(--tabs-h) + 14px); z-index: 2; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
 .pl-art { display: grid; grid-template-columns: repeat(7, 34px); gap: 6px; margin-bottom: 4px; }
 .pl-art i { height: 46px; border-radius: 10px; background: var(--surface-2); animation: pl-pop .5s var(--ease-out) both; animation-delay: calc(var(--i) * 45ms); }
 .pl-art i.on { background: var(--orange); box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--orange) 70%, transparent); }
@@ -1133,6 +1152,67 @@ html.hero-on .sb-strip { opacity: 0; }
 .pk-row.on .chk-box { background: var(--orange); border-color: var(--orange); }
 .pk-row.on .chk-box svg { stroke-dashoffset: 0; }
 @media (prefers-reduced-motion: reduce) { .pl-art i, .pl-steps li, .pl-list .tg-li, .pl-empty { animation: none; } .pk-sheet { transition: none; } }
+.sous-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit; font-size: .85rem; font-weight: 600; transition: background-color .2s, color .2s, transform 140ms var(--ease-out); }
+.sous-btn:active { transform: scale(.96); }
+.sous-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+.sous-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--green) 18%, var(--surface)); border-color: color-mix(in srgb, var(--green) 50%, transparent); }
+
+/* ===== загрузка: всегда живая ===== */
+.set-msg.busy::before, .busy-c::before { content: ''; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border-radius: 50%; border: 2px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skel { display: grid; gap: 10px; margin-top: 8px; }
+.skel i { display: block; border-radius: 14px; background: linear-gradient(90deg, var(--surface) 0%, color-mix(in srgb, var(--fg) 7%, var(--surface)) 40%, var(--surface) 80%); background-size: 300% 100%; animation: shimmer 1.3s ease-in-out infinite; }
+.sk-card { height: 92px; } .sk-btn { height: 50px; } .sk-row { height: 62px; }
+.skel i:nth-child(2) { animation-delay: .1s; } .skel i:nth-child(3) { animation-delay: .2s; } .skel i:nth-child(4) { animation-delay: .3s; } .skel i:nth-child(5) { animation-delay: .4s; }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -50% 0; } }
+.ld-bowl { position: relative; width: 64px; height: 50px; margin: 6px auto 4px; }
+.ld-bowl::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 0; height: 24px; border-radius: 0 0 26px 26px; background: var(--orange); }
+.ld-bowl i { position: absolute; bottom: 26px; width: 5px; height: 20px; border-radius: 3px; background: linear-gradient(to top, color-mix(in srgb, var(--orange) 80%, transparent), transparent); animation: steam 1.6s ease-in-out infinite; transform-origin: bottom; }
+.ld-bowl i:nth-child(1) { left: 20px; } .ld-bowl i:nth-child(2) { left: 30px; animation-delay: .3s; height: 26px; } .ld-bowl i:nth-child(3) { left: 40px; animation-delay: .6s; }
+@media (prefers-reduced-motion: reduce) { .skel i, .ld-bowl i { animation: none; } .set-msg.busy::before, .busy-c::before { animation-duration: 2s; } }
+/* ===== План: лента дней + список ===== */
+.pl-dots { display: flex; gap: 3px; height: 5px; } .pl-dots i { width: 5px; height: 5px; border-radius: 3px; } .pl-dots .c { background: var(--orange); } .pl-dots .t { background: #30b356; }
+.ag { display: grid; gap: 14px; }
+.ag-day { animation: row-in .35s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 30ms); scroll-margin-top: 120px; border-radius: 16px; transition: box-shadow .3s; }
+.ag-day.flash { box-shadow: 0 0 0 2px var(--orange); }
+.ag-h { display: flex; align-items: baseline; gap: 8px; margin: 0 4px 8px; }
+.ag-h b { font-size: 1.15rem; } .ag-h span { color: var(--muted); font-size: .9rem; flex: 1; }
+.ag-add { flex: none; width: 34px; height: 34px; border-radius: 17px; border: 0; background: var(--surface-2); color: var(--orange); display: grid; place-items: center; align-self: center; transition: transform 140ms var(--ease-out); }
+.ag-add:active { transform: scale(.9); }
+.ag-add svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.ag-day.empty .ag-h { margin-bottom: 0; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.ag-day.empty .ag-h b { font-size: 1rem; font-weight: 600; color: var(--muted); }
+.ag-list { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: 14px; overflow: hidden; }
+.ag-it { position: relative; display: flex; align-items: center; gap: 6px; min-height: 60px; padding-left: 12px; }
+.ag-it + .ag-it::before { content: ''; position: absolute; left: 64px; right: 0; top: 0; height: 1px; background: var(--line); }
+.ag-time { flex: none; width: 44px; font-family: var(--f-mono); font-size: .8rem; color: var(--muted); }
+.ag-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 9px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.ag-main .tg-av { width: 40px; height: 40px; border-radius: 12px; font-size: 1.3rem; }
+.ag-main .pf-ico { width: 40px; height: 40px; border-radius: 12px; } .ag-main .pf-ico svg { width: 22px; height: 22px; }
+.ag-t { flex: 1; min-width: 0; display: grid; gap: 1px; } .ag-t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ag-t small { color: var(--muted); font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-more { flex: none; color: var(--orange); font-size: .85rem; font-weight: 600; padding-right: 4px; }
+.ag-chk { flex: none; width: 48px; height: 48px; border: 0; background: none; display: grid; place-items: center; }
+.ag-chk.on .chk-box { background: var(--green); border-color: var(--green); } .ag-chk.on .chk-box svg { stroke-dashoffset: 0; stroke: #fff; }
+.ag-it.done .ag-t, .ag-it.done .ag-time { opacity: .5; } .ag-it.done .ag-t b { text-decoration: line-through; }
+.ag-cook .ag-t b { font-size: 1.02rem; }
+/* что сегодня — на главной */
+.td-card { width: 100%; display: grid; gap: 8px; padding: 12px 14px; margin-bottom: 10px; border: 0; border-radius: 16px; background: var(--surface); color: var(--fg); font: inherit; text-align: left; animation: row-in .35s var(--ease-out) both; transition: transform 140ms var(--ease-out); }
+.td-card:active { transform: scale(.98); }
+.td-k { font: 600 .72rem/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--orange); }
+.td-row { display: flex; align-items: center; gap: 10px; } .td-row .pf-ico { width: 28px; height: 28px; border-radius: 8px; } .td-row .pf-ico svg { width: 17px; height: 17px; }
+.td-t { display: flex; align-items: baseline; gap: 8px; min-width: 0; } .td-t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .td-t small { color: var(--muted); flex: none; }
+/* шторки плана */
+.pk-sub { margin: -6px 2px 12px; }
+.pk-acts { display: flex; gap: 8px; margin-bottom: 12px; } .pk-acts .nav-btn { flex: 1; text-decoration: none; display: grid; place-items: center; }
+.ps { display: grid; gap: 8px; }
+.ps-l { margin-top: 10px; font: 600 .78rem/1 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ps-h { margin: 0; } .ps-h.ok { color: var(--green); }
+.ps-time { font: inherit; font-size: 17px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; width: 140px; }
+.ps-save { margin-top: 16px; min-height: 52px; }
+.seg { display: flex; padding: 3px; gap: 2px; border-radius: 12px; background: var(--surface-2); overflow-x: auto; scrollbar-width: none; }
+.seg button { flex: 1; min-height: 36px; padding: 0 10px; border: 0; border-radius: 9px; background: none; color: var(--fg); font: inherit; font-size: .88rem; font-weight: 500; white-space: nowrap; transition: background-color .2s, box-shadow .2s; }
+.seg button[aria-checked="true"] { background: var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,.25); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .ag-day, .td-card { animation: none; } }
 </style>
 
 <div id="app">
@@ -1147,6 +1227,7 @@ html.hero-on .sb-strip { opacity: 0; }
         <output id="gCount">5</output><span class="gl">гостей</span>
         <button type="button" id="gPlus" aria-label="Больше гостей">+</button>
       </div>
+      <button type="button" class="sous-btn" id="sousBtn" hidden aria-pressed="true" title="Готовлю с су-шефом или один"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M15.5 6a3 3 0 0 1 0 6M17.5 14.2c1.9.6 3 2.2 3.3 4.8"/></svg><span>С су-шефом</span></button>
       <button type="button" class="icon-btn" id="editBtn" hidden aria-pressed="false" aria-label="Править тексты" title="Править тексты">
         <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>
       </button>

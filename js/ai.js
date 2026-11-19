@@ -116,12 +116,34 @@
   }
 
   /* JSON из ответа: срезаем ```json-заборы и болтовню вокруг */
+  /* JSON из ответа. Модели (особенно GigaChat) любят ```json-заборы, пояснения вокруг, переносы строк
+     прямо внутри строк и запятые в конце — всё это чиним, а обрезанный массив закрываем по последнему целому объекту. */
+  function fixStrings(s) {
+    var out = '', inStr = false, esc = false;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s[i];
+      if (inStr) {
+        if (esc) { out += ch; esc = false; continue; }
+        if (ch === '\\') { esc = true; out += ch; continue; }
+        if (ch === '"') { inStr = false; out += ch; continue; }
+        if (ch === '\n') { out += '\\n'; continue; }
+        if (ch === '\r') continue;
+        if (ch === '\t') { out += '\\t'; continue; }
+        out += ch; continue;
+      }
+      if (ch === '"') inStr = true;
+      out += ch;
+    }
+    return out.replace(/,\s*([}\]])/g, '$1');
+  }
+  function tryParse(s) { try { return JSON.parse(s); } catch (e) { try { return JSON.parse(fixStrings(s)); } catch (x) { return undefined; } } }
   function extractJSON(t) {
-    var s = String(t || '').replace(/```(?:json)?/gi, '');
+    var s = String(t || '').replace(/```(?:json)?/gi, '').replace(/[“”]/g, '"');
     var a = s.search(/[\[{]/); if (a < 0) throw err('invalid_json', 'Нейросеть не прислала JSON');
-    var open = s[a], close = open === '{' ? '}' : ']', b = s.lastIndexOf(close);
-    if (b <= a) throw err('invalid_json', 'Ответ оборвался — модель упёрлась в лимит длины');
-    try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { throw err('invalid_json', 'Кривой JSON от модели'); }
+    var open = s[a], close = open === '{' ? '}' : ']', b = s.lastIndexOf(close), v;
+    if (b > a) { v = tryParse(s.slice(a, b + 1)); if (v !== undefined) return v; }
+    if (open === '[') { var lb = s.lastIndexOf('}'); if (lb > a) { v = tryParse(s.slice(a, lb + 1) + ']'); if (v !== undefined) return v; } }
+    throw err('invalid_json', b <= a ? 'ответ оборвался' : 'кривой JSON');
   }
 
   function wrapAbort(p) {

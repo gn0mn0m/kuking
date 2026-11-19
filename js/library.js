@@ -118,6 +118,18 @@
     autoPurge();
     var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : view === 'plan' ? planHTML() : view === 'profile' ? profileHTML() : listHTML();
     document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden);
+    var old = ov.firstElementChild;
+    if (dir && old && !ov.hidden && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      /* как в iOS: старый экран уезжает, а не исчезает */
+      document.querySelectorAll('.tg-out').forEach(function (x) { x.remove(); });
+      var r = old.getBoundingClientRect(), o = ov.getBoundingClientRect();
+      old.classList.remove('in-fwd', 'in-back', 'stagger');
+      var out = document.createElement('div'); out.className = 'tg-out out-' + dir; out.setAttribute('aria-hidden', 'true');
+      out.style.cssText = 'left:' + o.left + 'px;top:' + o.top + 'px;width:' + o.width + 'px;height:' + o.height + 'px;overflow:hidden';
+      old.style.cssText = 'position:absolute;left:' + (r.left - o.left) + 'px;top:' + (r.top - o.top) + 'px;width:' + r.width + 'px';
+      out.appendChild(old); ov.parentNode.insertBefore(out, dir === 'back' ? ov.nextSibling : ov);
+      setTimeout(function () { out.remove(); }, 480);
+    }
     ov.innerHTML = '<div class="tg-screen' + (dir ? ' in-' + dir : '') + (stagger && view === 'list' ? ' stagger' : '') + '">' + html + '</div>';
     dir = ''; stagger = false;
     ov.querySelectorAll('.tg-li').forEach(function (li, i) { if (i < 12) li.style.setProperty('--i', i); });
@@ -158,6 +170,7 @@
       }).join('') +
       '<button type="button" class="tg-chip tg-sort" aria-expanded="' + sortOpen + '" aria-label="Порядок">⇅ ' + esc((SORTS.filter(function (s) { return s[0] === sortBy; })[0] || SORTS[0])[1]) + '</button></div>' +
       (sortOpen ? '<div class="tg-pop" role="menu">' + SORTS.map(function (s) { return '<button type="button" role="menuitemradio" data-sort="' + s[0] + '" aria-checked="' + (sortBy === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>' : '') + '</div>';
+    h += todayCard();
     if (active && !isHid(active.id)) h += '<button type="button" class="tg-pin" id="libClose"><span class="tg-pin-bar"></span><span class="tg-pin-t"><small>Сейчас готовишь</small><b>' + esc(active.title) + '</b></span><span class="tg-pin-go">Открыть →</span></button>';
     if (!all.length) h += emptyHTML();
     else if (!list.length) h += '<p class="small tg-none">Ничего не нашёл. Попробуй другое слово или сбрось фильтр.</p>';
@@ -172,70 +185,197 @@
       (rest.length ? (pins.length ? '<h3 class="tg-sec-t">Все рецепты</h3>' : '') + '<ul class="tg-list tg-group">' + rest.map(row).join('') + '</ul>' : '');
   }
   /* ---------- План (скоро) и Профиль ---------- */
-  /* ---------- План: неделя как в Календаре iPhone ---------- */
-  var plan = load('kuking:plan', {}), planDay = today(), planIntro = lget('kuking:planIntro') === '1';
+  /* ---------- План: лента по дням, как «Список» в Календаре iPhone ----------
+     В каждом дне — блюда и подготовка: закупка, убрать мясо в морозилку, достать на разморозку,
+     замариновать, сама готовка. Время подготовки берётся из настроек плана; по нему же — пуш. */
+  var plan = load('kuking:plan', {}), planIntro = lget('kuking:planIntro') === '1';
+  var planCfg = load('kuking:planCfg', null), doneTasks = load('kuking:planDone', {});
   var DOW = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], DOW_FULL = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
   var MON = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   function dKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function dParse(k) { var x = k.split('-'); return new Date(+x[0], +x[1] - 1, +x[2]); }
+  function addDays(k, n) { var d = dParse(k); d.setDate(d.getDate() + n); return dKey(d); }
+  function dayName(k) { var t = today(); return k === t ? 'Сегодня' : k === addDays(t, 1) ? 'Завтра' : DOW_FULL[dParse(k).getDay()]; }
+  function dayDate(k) { var d = dParse(k); return d.getDate() + ' ' + MON[d.getMonth()]; }
+  function cfg() { return planCfg || { shop: 'week', shopDay: 6, shopTime: '12:00', meat: 'fresh', cook: '19:00' }; }
   function savePlan() {
     Object.keys(plan).forEach(function (k) { if (!plan[k] || !plan[k].length) delete plan[k]; });
-    lset('kuking:plan', JSON.stringify(plan));
-    if (db) db.collection('meta').doc('plan').set({ days: plan, updatedAt: new Date().toISOString() }).catch(function () {});
+    lset('kuking:plan', JSON.stringify(plan)); lset('kuking:planCfg', JSON.stringify(planCfg));
+    if (db) db.collection('meta').doc('plan').set({ days: plan, cfg: planCfg, updatedAt: new Date().toISOString() }).catch(function () {});
+    syncTasks();
   }
+  function hasMeat(r) { return (r.ingredients || []).some(function (i) { return /говяд|свин|баран|телят|куриц|курин|бедр|бёдр|крыл|фарш|мяс|индей|утк|лосос|сёмг|семг|рыб|форел|кревет/i.test(i.name); }); }
+  function marinated(r) { return JSON.stringify(r.slides || []).search(/маринад|маринуй|замарин/i) >= 0; }
+  function hm(t) { return String(t || '19:00').slice(0, 5); }
+  function minus(t, h) { var x = hm(t).split(':'), m = (+x[0] * 60 + +x[1] - h * 60 + 1440) % 1440; return String((m / 60) | 0).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+  /* подготовка на 21 день вперёд: [{key, day, time, kind, title, sub, ids}] */
+  function tasksAll() {
+    var c = cfg(), t = today(), out = [], days = [];
+    for (var i = -7; i < 21; i++) days.push(addDays(t, i));
+    var withDishes = days.filter(function (k) { return (plan[k] || []).filter(byId).length; });
+    // закупка
+    if (c.shop === 'week') {
+      var groups = {};
+      withDishes.forEach(function (k) { var d = dParse(k), back = (d.getDay() - c.shopDay + 7) % 7; var sk = addDays(k, -back); if (back === 0 && hm(c.shopTime) > hm(c.cook)) sk = addDays(k, -7); (groups[sk] = groups[sk] || []).push(k); });
+      Object.keys(groups).forEach(function (sk) { var ids = []; groups[sk].forEach(function (k) { ids = ids.concat(plan[k].filter(byId)); });
+        out.push({ key: 'shop:' + sk, day: sk, time: hm(c.shopTime), kind: 'shop', title: 'Закупка', sub: ids.length + ' ' + (ids.length === 1 ? 'блюдо' : ids.length < 5 ? 'блюда' : 'блюд') + ' до ' + dayDate(groups[sk][groups[sk].length - 1]), ids: ids }); });
+    }
+    withDishes.forEach(function (k) {
+      var ids = plan[k].filter(byId);
+      if (c.shop === 'day') out.push({ key: 'shop:' + k, day: k, time: minus(c.cook, 2), kind: 'shop', title: 'Закупка', sub: 'на сегодняшний ужин', ids: ids });
+      if (c.shop === 'delivery') out.push({ key: 'order:' + k, day: addDays(k, -1), time: '20:00', kind: 'shop', title: 'Заказать продукты', sub: 'доставка к ' + dayName(k).toLowerCase() + ', ' + dayDate(k), ids: ids });
+      ids.forEach(function (id) {
+        var r = byId(id);
+        if (c.meat === 'frozen' && hasMeat(r)) {
+          var sday = c.shop === 'week' ? (out.filter(function (x) { return x.kind === 'shop' && x.ids.indexOf(id) >= 0; })[0] || {}).day : c.shop === 'delivery' ? k : null;
+          if (sday && sday < addDays(k, -1)) out.push({ key: 'freeze:' + k + ':' + id, day: sday, time: c.shop === 'delivery' ? '' : minus(c.shopTime, -1), kind: 'freeze', title: 'Мясо — в морозилку', sub: 'для «' + r.title + '»', ids: [id] });
+          if (sday && sday < addDays(k, -1)) out.push({ key: 'thaw:' + k + ':' + id, day: addDays(k, -1), time: '20:00', kind: 'thaw', title: 'Достать мясо в холодильник', sub: 'разморозится к завтрашнему ужину', ids: [id] });
+        }
+        if (marinated(r)) out.push({ key: 'mar:' + k + ':' + id, day: k, time: '09:00', kind: 'marinade', title: 'Замариновать', sub: 'для «' + r.title + '» — к вечеру пропитается', ids: [id] });
+        out.push({ key: 'cook:' + k + ':' + id, day: k, time: hm(c.cook), kind: 'cook', title: r.title, sub: String(r.totalTime || '').replace('≈ ', ''), ids: [id], dish: id });
+      });
+    });
+    return out.sort(function (x, y) { return (x.day + (x.time || '00:00')).localeCompare(y.day + (y.time || '00:00')); });
+  }
+  /* пуши: будущие напоминания кладём на сервер, он присылает их вовремя */
+  var syncT = 0;
+  function syncTasks() {
+    clearTimeout(syncT);
+    syncT = setTimeout(function () {
+      var S = window.KukingStore; if (!S || !S.user || !S.user() || !S.req) return;
+      var me = S.user().id, now = Date.now();
+      var rows = tasksAll().filter(function (x) { return x.time && !doneTasks[x.key]; }).map(function (x) {
+        var d = dParse(x.day), hhmm = x.time.split(':'); d.setHours(+hhmm[0], +hhmm[1], 0, 0);
+        var title = x.kind === 'cook' ? 'Сегодня готовим: ' + x.title : x.title;
+        var body = x.kind === 'shop' ? 'Список покупок — в «Плане»: ' + x.sub : x.sub;
+        return { user_id: me, key: x.key, at: d.toISOString(), title: title, body: body, sent: false, _t: d.getTime() };
+      }).filter(function (x) { return x._t > now; }).map(function (x) { delete x._t; return x; });
+      S.req('DELETE', 'plan_tasks?user_id=eq.' + encodeURIComponent(me) + '&sent=eq.false').then(function () {
+        return rows.length ? S.req('POST', 'plan_tasks?on_conflict=user_id,key', rows, 'resolution=merge-duplicates,return=minimal') : null;
+      }).catch(function () {});
+    }, 600);
+  }
+  var TK = { /* значки подготовки */
+    shop: ['#30b356', '<path d="M4 5h2l2 10h10l2-7H7"/><circle cx="10" cy="19" r="1.4" class="f"/><circle cx="17" cy="19" r="1.4" class="f"/>'],
+    freeze: ['#0a84ff', '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/><path d="M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5"/>'],
+    thaw: ['#64d2ff', '<path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/>'],
+    marinade: ['#bf5af2', '<path d="M7 4h10M8 4v4l-3 5v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6l-3-5V4"/><path d="M5 14h14"/>'],
+    cook: ['#ff9f0a', '<path d="M5 12h14v2a7 7 0 0 1-14 0z"/><path d="M3 12h18"/><path d="M9 9c-1-1.5 1-2.2 0-4M12 9c-1-1.5 1-2.2 0-4M15 9c-1-1.5 1-2.2 0-4"/>']
+  };
+  function tIco(k) { var x = TK[k]; return '<span class="pf-ico" style="background:' + x[0] + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + x[1] + '</svg></span>'; }
   var CAL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
+  var GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>';
+  function taskRow(x, tday) {
+    var dn = !!doneTasks[x.key], past = x.day < tday;
+    if (x.kind === 'cook') {
+      var r = byId(x.dish);
+      return '<li class="ag-it ag-cook' + (dn ? ' done' : '') + '"><span class="ag-time">' + esc(x.time) + '</span>' +
+        '<button type="button" class="ag-main" data-open="' + esc(x.dish) + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span><span class="ag-t"><b>' + esc(r.title) + '</b><small>' + esc(x.sub) + '</small></span></button>' +
+        '<button type="button" class="pl-x" data-unplan="' + esc(x.dish) + '" data-pday="' + x.day + '" aria-label="Убрать из плана"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></li>';
+    }
+    return '<li class="ag-it' + (dn ? ' done' : '') + '"><span class="ag-time">' + esc(x.time || '') + '</span>' +
+      '<button type="button" class="ag-main" data-task="' + esc(x.key) + '"' + (x.kind === 'shop' ? ' data-shop="' + esc(x.key) + '"' : '') + '>' + tIco(x.kind) + '<span class="ag-t"><b>' + esc(x.title) + '</b><small>' + esc(x.sub) + '</small></span>' +
+      (x.kind === 'shop' ? '<span class="ag-more">Список</span>' : '') + '</button>' +
+      '<button type="button" class="ag-chk' + (dn ? ' on' : '') + '" data-tdone="' + esc(x.key) + '" role="checkbox" aria-checked="' + dn + '" aria-label="Сделано"><span class="chk-box"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span></button></li>';
+  }
   function planHTML() {
     if (!planIntro) return bigHead('План') +
       '<div class="pl-intro"><div class="pl-art" aria-hidden="true">' + [0, 1, 2, 3, 4, 5, 6].map(function (i) { return '<i style="--i:' + i + '"' + (i === 2 || i === 4 ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
-      '<h3>Неделя без вопроса «что пожрать»</h3><p class="small">Раскидай рецепты по дням — и в магазин за один заход.</p>' +
-      '<ol class="pl-steps"><li><b>Выбери день</b><span>лента дней сверху, как в Календаре</span></li><li><b>Добавь блюдо</b><span>из своей книги, в пару тапов</span></li><li><b>Готовь по плану</b><span>сегодняшнее блюдо — прямо тут</span></li></ol>' +
-      '<button type="button" class="nav-btn primary pl-start" data-a="planStart">Начать планировать</button></div>';
-    var t0 = new Date(); t0.setHours(0, 0, 0, 0); t0.setDate(t0.getDate() - ((t0.getDay() + 6) % 7)); // с понедельника этой недели
-    var days = []; for (var i = 0; i < 21; i++) { var d = new Date(t0); d.setDate(t0.getDate() + i); days.push(d); }
-    var td = today(), sel = dParse(planDay), ids = (plan[planDay] || []).filter(byId);
-    var tot = ids.reduce(function (t, id) { (byId(id).dishes || []).forEach(function (x) { t.k += +x.kcal || 0; t.p += +x.p || 0; }); return t; }, { k: 0, p: 0 });
-    var h = bigHead('План', '<button type="button" class="tg-ic" data-a="planToday" aria-label="К сегодняшнему дню">' + CAL + '</button>');
-    h += '<div class="pl-strip" role="tablist" aria-label="Дни">' + days.map(function (d) {
-      var k = dKey(d), n = (plan[k] || []).filter(byId).length;
-      return '<button type="button" role="tab" class="pl-day' + (k === td ? ' today' : '') + (d < t0 || k < td ? ' past' : '') + '" data-day="' + k + '" aria-selected="' + (k === planDay) + '" aria-label="' + DOW_FULL[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()] + (n ? ', блюд: ' + n : '') + '">' +
-        '<span class="pl-dow">' + DOW[d.getDay()] + '</span><b>' + d.getDate() + '</b><i class="pl-dot' + (n ? ' on' : '') + '"></i></button>';
-    }).join('') + '</div>';
-    h += '<div class="pl-head"><h3>' + (planDay === td ? 'Сегодня' : DOW_FULL[sel.getDay()]) + '<small>' + sel.getDate() + ' ' + MON[sel.getMonth()] + '</small></h3>' +
-      (tot.k ? '<span class="pl-sum"><b>' + tot.k + '</b> ккал · Б <b>' + tot.p + '</b></span>' : '') + '</div>';
-    if (ids.length) h += '<ul class="tg-list tg-group pl-list">' + ids.map(function (id) {
-      var r = byId(id);
-      return '<li class="tg-li pl-li"><button type="button" class="tg-row" data-open="' + esc(id) + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
-        '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b><small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span><span class="tg-l2"><span class="tg-sub">' + esc(r.tagline || '') + '</span></span></span></button>' +
-        '<button type="button" class="pl-x" data-unplan="' + esc(id) + '" aria-label="Убрать из плана">' + '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></li>';
-    }).join('') + '</ul>';
-    else h += '<div class="pl-empty"><p>На этот день ничего нет</p></div>';
-    h += '<button type="button" class="pl-add" data-a="planAdd"><span>' + PLUS + '</span>Добавить блюдо</button>';
-    var week = 0; days.slice(0, 7).forEach(function (d) { week += (plan[dKey(d)] || []).filter(byId).length; });
-    h += '<p class="pl-week">На этой неделе ' + (week ? 'запланировано блюд: <b>' + week + '</b>' : 'пока пусто') + '</p>';
-    return h;
+      '<h3>Неделя без вопроса «что пожрать»</h3><p class="small">Раскидай блюда по дням — «Кукинг» сам напомнит, когда закупиться, достать мясо и встать к плите.</p>' +
+      '<ol class="pl-steps"><li><b>Скажи, как закупаешься</b><span>раз в неделю, в день готовки или доставкой</span></li><li><b>Добавь блюда в дни</b><span>из своей книги, в пару тапов</span></li><li><b>Лови напоминания</b><span>закупка, морозилка, маринад, готовка</span></li></ol>' +
+      '<button type="button" class="nav-btn primary pl-start" data-a="planStart">Начать</button></div>';
+    var td = today(), all = tasksAll(), head = bigHead('План', '<button type="button" class="tg-ic" data-a="planCfg" aria-label="Настройки плана">' + GEAR + '</button>');
+    var t0 = dParse(td); t0.setDate(t0.getDate() - ((t0.getDay() + 6) % 7));
+    var strip = '<div class="pl-strip" role="tablist" aria-label="Дни">';
+    for (var i = 0; i < 21; i++) { var d = new Date(t0); d.setDate(t0.getDate() + i); var k = dKey(d), n = (plan[k] || []).filter(byId).length, tk = all.filter(function (x) { return x.day === k && x.kind !== 'cook'; }).length;
+      strip += '<button type="button" class="pl-day' + (k === td ? ' today' : '') + (k < td ? ' past' : '') + '" data-jump="' + k + '" aria-label="' + DOW_FULL[d.getDay()] + ', ' + dayDate(k) + '"><span class="pl-dow">' + DOW[d.getDay()] + '</span><b>' + d.getDate() + '</b><span class="pl-dots">' + (n ? '<i class="c"></i>' : '') + (tk ? '<i class="t"></i>' : '') + '</span></button>'; }
+    strip += '</div>';
+    var h = head + strip + '<div class="ag">';
+    for (var j = 0; j < 14; j++) {
+      var k2 = addDays(td, j), items = all.filter(function (x) { return x.day === k2; });
+      h += '<section class="ag-day' + (items.length ? '' : ' empty') + '" id="ag-' + k2 + '" style="--i:' + Math.min(j, 8) + '"><header class="ag-h"><b>' + dayName(k2) + '</b><span>' + (j > 1 ? '' : DOW_FULL[dParse(k2).getDay()].toLowerCase() + ', ') + dayDate(k2) + '</span><button type="button" class="ag-add" data-add="' + k2 + '" aria-label="Добавить блюдо на ' + dayDate(k2) + '">' + PLUS + '</button></header>' +
+        (items.length ? '<ul class="ag-list">' + items.map(function (x) { return taskRow(x, td); }).join('') + '</ul>' : '') + '</section>';
+    }
+    return h + '</div>';
   }
-  function planPicker() {
+  /* что сегодня — карточка над списком рецептов */
+  function todayCard() {
+    if (!planIntro) return '';
+    var td = today(), all = tasksAll().filter(function (x) { return (x.day === td || x.day === addDays(td, 1)) && !doneTasks[x.key]; }).slice(0, 3);
+    if (!all.length) return '';
+    return '<button type="button" class="td-card" data-a="toPlan"><span class="td-k">По плану</span>' + all.map(function (x) {
+      return '<span class="td-row">' + tIco(x.kind) + '<span class="td-t"><b>' + esc(x.kind === 'cook' ? x.title : x.title) + '</b><small>' + (x.day === td ? 'сегодня' : 'завтра') + (x.time ? ' в ' + x.time : '') + '</small></span></span>';
+    }).join('') + '</button>';
+  }
+  function sheet(html, onClick) {
+    var m = document.createElement('div'); m.className = 'pk-ov'; m.setAttribute('role', 'dialog');
+    m.innerHTML = '<div class="pk-sheet"><span class="set-grab" aria-hidden="true"></span>' + html + '</div>';
+    document.body.appendChild(m); requestAnimationFrame(function () { m.classList.add('on'); });
+    function shut() { m.classList.remove('on'); setTimeout(function () { m.remove(); }, 300); keepY(render); }
+    m.addEventListener('click', function (e) { if (e.target === m || e.target.closest('[data-pk=x]')) return shut(); onClick(e, m, shut); });
+    return m;
+  }
+  function planPicker(day) {
     var list = R.filter(function (r) { return !isHid(r.id); }).slice().reverse();
-    var m = document.createElement('div'); m.className = 'pk-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Выбери блюдо');
-    var d = dParse(planDay);
-    m.innerHTML = '<div class="pk-sheet"><span class="set-grab" aria-hidden="true"></span><div class="pk-head"><b>' + (planDay === today() ? 'На сегодня' : DOW_FULL[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()]) + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div>' +
+    sheet('<div class="pk-head"><b>' + dayName(day) + ', ' + dayDate(day) + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div>' +
       (list.length ? '<ul class="tg-list tg-group">' + list.map(function (r) {
-        var on = (plan[planDay] || []).indexOf(r.id) >= 0;
+        var on = (plan[day] || []).indexOf(r.id) >= 0;
         return '<li class="tg-li"><button type="button" class="tg-row pk-row' + (on ? ' on' : '') + '" data-pk="' + esc(r.id) + '" aria-pressed="' + on + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
           '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b><small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span><span class="tg-l2"><span class="tg-sub">' + esc(r.tagline || '') + '</span></span></span>' +
           '<span class="chk-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span></button></li>';
-      }).join('') + '</ul>' : '<p class="small">Книга пустая — сначала создай рецепт.</p>') + '</div>';
-    document.body.appendChild(m); requestAnimationFrame(function () { m.classList.add('on'); });
-    function shut() { m.classList.remove('on'); setTimeout(function () { m.remove(); }, 300); keepY(render); }
-    m.addEventListener('click', function (e) {
-      if (e.target === m) return shut();
+      }).join('') + '</ul>' : '<p class="small">Книга пустая — сначала создай рецепт.</p>'),
+    function (e) {
       var b = e.target.closest('[data-pk]'); if (!b) return;
-      var id = b.getAttribute('data-pk'); if (id === 'x') return shut();
-      var arr = plan[planDay] = plan[planDay] || [], i = arr.indexOf(id);
+      var id = b.getAttribute('data-pk'), arr = plan[day] = plan[day] || [], i = arr.indexOf(id);
       if (i >= 0) arr.splice(i, 1); else arr.push(id);
       b.classList.toggle('on', i < 0); b.setAttribute('aria-pressed', String(i < 0)); savePlan();
     });
   }
+  /* список покупок: всё по блюдам закупки, одинаковое складываем */
+  function shopList(key) {
+    var x = tasksAll().filter(function (t) { return t.key === key; })[0]; if (!x) return;
+    var sum = {}, order = [];
+    x.ids.forEach(function (id) { (byId(id).ingredients || []).forEach(function (i) {
+      var k = i.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() + '|' + (i.unit || '');
+      if (!sum[k]) { sum[k] = { name: i.name.replace(/\s*\(.*?\)\s*/g, ' ').trim(), unit: i.unit || '', amount: 0, text: i.unitText || '' }; order.push(k); }
+      if (i.amount) sum[k].amount += +i.amount;
+    }); });
+    var have = load('kuking:shopHave:' + key, {});
+    var rows = order.map(function (k) { var v = sum[k], q = v.amount ? (Math.round(v.amount * 10) / 10) + ' ' + v.unit : v.text;
+      return '<li class="chk' + (have[k] ? ' on' : '') + '" data-sh="' + esc(k) + '" role="checkbox" aria-checked="' + !!have[k] + '" tabindex="0"><span class="chk-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span><span class="chk-name">' + esc(v.name) + '</span><span class="chk-am">' + esc(q) + '</span></li>'; });
+    var txt = order.map(function (k) { var v = sum[k]; return '• ' + v.name + (v.amount ? ' — ' + Math.round(v.amount * 10) / 10 + ' ' + v.unit : v.text ? ' — ' + v.text : ''); }).join('\n');
+    sheet('<div class="pk-head"><b>' + esc(x.title) + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div><p class="small pk-sub">' + esc(x.sub) + ' · ' + x.ids.map(function (id) { return '«' + esc(byId(id).title) + '»'; }).join(', ') + '</p>' +
+      '<div class="pk-acts"><a class="nav-btn" href="https://t.me/share/url?url=' + encodeURIComponent(' ') + '&text=' + encodeURIComponent('Закупка:\n' + txt) + '" target="_blank" rel="noopener">Отправить в Telegram</a><button type="button" class="ghost-btn" data-copy="1">Скопировать</button></div>' +
+      '<ul class="chk-list">' + rows.join('') + '</ul>',
+    function (e) {
+      if (e.target.closest('[data-copy]')) { try { navigator.clipboard.writeText('Закупка:\n' + txt); e.target.textContent = 'Скопировано'; } catch (x2) {} return; }
+      var li = e.target.closest('[data-sh]'); if (!li) return;
+      var k = li.getAttribute('data-sh'); have[k] = !have[k]; if (!have[k]) delete have[k];
+      li.classList.toggle('on', !!have[k]); li.setAttribute('aria-checked', String(!!have[k])); lset('kuking:shopHave:' + key, JSON.stringify(have));
+    });
+  }
+  function planSettings(first) {
+    var c = JSON.parse(JSON.stringify(cfg())), Soc = SOC(), ps = Soc.pushState ? Soc.pushState() : 'nope';
+    function seg(name, opts, cur) { return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-seg="' + name + '" data-v="' + o[0] + '" aria-checked="' + (String(cur) === String(o[0])) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
+    function body() {
+      return '<div class="pk-head"><b>' + (first ? 'Как ты закупаешься?' : 'Настройки плана') + '</b><button type="button" class="ghost-btn" data-pk="x">' + (first ? 'Пропустить' : 'Готово') + '</button></div>' +
+        '<div class="ps"><label class="ps-l">Закупка</label>' + seg('shop', [['week', 'Раз в неделю'], ['day', 'В день готовки'], ['delivery', 'Доставка']], c.shop) +
+        (c.shop === 'week' ? '<label class="ps-l">День и время закупки</label>' + seg('shopDay', [[1, 'Пн'], [2, 'Вт'], [3, 'Ср'], [4, 'Чт'], [5, 'Пт'], [6, 'Сб'], [0, 'Вс']], c.shopDay) + '<input class="ps-time" type="time" data-f="shopTime" value="' + esc(c.shopTime) + '">' : '') +
+        '<label class="ps-l">Мясо и рыбу</label>' + seg('meat', [['fresh', 'Беру свежее'], ['frozen', 'Храню в морозилке']], c.meat) +
+        '<p class="small ps-h">' + (c.meat === 'frozen' ? 'Напомню убрать в морозилку после закупки и достать в холодильник вечером накануне.' : 'Если мясо из морозилки — переключи, напомню про разморозку.') + '</p>' +
+        '<label class="ps-l">Обычно готовлю в</label><input class="ps-time" type="time" data-f="cook" value="' + esc(c.cook) + '">' +
+        '<label class="ps-l">Напоминания на телефон</label>' + (ps === 'on' ? '<p class="small ps-h ok">Включены — пришлю в нужное время.</p>' : ps === 'install' ? '<p class="small ps-h">Поставь «Кукинг» на экран «Домой» и открой оттуда — тогда включатся.</p>' : ps === 'denied' ? '<p class="small ps-h">Запрещены в настройках iPhone → Уведомления → Кукинг.</p>' : ps === 'nope' ? '<p class="small ps-h">Этот браузер не умеет.</p>' : '<button type="button" class="nav-btn" data-pushon="1">Включить уведомления</button>') +
+        '<button type="button" class="nav-btn primary ps-save" data-psave="1">Сохранить</button></div>';
+    }
+    var m = sheet(body(), function (e, mm, shut) {
+      var sb = e.target.closest('[data-seg]');
+      if (sb) { var n = sb.getAttribute('data-seg'), v = sb.getAttribute('data-v'); c[n] = /^\d+$/.test(v) && n === 'shopDay' ? +v : v; read(); mm.querySelector('.pk-sheet').innerHTML = '<span class="set-grab" aria-hidden="true"></span>' + body(); return; }
+      if (e.target.closest('[data-pushon]')) { e.target.textContent = 'Включаю…'; (Soc.enablePush ? Soc.enablePush() : Promise.reject()).then(function () { mm.querySelector('.pk-sheet').innerHTML = '<span class="set-grab" aria-hidden="true"></span>' + body(); }).catch(function (x) { e.target.textContent = 'Не вышло: ' + (x && x.message || ''); }); return; }
+      if (e.target.closest('[data-psave]')) { read(); planCfg = c; savePlan(); shut(); }
+    });
+    function read() { m.querySelectorAll('[data-f]').forEach(function (i) { c[i.getAttribute('data-f')] = i.value || c[i.getAttribute('data-f')]; }); }
+  }
+
   function chev() { return '<svg class="pf-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'; }
   function pfRow(a, ico, label, sub) { return '<button type="button" class="pf-row" data-pf="' + a + '">' + icoSq(ico) + '<span class="pf-t">' + label + '</span>' + (sub ? '<span class="pf-sub">' + sub + '</span>' : '') + chev() + '</button>'; }
   function profileHTML() {
@@ -340,7 +480,7 @@
       .catch(function (e) { themesLoading = ''; themesErr = e && e.code === 'cancelled' ? '' : (window.KukingAIMsg ? window.KukingAIMsg(e) : 'Не вышло обновить идеи') + '.'; render(); });
   }
   function themesBlock() {
-    if (themesLoading) return '<p class="small th-note">Подбираю 10 блюд под твой вкус… ' + esc(themesLoading) + '</p>';
+    if (themesLoading) return '<div class="ld-bowl" aria-hidden="true"><i></i><i></i><i></i></div><p class="small th-note busy-c">Подбираю 10 блюд под твой вкус… ' + esc(themesLoading) + '</p><div class="skel"><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
     if (!window.Fresh.themes.length) return '<p class="small th-note">' + esc(themesErr || 'Идей пока нет.') + '</p><button type="button" class="nav-btn lib-themes-re">Ещё раз</button>';
     return '<ul class="th-list">' + window.Fresh.themes.map(function (t, i) {
       return '<li><button type="button" class="th-go" data-i="' + i + '"><b>' + esc(t[0]) + '</b><span>' + esc(t[1]) + '</span>' + (t[2] ? '<em>' + esc(t[2]) + '</em>' : '') + '</button></li>';
@@ -437,15 +577,26 @@
   /* ---------- события ---------- */
   function $$(s, f) { ov.querySelectorAll(s).forEach(f); }
   function on(s, f) { $$(s, function (b) { b.addEventListener('click', function (e) { f(b, e); }); }); }
+  /* тап по рецепту: отклик, щелчок, потом переход */
+  function openTap(b) {
+    if (Date.now() < noClickUntil) return;
+    noClickUntil = Date.now() + 400;
+    if (window.kHaptic) window.kHaptic(8);
+    b.classList.add('tap');
+    setTimeout(function () { go('detail', b.getAttribute('data-open')); }, 110);
+  }
   function bind() {
     on('#libMenu', function () { if (window.KukingDrawer) window.KukingDrawer.open(); });
     on('#libClose', close);
-    on('[data-a=planStart]', function () { planIntro = true; lset('kuking:planIntro', '1'); dir = 'fwd'; render(); });
-    on('[data-a=planToday]', function () { planDay = today(); render(); var t = ov.querySelector('.pl-day[aria-selected=true]'); if (t) t.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); });
-    on('[data-day]', function (b) { planDay = b.getAttribute('data-day'); var x = ov.scrollLeft; keepY(render); var sc = ov.querySelector('.pl-strip'); var t = ov.querySelector('.pl-day[aria-selected=true]'); if (sc && t) sc.scrollLeft = t.offsetLeft - sc.clientWidth / 2 + t.clientWidth / 2; });
-    on('[data-a=planAdd]', planPicker);
-    on('[data-unplan]', function (b) { var id = b.getAttribute('data-unplan'); plan[planDay] = (plan[planDay] || []).filter(function (x) { return x !== id; }); savePlan(); keepY(render); });
-    var strip = ov.querySelector('.pl-strip'); if (strip && !strip.dataset.c) { strip.dataset.c = 1; var t0 = strip.querySelector('.pl-day[aria-selected=true]'); if (t0) strip.scrollLeft = t0.offsetLeft - strip.clientWidth / 2 + t0.clientWidth / 2; }
+    on('[data-a=planStart]', function () { planIntro = true; lset('kuking:planIntro', '1'); dir = 'fwd'; render(); ov.scrollTop = 0; planSettings(true); });
+    on('[data-a=planCfg]', function () { planSettings(false); });
+    on('[data-a=toPlan]', function () { TAB = 'plan'; view = 'plan'; dir = 'fwd'; render(); ov.scrollTop = 0; });
+    on('[data-jump]', function (b) { var el = ov.querySelector('#ag-' + b.getAttribute('data-jump')); if (el) { ov.scrollTo({ top: el.offsetTop - 120, behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } else planPicker(b.getAttribute('data-jump')); });
+    on('[data-add]', function (b) { planPicker(b.getAttribute('data-add')); });
+    on('[data-shop]', function (b) { shopList(b.getAttribute('data-shop')); });
+    on('[data-tdone]', function (b) { var k = b.getAttribute('data-tdone'); doneTasks[k] = !doneTasks[k]; if (!doneTasks[k]) delete doneTasks[k]; lset('kuking:planDone', JSON.stringify(doneTasks)); keepY(render); syncTasks(); });
+    on('[data-unplan]', function (b) { var id = b.getAttribute('data-unplan'), d = b.getAttribute('data-pday'); plan[d] = (plan[d] || []).filter(function (x) { return x !== id; }); savePlan(); keepY(render); });
+    var strip = ov.querySelector('.pl-strip'); if (strip && !strip.dataset.c) { strip.dataset.c = 1; var t0 = strip.querySelector('.pl-day.today'); if (t0) strip.scrollLeft = t0.offsetLeft - 16; }
     on('[data-pf]', function (b) {
       var a = b.getAttribute('data-pf'), St = window.KukingSettings, Soc = SOC();
       if (a === 'login' || a === 'account') St && St.open('account');
@@ -454,7 +605,7 @@
       if (a === 'anketa' && Soc.openAnketa) Soc.openAnketa();
     });
     on('.lib-fresh', function () { window.Fresh.spin(freshCtx); });
-    on('[data-open]', function (b) { if (Date.now() < noClickUntil) return; go('detail', b.getAttribute('data-open')); });
+    on('[data-open]', openTap);
     gestures();
     on('[data-a=back]', function () { if (view === 'edit' && draft && draft.id) go('detail', draft.id, true); else go('list', undefined, true); });
     on('[data-a=create]', function () { go('create'); });
@@ -463,7 +614,7 @@
     on('[data-a=editnew]', function () { draft = blankDraft(); go('edit'); });
     on('[data-a=editme]', function (b) { var r = byId(b.getAttribute('data-id')); draft = JSON.parse(JSON.stringify(r.manual._draft || blankDraft())); draft.id = r.id; go('edit'); });
     var q = ov.querySelector('#libQ');
-    if (q) q.addEventListener('input', function () { query = q.value; var l = ov.querySelector('.tg-lists'); if (!l) { render(); return; } l.innerHTML = listsHTML(visible()); on('.tg-lists [data-open]', function (b) { if (Date.now() < noClickUntil) return; go('detail', b.getAttribute('data-open')); }); gestures(); });
+    if (q) q.addEventListener('input', function () { query = q.value; var l = ov.querySelector('.tg-lists'); if (!l) { render(); return; } l.innerHTML = listsHTML(visible()); on('.tg-lists [data-open]', openTap); gestures(); });
     on('[data-for]', function (b) { forMode = b.getAttribute('data-for'); lset('kuking:for', forMode); render(); });
     on('.tg-sort', function () { sortOpen = !sortOpen; render(); });
     on('[data-sort]', function (b) { sortBy = b.getAttribute('data-sort'); sortOpen = false; lset('kuking:sort2', sortBy); render(); });
@@ -521,7 +672,7 @@
       row.addEventListener('touchstart', function (e) {
         var t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; mode = '';
         if (x0 < 24) return; // край экрана — шторка
-        lp = setTimeout(function () { lp = null; mode = 'menu'; noClickUntil = Date.now() + 600; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) {} li.classList.add('pressed'); menu(id); }, 480);
+        lp = setTimeout(function () { lp = null; mode = 'menu'; noClickUntil = Date.now() + 600; if (window.kHaptic) window.kHaptic(12); li.classList.add('pressed'); menu(id); }, 480);
       }, { passive: true });
       row.addEventListener('touchmove', function (e) {
         var t = e.touches[0], mx = t.clientX - x0, my = t.clientY - y0;
@@ -630,8 +781,9 @@
         add.forEach(function (r) { R.push(r); });
         if (!ov.hidden && !typing()) keepY(render);
       }, function () {});
+      setTimeout(syncTasks, 1500);
       db.collection('meta').doc('plan').get().then(function (x) {
-        var v = x && x.exists && x.data(); if (v && v.days) { Object.keys(v.days).forEach(function (k) { if (!plan[k]) plan[k] = v.days[k]; }); lset('kuking:plan', JSON.stringify(plan)); if (!ov.hidden && view === 'plan') keepY(render); }
+        var v = x && x.exists && x.data(); if (v && v.days) { Object.keys(v.days).forEach(function (k) { if (!plan[k]) plan[k] = v.days[k]; }); if (v.cfg && !planCfg) planCfg = v.cfg; lset('kuking:plan', JSON.stringify(plan)); lset('kuking:planCfg', JSON.stringify(planCfg)); if (!ov.hidden) keepY(render); }
       }).catch(function () {});
       db.collection('meta').doc('ideas').get().then(function (x) {
         var v = x && x.exists && x.data();

@@ -120,7 +120,7 @@
 
   function listHTML() {
     if (!S.user()) return head() + '<div class="soc-empty"><p>Чтобы дружить, надо войти. Без входа ты как сиделец без погонялова.</p><button type="button" class="nav-btn primary" data-a="login">Войти</button></div>';
-    if (!loaded) return head() + '<p class="small soc-pad">Секунду, пробиваю по базе…</p>';
+    if (!loaded) return head() + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-card"></i><i class="sk-btn"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
     if (!me) return head() + nickForm(true);
     if (view === 'push') return head() + pushCard(true);
     var m = uid(), h = head();
@@ -171,26 +171,19 @@
   }
   /* черновик анкеты: что ввёл — не пропадёт, даже если экран перерисуется */
   var needSql = false;
-  /* аватарка: обрезаем по центру в квадрат 320×320, jpeg, кладём в Supabase Storage (бакет avatars) */
+  /* аватарка: обрезаем по центру в квадрат 192×192 и храним прямо в анкете (jpeg ~15 КБ) — без отдельного хранилища */
   function uploadAvatar(file) {
     return new Promise(function (ok, no) {
       var img = new Image(), url = URL.createObjectURL(file);
       img.onload = function () {
-        var n = 320, c = document.createElement('canvas'); c.width = n; c.height = n;
+        var n = 192, c = document.createElement('canvas'); c.width = n; c.height = n;
         var k = Math.min(img.naturalWidth, img.naturalHeight), sx = (img.naturalWidth - k) / 2, sy = (img.naturalHeight - k) / 2;
-        c.getContext('2d').drawImage(img, sx, sy, k, k, 0, 0, n, n); URL.revokeObjectURL(url);
-        c.toBlob(function (b) { b ? ok(b) : no(new Error('не вышло сжать')); }, 'image/jpeg', 0.86);
+        var g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, sx, sy, k, k, 0, 0, n, n); URL.revokeObjectURL(url);
+        var d = c.toDataURL('image/jpeg', 0.82); if (d.length > 70000) d = c.toDataURL('image/jpeg', 0.6);
+        ok(d);
       };
-      img.onerror = function () { no(new Error('не картинка')); };
+      img.onerror = function () { no(new Error('это не картинка')); };
       img.src = url;
-    }).then(function (blob) {
-      var C = window.KUKING_CONFIG || {}, base = (C.supabaseUrl || '').replace(/\/+$/, ''), path = uid() + '/avatar.jpg';
-      return S.token().then(function (t) {
-        return fetch(base + '/storage/v1/object/avatars/' + path, { method: 'POST', headers: { Authorization: 'Bearer ' + t, apikey: C.supabaseAnonKey || '', 'x-upsert': 'true', 'Content-Type': 'image/jpeg' }, body: blob });
-      }).then(function (r) {
-        if (!r.ok) return r.text().then(function (t) { throw new Error(/bucket/i.test(t) ? 'в базе нет хранилища — запусти свежий SQL' : t.slice(0, 120)); });
-        return base + '/storage/v1/object/public/avatars/' + path + '?v=' + Date.now();
-      });
     });
   }
   var FDK = 'kuking:anketa', fd = null; try { fd = JSON.parse(localStorage.getItem(FDK)); } catch (e) {}
@@ -242,7 +235,7 @@
       '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
       '<label class="set-f soc-skill"><span>Уровень готовки: <b id="socSkillV">' + esc(fv('skill', i.skill || mySkill())) + '</b> из 10 <em id="socSkillT">' + skillText(fv('skill', i.skill || mySkill())) + '</em></span><input id="socSkill" type="range" min="1" max="10" step="1" value="' + esc(fv('skill', i.skill || mySkill())) + '" aria-describedby="socSkillT"></label>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary">' + (first ? 'Погнали' : 'Сохранить') + '</button>' + (first ? '' : '<button type="button" class="ghost-btn" data-a="nickx">Отмена</button>') + '</div>' +
-      (nickMsg ? '<p class="set-msg">' + esc(nickMsg) + '</p>' : '') + '</form>';
+      (nickMsg ? '<p class="set-msg' + (/…$/.test(nickMsg) ? ' busy' : '') + '">' + esc(nickMsg) + '</p>' : '') + '</form>';
   }
 
   /* ---------- пуши ---------- */
@@ -281,7 +274,7 @@
     else if (st === 'nope') h += '<p class="small">Этот браузер пуши не умеет.</p>';
     else h += '<p class="small">Разреши «Кукингу» присылать уведомления. Без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
     if (after) h += '<button type="button" class="' + (st === 'off' ? 'ghost-btn' : 'nav-btn primary') + '" data-a="pdone">' + (st === 'off' ? 'Потом' : 'Дальше') + '</button>';
-    return h + (msg ? '<p class="set-msg">' + esc(msg) + '</p>' : '') + '</div>';
+    return h + (msg ? '<p class="set-msg' + (/…$/.test(msg) ? ' busy' : '') + '">' + esc(msg) + '</p>' : '') + '</div>';
   }
 
   /* ---------- профиль человека ---------- */
@@ -330,9 +323,8 @@
     if (myReview && myReview.score) owners.push(m);
     if (!owners.length) return '';
     var n = owners.reduce(function (s, o) { return s + repliesOf(rid, o).length; }, 0);
-    var isOpen = !!openThr[rid];
-    var h = '<div class="lib-thr-wrap"><button type="button" class="lib-link lib-thr" data-rid="' + esc(rid) + '" aria-expanded="' + isOpen + '">Обсуждение' + (n ? ' · ' + n : '') + '</button>';
-    if (isOpen) h += owners.map(function (o) {
+    var h = '<div class="lib-thr-wrap"><h3 class="tg-sec-h">Комментарии' + (n ? ' · ' + n : '') + '</h3>';
+    h += owners.map(function (o) {
       var d = (reviewsBy[o] || {})[rid] || myReview, p = people[o];
       return '<div class="lib-thr-item"><div class="soc-rep-h">' + nickHTML(p) + '<b class="lib-score sm ' + scCls(d.score) + '">' + d.score + '</b></div>' +
         (o !== m && d.comment ? '<p class="soc-cm">' + esc(d.comment) + '</p>' : '') + threadBody(rid, o) + '</div>';

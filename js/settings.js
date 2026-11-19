@@ -24,7 +24,7 @@
       '<label class="set-f"><span>Почта</span><input id="authEmail" type="email" autocomplete="email" required inputmode="email" value="' + esc(authDraft) + '"></label>' +
       '<label class="set-f"><span>Пароль (от 6 знаков)</span><input id="authPass" type="password" autocomplete="current-password" minlength="6" required></label>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary" data-mode="in">Войти</button><button type="submit" class="nav-btn" data-mode="up">Зарегистрироваться</button></div></form>' +
-      (msg.account ? '<p class="set-msg">' + esc(msg.account) + '</p>' : '');
+      (msg.account ? '<p class="set-msg' + (/…$/.test(msg.account) ? ' busy' : '') + '">' + esc(msg.account) + '</p>' : '');
   }
   function aiHTML() {
     var c = AI.get(), P = AI.presets;
@@ -38,7 +38,7 @@
       '<label class="set-f"><span>Модель</span><input id="aiModel" type="text" autocomplete="off" autocapitalize="off" value="' + esc(c.model || '') + '" placeholder="точное имя модели из кабинета провайдера"></label>' +
       '<p class="small">Рецепт — длинная и строгая штука: на слабых моделях он будет кривее. Бери топовую модель своего провайдера.</p></div>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary">Сохранить и проверить</button>' + (c.key ? '<button type="button" class="ghost-btn" data-a="aiclear">Удалить ключ</button>' : '') + '</div></form>' +
-      (msg.ai ? '<p class="set-msg' + (msg.aiOk ? ' ok' : '') + '">' + esc(msg.ai) + '</p>' : '');
+      (msg.ai ? '<p class="set-msg' + (msg.aiOk ? ' ok' : '') + (/…$/.test(msg.ai) ? ' busy' : '') + '">' + esc(msg.ai) + '</p>' : '');
   }
   var ACCENTS = [['saffron', 'Шафран'], ['orange', 'Оранжевый'], ['burgundy', 'Бордовый'], ['green', 'Зелёный'], ['blue', 'Синий'], ['violet', 'Фиолет']];
   function curAccent() { return document.documentElement.getAttribute('data-accent') || 'saffron'; }
@@ -75,7 +75,11 @@
     el.querySelectorAll('[data-acc]').forEach(function (b) {
       b.addEventListener('click', function () {
         var a = b.getAttribute('data-acc');
-        if (a === 'saffron') document.documentElement.removeAttribute('data-accent'); else document.documentElement.setAttribute('data-accent', a);
+        var de = document.documentElement; de.classList.add('acc-swap'); clearTimeout(window.__accT);
+        if (a === 'saffron') de.removeAttribute('data-accent'); else de.setAttribute('data-accent', a);
+        if (window.kHaptic) window.kHaptic(10);
+        window.__accT = setTimeout(function () { de.classList.remove('acc-swap'); }, 600);
+        try { var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', getComputedStyle(de).getPropertyValue('--bg').trim()); } catch (e) {}
         try { localStorage.setItem('kuking:accent', a); } catch (e) {}
         render();
       });

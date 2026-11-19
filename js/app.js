@@ -27,7 +27,8 @@
     guests: clamp(store.get('guests', M.baseGuests) | 0, 1, 12),
     have: store.get('have', {}),
     picked: store.get('picked', {}),
-    lanes: store.get('lanes', { chef: true, sous: true })
+    lanes: store.get('lanes', { chef: true, sous: true }),
+    solo: store.get('solo', false)
   };
 
   /* ---------- пересчёт количеств ---------- */
@@ -517,8 +518,8 @@
       shopCancel();
       var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (navigator.vibrate) { try { navigator.vibrate([20, 40, 20]); } catch (e) {} }
-      showHud('Всё на месте', 'Теперь посуда', 'продукты собраны', calm ? 1200 : 2000);
-      shopT = setTimeout(function () { if (state.idx === shopAt) go(shopAt + 1, 1); setTimeout(dropHud, 200); }, calm ? 1200 : 2000);
+      showHud('Всё на месте', 'Теперь посуда', 'продукты собраны', calm ? 900 : 1000);
+      shopT = setTimeout(function () { if (state.idx === shopAt) go(shopAt + 1, 1); setTimeout(dropHud, 150); }, calm ? 900 : 1000);
     }
     count();
   }
@@ -590,12 +591,12 @@
       var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
       ['#prev', '#next'].forEach(function (q) { var n = $(q); if (n) n.addEventListener('click', onNav); });
       if (navigator.vibrate) { try { navigator.vibrate([30, 60, 30]); } catch (e) {} }
-      showHud('Арсенал собран', 'Погнали резать', 'ножи наточены, доски на месте', calm ? 1300 : 2300);
+      showHud('Арсенал собран', 'Погнали резать', 'ножи наточены, доски на месте', calm ? 900 : 1300);
       goT = setTimeout(function () {
         clearFx();
         if (state.idx === slideAt) go(slideAt + 1, 1);
         setTimeout(dropBanner, 200);
-      }, calm ? 1300 : 2300);
+      }, calm ? 900 : 1300);
     }
     function cancelGo() { clearFx(); el.classList.remove('all-set'); dropBanner(); }
     M.tools.forEach(function (z, zi) {
@@ -689,7 +690,7 @@
     if (s.both) {
       lanes.classList.add('one');
       lanes.appendChild(laneEl(friends ? 'both' : 'you', visibleActs(keyed(s.both, k + '.both')), false)); // соло-режимы: «Ты»
-    } else if (!friends) {
+    } else if (!friends || state.solo) {
       lanes.classList.add('one');
       var sousActs = visibleActs(keyed(s.lanes.sous || [], k + '.sous'));
       var acts = visibleActs(keyed(s.lanes.chef || [], k + '.chef')).concat(sousActs.length ? [{ divider: 'Дальше — то, что делал бы ' + roleName('sous').toLowerCase() }] : [], sousActs);
@@ -754,7 +755,19 @@
       setTimeout(function () { if (current === el) window.Confetti.fire({ anchor: el.querySelector('.final-title') }); }, 380);
     }
   }
+  /* друзья: готовлю с су-шефом или один — один получает обе колонки подряд */
+  var sousBtn = $('#sousBtn');
+  function hasLanes() { return (M.slides || []).some(function (x) { return x.type === 'step' && x.lanes; }); }
+  function syncSous() {
+    if (!sousBtn) return;
+    var show = modeOf(state.guests) === 'friends' && hasLanes();
+    sousBtn.hidden = !show;
+    sousBtn.setAttribute('aria-pressed', String(!state.solo));
+    sousBtn.querySelector('span').textContent = state.solo ? 'Готовлю один' : 'С су-шефом';
+  }
+  if (sousBtn) sousBtn.addEventListener('click', function () { state.solo = !state.solo; store.set('solo', state.solo); syncSous(); rerender(); });
   function rerender() {
+    syncSous();
     if (!current) return;
     var st = current.scrollTop, el = build(M.slides[state.idx]);
     applyEditable(el);
@@ -832,7 +845,7 @@
     } catch (e) {}
   });
 
-  syncTitle();
+  syncTitle(); syncSous();
   renderHeader();
   go(state.idx, 0);
 })();

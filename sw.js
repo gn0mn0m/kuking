@@ -1,10 +1,11 @@
 /* Service worker «Кукинга»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-1e8b3292a1';
+var CACHE = 'kuking-3e443fef87';
 var ASSETS = [
 "./",
 "icons/icon-180.png",
 "icons/icon-192.png",
 "icons/icon-512.png",
+"icons/icon.svg",
 "icons/maskable-512.png",
 "index.html",
 "js/ai.js",

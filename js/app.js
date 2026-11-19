@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var M = window.MENU;
+  if (!M) return; // рецептов ещё нет — живём на главной
   var $ = function (s, r) { return (r || document).querySelector(s); };
   function h(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -394,7 +395,7 @@
   function buildCover(s, el) {
     var per = M.dishes.reduce(function (a, d) { return { kcal: a.kcal + d.kcal, p: a.p + d.p, f: a.f + d.f, c: a.c + d.c }; }, { kcal: 0, p: 0, f: 0, c: 0 });
     var m = modeOf(state.guests);
-    var hint = m === 'friends' ? '' : '<p class="note">Меню заточено под друзей. На ' + state.guests + ' — всё пересчитается, а шаги сольются в одно окно: весь движ на тебе.</p>';
+    var hint = m === 'friends' || M.mode !== 'friends' ? '' : '<p class="note">Меню заточено под друзей. На ' + state.guests + ' — всё пересчитается, а шаги сольются в одно окно: весь движ на тебе.</p>';
     effTitle();
     el.innerHTML =
       '<p class="eyebrow">' + E('tagline', M.tagline) + '</p>' +

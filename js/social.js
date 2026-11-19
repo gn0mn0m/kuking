@@ -42,6 +42,7 @@
   API.admin = function () { return admin; };
   API.isAdmin = function () { return !!(me && me.is_admin); };
   API.person = function (id) { return people[id]; };
+  API.info = function (id) { return info[id]; };
   API.badge = function () { return links.filter(function (l) { return l.status === 'pending' && l.b === uid(); }).length; };
   API.reviewsOf = function (userId) { return reviewsBy[userId] || {}; };
   /* кто ест: имя, любимое и что не жрёт — для нейросети */
@@ -85,6 +86,8 @@
     }).then(function () {
       loaded = true;
       if (me && me.is_admin) S.claimLegacy();
+      var chef = !!(me && me.is_admin), was = false; try { was = localStorage.getItem('kuking:chef') === '1'; } catch (e) {}
+      if (chef !== was) { try { if (chef) localStorage.setItem('kuking:chef', '1'); else localStorage.removeItem('kuking:chef'); } catch (e) {} location.reload(); return; }
       emit(); if (!ov.hidden) render();
     }).catch(function () {});
   }

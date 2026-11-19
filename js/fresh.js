@@ -245,9 +245,9 @@
   }
 
   /* ---------- рулетка тем + генерация ---------- */
-  function spin(ctx, fixedI) {
-    if (fixedI == null && stale(ctx)) return prep(ctx, function () { spin(ctx); });
-    if (!THEMES.length) {
+  function spin(ctx, fixedI, custom) {
+    if (!custom && fixedI == null && stale(ctx)) return prep(ctx, function () { spin(ctx); });
+    if (!custom && !THEMES.length) {
       var e = document.createElement('div'); e.className = 'rl-ov';
       e.innerHTML = '<div class="rl-box" role="dialog" aria-modal="true" aria-label="Рулетка свежака"><button type="button" class="rl-x">✕ Выйти</button><p class="rl-res">В барабане пусто</p><p class="small">Темы ещё не заданы.</p></div>';
       document.body.appendChild(e);
@@ -258,10 +258,10 @@
       return;
     }
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var direct = fixedI != null;
-    var pickI = direct ? fixedI : (Math.random() * THEMES.length) | 0, pick = THEMES[pickI];
+    var direct = fixedI != null || !!custom;
+    var pickI = fixedI != null ? fixedI : (Math.random() * Math.max(1, THEMES.length)) | 0, pick = custom || THEMES[pickI];
     var N = 34, target = N - 4, seq = [];
-    for (var i = 0; i < N; i++) seq.push(THEMES[(pickI + 7 + i * 5) % THEMES.length]);
+    for (var i = 0; i < N; i++) seq.push(THEMES.length ? THEMES[(pickI + 7 + i * 5) % THEMES.length] : pick);
     seq[target] = pick;
     var m = document.createElement('div');
     m.className = 'rl-ov';
@@ -366,5 +366,17 @@
   function toDoc(r) { return { title: r.title, theme: r.theme || '', createdAt: new Date().toISOString(), recipe: JSON.stringify(r) }; }
   function forget(id) { delete cache[id]; saveCache(); }
 
-  window.Fresh = { spin: spin, merge: merge, toDoc: toDoc, forget: forget, themes: THEMES, stale: stale, refresh: refreshIdeas, setIdeas: setIdeas };
+  /* своя идея: «хочу шаурму с ананасом» → рецепт */
+  function custom(ctx, idea, mode) { spin(ctx, null, [String(idea).slice(0, 120), '', '', MODE_RU[mode] ? mode : 'self']); }
+  /* ручной рецепт из редактора: та же проверка, что у нейросети */
+  function manual(ctx, loose, prevId) {
+    var r = fix(loose, loose.title, loose.mode);
+    r.id = prevId || 'my-' + Date.now().toString(36); r.ai = false; r.manual = loose; delete r.theme;
+    cache[r.id] = r; saveCache();
+    var i = window.RECIPES.map(function (x) { return x.id; }).indexOf(r.id);
+    if (i >= 0) window.RECIPES[i] = r; else window.RECIPES.push(r);
+    ctx.added(r, i >= 0);
+    return r;
+  }
+  window.Fresh = { custom: custom, manual: manual, spin: spin, merge: merge, toDoc: toDoc, forget: forget, themes: THEMES, stale: stale, refresh: refreshIdeas, setIdeas: setIdeas };
 })();

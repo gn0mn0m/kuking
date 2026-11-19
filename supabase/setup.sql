@@ -114,10 +114,10 @@ create index if not exists docs_collection_idx on public.docs (collection);
 alter table public.docs enable row level security;
 grant select, insert, update, delete on public.docs to authenticated;
 
--- оценки видны: свои, шефа и друзей; свежак и прочее — всем вошедшим
+-- оценки видны: свои, шефа и друзей; рецепты и прочее — только свои
 drop policy if exists "docs read" on public.docs;
 create policy "docs read" on public.docs for select to authenticated
-  using (collection <> 'reviews' or user_id is null or public.can_see(user_id));
+  using (user_id is null or user_id = auth.uid() or (collection = 'reviews' and public.can_see(user_id)));
 drop policy if exists "docs insert own" on public.docs;
 create policy "docs insert own" on public.docs for insert to authenticated with check (auth.uid() = user_id);
 drop policy if exists "docs update own" on public.docs;

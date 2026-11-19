@@ -37,6 +37,13 @@
       '<div class="set-row"><button type="submit" class="nav-btn primary">Сохранить и проверить</button>' + (c.key ? '<button type="button" class="ghost-btn" data-a="aiclear">Удалить ключ</button>' : '') + '</div></form>' +
       (msg.ai ? '<p class="set-msg' + (msg.aiOk ? ' ok' : '') + '">' + esc(msg.ai) + '</p>' : '');
   }
+  var ACCENTS = [['orange', 'Оранжевый'], ['burgundy', 'Бордовый'], ['green', 'Зелёный'], ['blue', 'Синий'], ['violet', 'Фиолетовый']];
+  function curAccent() { return document.documentElement.getAttribute('data-accent') || 'orange'; }
+  function lookHTML() {
+    return '<p class="small">Цвет кнопок и акцентов. Только на этом телефоне.</p><div class="set-acc" role="radiogroup" aria-label="Цвет приложения">' + ACCENTS.map(function (a) {
+      return '<button type="button" class="set-sw acc-' + a[0] + '" role="radio" data-acc="' + a[0] + '" aria-checked="' + (curAccent() === a[0]) + '"><i aria-hidden="true"></i><span>' + a[1] + '</span></button>';
+    }).join('') + '</div>';
+  }
   function installHTML() {
     if (standalone()) return '<p class="small">Приложение уже стоит на экране «Домой». Обновления подтягиваются сами при запуске с интернетом.</p>';
     return '<ol class="set-steps"><li>Открой эту страницу в <b>Safari</b>.</li><li>Нажми <b>Поделиться</b> — квадрат со стрелкой вверх.</li><li>Выбери <b>«На экран „Домой“»</b> → «Добавить».</li><li>Запускай «Кукинг» с иконки — на весь экран и без интернета.</li></ol>';
@@ -44,10 +51,10 @@
   function render() {
     el.innerHTML = '<div class="set-panel"><div class="set-head"><h2 id="setTitle" class="set-title">Настройки</h2>' +
       '<button type="button" class="ghost-btn" data-a="close">Готово</button></div>' +
-      '<div class="set-tabs" role="tablist">' + [['account', 'Аккаунт'], ['ai', 'Нейросеть'], ['install', 'Установка']].map(function (t) {
+      '<div class="set-tabs" role="tablist">' + [['account', 'Аккаунт'], ['look', 'Вид'], ['ai', 'Нейросеть'], ['install', 'Установка']].map(function (t) {
         return '<button type="button" role="tab" class="set-tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + '</button>';
       }).join('') + '</div>' +
-      '<section class="set-body">' + (tab === 'account' ? accountHTML() : tab === 'ai' ? aiHTML() : installHTML()) + '</section>' +
+      '<section class="set-body">' + (tab === 'account' ? accountHTML() : tab === 'look' ? lookHTML() : tab === 'ai' ? aiHTML() : installHTML()) + '</section>' +
       '<p class="set-ver">Кукинг ' + esc(VERSION) + '</p></div>';
     bind();
   }
@@ -60,6 +67,14 @@
         if (a === 'out') { S.signOut(); location.reload(); }
         if (a === 'friends') { close(); window.KukingSocial.open(); }
         if (a === 'aiclear') { AI.clear(); msg.ai = 'Ключ удалён с телефона'; msg.aiOk = true; render(); }
+      });
+    });
+    el.querySelectorAll('[data-acc]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var a = b.getAttribute('data-acc');
+        if (a === 'orange') document.documentElement.removeAttribute('data-accent'); else document.documentElement.setAttribute('data-accent', a);
+        try { localStorage.setItem('kuking:accent', a); } catch (e) {}
+        render();
       });
     });
     var af = el.querySelector('#authForm');

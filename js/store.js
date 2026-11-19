@@ -8,7 +8,7 @@
   var C = window.KUKING_CONFIG || {};
   var URL_ = (C.supabaseUrl || '').replace(/\/+$/, ''), KEY = C.supabaseAnonKey || '';
   var SKEY = 'kuking:session';
-  var PERSONAL = { reviews: 1, meta: 1 };
+  var PERSONAL = { reviews: 1, meta: 1, fresh: 1 };
   var enabled = !!(URL_ && KEY);
 
   function load() { try { return JSON.parse(localStorage.getItem(SKEY)); } catch (e) { return null; } }
@@ -133,7 +133,7 @@
     signIn: function (email, password) {
       return authFetch('token?grant_type=password', { email: email, password: password }).then(function (j) { setSession(j); });
     },
-    signOut: function () { session = null; save(null); emitAuth(); },
+    signOut: function () { session = null; save(null); try { localStorage.removeItem('kuking:chef'); } catch (e) {} emitAuth(); },
     /* все оценки всех друзей — для средних на карточках и вкуса в нейросети */
     allReviews: function () {
       if (!session) return Promise.resolve([]);

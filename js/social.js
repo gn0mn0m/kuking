@@ -167,7 +167,8 @@
       (act ? '<span class="soc-act">' + act + '</span>' : '') + '</li>';
   }
   /* черновик анкеты: что ввёл — не пропадёт, даже если экран перерисуется */
-  var fd = null;
+  var FDK = 'kuking:anketa', fd = null; try { fd = JSON.parse(localStorage.getItem(FDK)); } catch (e) {}
+  function saveFd() { try { if (fd) localStorage.setItem(FDK, JSON.stringify(fd)); else localStorage.removeItem(FDK); } catch (e) {} }
   function busyForm() { var a = document.activeElement; return !!(ov.querySelector('#socNick') || (a && ov.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.value)); }
   function fv(k, dflt) { return fd && fd[k] != null ? fd[k] : dflt; }
   var nickState = '', nickTimer = null;
@@ -324,7 +325,7 @@
     if (a === 'back') { view = 'list'; render(); return; }
     if (a === 'login') { close(); if (window.KukingSettings) window.KukingSettings.open('account'); return; }
     if (a === 'nick') { view = view === 'nick' ? 'list' : 'nick'; nickMsg = ''; render(); var i = ov.querySelector('#socNickIn'); if (i) i.focus(); return; }
-    if (a === 'nickx') { fd = null; view = 'list'; render(); return; }
+    if (a === 'nickx') { fd = null; saveFd(); view = 'list'; render(); return; }
     if (a === 'profile') { viewing = id; view = 'profile'; render(); ov.querySelectorAll('.soc-page')[1].scrollTop = 0; return; }
     if (a === 'invite') return invite();
     if (a === 'pon') { msg = 'Включаю…'; render(); enablePush().then(function () { msg = ''; render(); toast('Пуши включены'); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
@@ -362,8 +363,8 @@
     var nf = ov.querySelector('#socNick');
     if (nf) {
       var map = { socNickIn: 'nick', socName: 'name', socBday: 'bday', socLikes: 'likes', socAvoid: 'avoid' };
-      nf.addEventListener('input', function (e) { var k = map[e.target.id]; if (!k) return; fd = fd || {}; fd[k] = e.target.value; if (k === 'nick') checkNick(e.target.value.trim()); });
-      nf.addEventListener('change', function (e) { var k = map[e.target.id]; if (k) { fd = fd || {}; fd[k] = e.target.value; } });
+      nf.addEventListener('input', function (e) { var k = map[e.target.id]; if (!k) return; fd = fd || {}; fd[k] = e.target.value; saveFd(); if (k === 'nick') checkNick(e.target.value.trim()); });
+      nf.addEventListener('change', function (e) { var k = map[e.target.id]; if (k) { fd = fd || {}; fd[k] = e.target.value; saveFd(); } });
       var ni = ov.querySelector('#socNickIn'); if (ni && ni.value && (!me || ni.value !== me.nick)) checkNick(ni.value.trim());
     }
     if (nf) nf.addEventListener('submit', function (e) {
@@ -377,7 +378,7 @@
       var step = me ? (me.nick === nick ? Promise.resolve() : S.req('PATCH', 'profiles?id=eq.' + q(uid()), { nick: nick }))
         : S.req('POST', 'profiles', { id: uid(), nick: nick }).then(function () { return S.rpc('claim_admin'); });
       step.then(function () { return S.req('POST', 'profile_info?on_conflict=id', [data], 'resolution=merge-duplicates,return=minimal'); })
-        .then(function () { busy = false; nickMsg = ''; fd = null; view = first && pushState() !== 'nope' ? 'push' : 'list'; return refresh().then(acceptPending); })
+        .then(function () { busy = false; nickMsg = ''; fd = null; saveFd(); view = first && pushState() !== 'nope' ? 'push' : 'list'; return refresh().then(acceptPending); })
         .catch(function (er) { busy = false; nickMsg = /duplicate|unique|23505|409/i.test(String(er && (er.message || er.code))) ? 'Ник занят — придумай другой' : 'Не вышло: ' + (er && er.message); render(); });
     });
     bindReplies(ov, render);

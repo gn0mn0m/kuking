@@ -8,7 +8,8 @@
   el.className = 'set-ov'; el.hidden = true;
   el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'setTitle');
   document.body.appendChild(el);
-  var tab = 'account', msg = {}, busy = false;
+  var tab = 'account', msg = {}, busy = false, authDraft = '';
+  try { authDraft = sessionStorage.getItem('kuking:email') || ''; } catch (e) {}
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function standalone() { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
 
@@ -20,7 +21,7 @@
       '<div class="set-row">' + (window.KukingSocial && window.KukingSocial.enabled ? '<button type="button" class="nav-btn primary" data-a="friends">Друзья</button>' : '') + '<button type="button" class="ghost-btn" data-a="out">Выйти</button></div>';
     return '<p class="small">Войди, чтобы оценки и комменты были общими для всей хаты и нейросеть училась на вкусах компании.</p>' +
       '<form class="set-form" id="authForm" autocomplete="on">' +
-      '<label class="set-f"><span>Почта</span><input id="authEmail" type="email" autocomplete="email" required inputmode="email"></label>' +
+      '<label class="set-f"><span>Почта</span><input id="authEmail" type="email" autocomplete="email" required inputmode="email" value="' + esc(authDraft) + '"></label>' +
       '<label class="set-f"><span>Пароль (от 6 знаков)</span><input id="authPass" type="password" autocomplete="current-password" minlength="6" required></label>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary" data-mode="in">Войти</button><button type="submit" class="nav-btn" data-mode="up">Зарегистрироваться</button></div></form>' +
       (msg.account ? '<p class="set-msg">' + esc(msg.account) + '</p>' : '');
@@ -79,6 +80,7 @@
     });
     var af = el.querySelector('#authForm');
     if (af) {
+      af.querySelector('#authEmail').addEventListener('input', function (e) { authDraft = e.target.value; try { sessionStorage.setItem('kuking:email', authDraft); } catch (x) {} });
       var mode = 'in';
       af.querySelectorAll('button[type=submit]').forEach(function (b) { b.addEventListener('click', function () { mode = b.getAttribute('data-mode'); }); });
       af.addEventListener('submit', function (e) {

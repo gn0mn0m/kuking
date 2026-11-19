@@ -38,8 +38,8 @@
       '<div class="set-row"><button type="submit" class="nav-btn primary">Сохранить и проверить</button>' + (c.key ? '<button type="button" class="ghost-btn" data-a="aiclear">Удалить ключ</button>' : '') + '</div></form>' +
       (msg.ai ? '<p class="set-msg' + (msg.aiOk ? ' ok' : '') + '">' + esc(msg.ai) + '</p>' : '');
   }
-  var ACCENTS = [['orange', 'Оранжевый'], ['burgundy', 'Бордовый'], ['green', 'Зелёный'], ['blue', 'Синий'], ['violet', 'Фиолетовый']];
-  function curAccent() { return document.documentElement.getAttribute('data-accent') || 'orange'; }
+  var ACCENTS = [['saffron', 'Шафран'], ['orange', 'Оранжевый'], ['burgundy', 'Бордовый'], ['green', 'Зелёный'], ['blue', 'Синий'], ['violet', 'Фиолет']];
+  function curAccent() { return document.documentElement.getAttribute('data-accent') || 'saffron'; }
   function lookHTML() {
     return '<p class="small">Цвет кнопок и акцентов. Только на этом телефоне.</p><div class="set-acc" role="radiogroup" aria-label="Цвет приложения">' + ACCENTS.map(function (a) {
       return '<button type="button" class="set-sw acc-' + a[0] + '" role="radio" data-acc="' + a[0] + '" aria-checked="' + (curAccent() === a[0]) + '"><i aria-hidden="true"></i><span>' + a[1] + '</span></button>';
@@ -73,7 +73,7 @@
     el.querySelectorAll('[data-acc]').forEach(function (b) {
       b.addEventListener('click', function () {
         var a = b.getAttribute('data-acc');
-        if (a === 'orange') document.documentElement.removeAttribute('data-accent'); else document.documentElement.setAttribute('data-accent', a);
+        if (a === 'saffron') document.documentElement.removeAttribute('data-accent'); else document.documentElement.setAttribute('data-accent', a);
         try { localStorage.setItem('kuking:accent', a); } catch (e) {}
         render();
       });

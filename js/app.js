@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var M = window.MENU;
+  var doneActs = (function () { try { return JSON.parse(localStorage.getItem('kuking:done')) || {}; } catch (e) { return {}; } })();
   var SKILL = +(function () { try { return localStorage.getItem('kuking:skill'); } catch (e) { return 0; } })() || 5; // уровень готовки 1–10 из анкеты
   if (!M) return; // рецептов ещё нет — живём на главной
   var $ = function (s, r) { return (r || document).querySelector(s); };
@@ -639,6 +640,13 @@
         li.appendChild(box);
         window.RingTimer.mount(box, { id: a.timer.id, sec: a.timer.sec != null ? a.timer.sec : a.timer.min * 60, label: a.timer.label, slide: state.idx });
       }
+      /* тап по действию — сделано: гаснет, номер становится галкой */
+      var dk = M.id + ':' + a._k; if (doneActs[dk]) li.classList.add('done');
+      li.addEventListener('click', function (e) {
+        if (editing || e.target.closest('button, a, details, summary, input, [contenteditable=true], .ring-timer, .act-timer')) return;
+        doneActs[dk] = !doneActs[dk]; if (!doneActs[dk]) delete doneActs[dk];
+        li.classList.toggle('done', !!doneActs[dk]); try { localStorage.setItem('kuking:done', JSON.stringify(doneActs)); } catch (x) {}
+      });
       ol.appendChild(li);
     });
     L.appendChild(ol);

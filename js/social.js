@@ -447,15 +447,20 @@
   function open(personId) {
     last = document.activeElement;
     view = personId ? 'profile' : 'list'; viewing = personId || viewing; found = null; msg = '';
-    render(); ov.hidden = false; requestAnimationFrame(function () { ov.classList.add('on'); });
+    render(); ov.hidden = false; requestAnimationFrame(function () { ov.classList.add('on'); (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} }); });
     refresh(); clearInterval(timer); timer = setInterval(function () { if (!document.hidden) refresh(); }, 20000);
   }
   function close() {
     ov.classList.remove('on'); clearInterval(timer);
     setTimeout(function () { ov.hidden = true; view = 'list'; }, 320);
     if (last && last.focus) last.focus();
+    (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} });
   }
+  var closeSubs = [];
   API.open = open; API.close = close;
+  API.isOpen = function () { return !ov.hidden && ov.classList.contains('on'); };
+  API.onClose = function (f) { closeSubs.push(f); };
+  API.openAnketa = function () { open(); view = 'nick'; nickMsg = ''; render(); var i = ov.querySelector('#socNickIn'); if (i) i.focus(); };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) { if (view === 'profile') { view = 'list'; render(); } else close(); } });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
   API.enabled = true;

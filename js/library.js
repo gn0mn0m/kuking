@@ -109,17 +109,24 @@
   var view = 'list', detailId = null, listY = 0, dir = '', stagger = false;
   function go(v, id, back) {
     if (view === 'list') listY = ov.scrollTop;
+    if (!SUB[view] && SUB[v]) TAB = view; if (back && v === 'list' && TAB !== 'list') v = TAB;
     dir = back ? 'back' : 'fwd'; view = v; if (id !== undefined) detailId = id; if (v === 'list' && !back) stagger = true;
     render(); ov.scrollTop = v === 'list' ? listY : 0;
   }
 
   function render() {
     autoPurge();
-    var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : listHTML();
+    var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : view === 'plan' ? planHTML() : view === 'profile' ? profileHTML() : listHTML();
+    document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden);
     ov.innerHTML = '<div class="tg-screen' + (dir ? ' in-' + dir : '') + (stagger && view === 'list' ? ' stagger' : '') + '">' + html + '</div>';
     dir = ''; stagger = false;
     ov.querySelectorAll('.tg-li').forEach(function (li, i) { if (i < 12) li.style.setProperty('--i', i); });
-    bind();
+    bind(); syncTabs();
+  }
+  var PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+  function bigHead(title, right) {
+    return '<header class="tg-head"><span class="tg-mini" aria-hidden="true">' + title + '</span><span class="tg-nav-r">' + (right || '') + '</span></header>' +
+      '<h2 class="lib-title tg-big" id="libTitle">' + title + '</h2>';
   }
   function burger() {
     var n = SOC().badge();
@@ -127,8 +134,8 @@
   }
   function listHTML() {
     var list = visible(), all = R.filter(function (r) { return !isHid(r.id); });
-    var h = '<header class="tg-head">' + burger() + '<h2 class="lib-title" id="libTitle">Кукинг</h2>' +
-      '<button type="button" class="tg-ic lib-fresh" aria-label="Крутить свежак" title="Свежак: рулетка идей">🎲</button></header>';
+    var h = bigHead('Кукинг', '<button type="button" class="tg-ic lib-fresh" aria-label="Крутить свежак" title="Свежак: рулетка идей">🎲</button>' +
+      '<button type="button" class="tg-ic tg-plus" data-a="create" aria-label="Новый рецепт">' + PLUS + '</button>');
     h += '<div class="tg-tools"><label class="tg-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
       '<input id="libQ" type="search" placeholder="Поиск по рецептам" autocomplete="off" value="' + esc(query) + '" aria-label="Поиск по рецептам"></label>' +
       '<div class="tg-chips" role="toolbar" aria-label="Фильтры">' +
@@ -140,9 +147,35 @@
     if (active && !isHid(active.id)) h += '<button type="button" class="tg-pin" id="libClose"><span class="tg-pin-bar"></span><span class="tg-pin-t"><small>Сейчас готовишь</small><b>' + esc(active.title) + '</b></span><span class="tg-pin-go">Открыть →</span></button>';
     if (!all.length) h += emptyHTML();
     else if (!list.length) h += '<p class="small tg-none">Ничего не нашёл. Попробуй другое слово или сбрось фильтр.</p>';
-    else h += '<ul class="tg-list">' + list.map(row).join('') + '</ul>';
+    else h += '<div class="tg-lists">' + listsHTML(list) + '</div>';
     h += hiddenBlock();
-    h += '<button type="button" class="tg-fab" data-a="create" aria-label="Новый рецепт"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>';
+    return h;
+  }
+  function listsHTML(list) {
+    var pins = list.filter(function (r) { return isPin(r.id); }), rest = list.filter(function (r) { return !isPin(r.id); });
+    if (!list.length) return '<p class="small tg-none">Ничего не нашёл.</p>';
+    return (pins.length ? '<h3 class="tg-sec-t">📌 Закреплённые</h3><ul class="tg-list tg-group">' + pins.map(row).join('') + '</ul>' : '') +
+      (rest.length ? (pins.length ? '<h3 class="tg-sec-t">Все рецепты</h3>' : '') + '<ul class="tg-list tg-group">' + rest.map(row).join('') + '</ul>' : '');
+  }
+  /* ---------- План (скоро) и Профиль ---------- */
+  function planHTML() {
+    return bigHead('План') + '<div class="tg-empty"><div class="tg-empty-pic" aria-hidden="true">📅</div><h3>План на неделю — скоро</h3>' +
+      '<p class="small">Выберешь, на сколько дней и сколько раз в день готовишь, — нейросеть разложит блюда по дням под твои БЖУ и соберёт один список покупок.</p></div>';
+  }
+  function chev() { return '<svg class="pf-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'; }
+  function pfRow(a, ico, label, sub) { return '<button type="button" class="pf-row" data-pf="' + a + '"><span class="pf-ico" aria-hidden="true">' + ico + '</span><span class="pf-t">' + label + '</span>' + (sub ? '<span class="pf-sub">' + sub + '</span>' : '') + chev() + '</button>'; }
+  function profileHTML() {
+    var S = window.KukingStore, Soc = SOC(), me = Soc.me && Soc.me(), u = S && S.user && S.user();
+    var inf = me && Soc.info ? (Soc.info(me.id) || {}) : {}, name = inf.name || (me && me.nick) || (u ? u.email : 'Гость');
+    var n = Soc.badge ? Soc.badge() : 0, sk = +lget('kuking:skill') || 0;
+    var h = bigHead('Профиль');
+    h += '<button type="button" class="pf-card" data-pf="' + (u ? 'anketa' : 'login') + '"><span class="pf-av' + (me && me.is_admin ? ' chef' : '') + '" aria-hidden="true">' + esc(String(name).charAt(0).toUpperCase()) + (me && me.is_admin ? CROWN : '') + '</span>' +
+      '<span class="pf-who"><b>' + esc(name) + '</b>' + (me ? '<span class="pf-nick">@' + esc(me.nick) + (me.is_admin ? ' <span class="soc-chef adm">' + CROWN + 'админ</span>' : ' <span class="soc-chef">шеф</span>') + '</span>' : '<span class="pf-nick">' + (u ? 'заполни анкету' : 'войди, чтобы дружить и хранить рецепты') + '</span>') + '</span>' + chev() + '</button>';
+    h += '<div class="pf-group">' + (u ? pfRow('anketa', '📝', 'Анкета', sk ? 'уровень ' + sk + '/10' : '') : pfRow('login', '🔑', 'Войти или зарегистрироваться')) +
+      (Soc.enabled && u ? pfRow('friends', '👥', 'Друзья', n ? '<em class="pf-badge">' + n + '</em>' : '') : '') + '</div>';
+    h += '<div class="pf-group">' + pfRow('ai', '✨', 'Нейросеть', window.KukingAI && window.KukingAI.ready() ? 'подключена' : 'не подключена') +
+      pfRow('look', '🎨', 'Цвет приложения') + pfRow('account', '👤', 'Аккаунт') + pfRow('install', '📲', 'Установка на iPhone') + '</div>';
+    h += '<p class="pf-ver">Кукинг ' + esc((window.KUKING_CONFIG || {}).version || '') + '</p>';
     return h;
   }
   function emptyHTML() {
@@ -188,13 +221,14 @@
   }
   function detailHTML(r) {
     var on = active && r.id === active.id, ch = chefOf(r.id), adm = SOC().admin();
-    var h = '<header class="tg-head tg-head-sub"><button type="button" class="tg-back" data-a="back" aria-label="Назад к рецептам"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Рецепты</button></header>';
-    h += '<div class="tg-hero"><span class="tg-av big m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
-      '<h2 class="tg-title">' + esc(r.title) + '</h2>' +
-      '<p class="tg-meta">' + [esc(String(r.totalTime || '').replace('≈ ', '≈ ')), MODE_NAME[r.mode] ? '<span class="tg-mode m-' + r.mode + '">' + MODE_NAME[r.mode] + '</span>' : '', r.baseGuests ? r.baseGuests + ' порц.' : '', r.ai ? 'от нейросети' : r.manual ? 'твой рецепт' : ''].filter(Boolean).join(' · ') + '</p>' +
+    var tot = (r.dishes || []).reduce(function (t, d) { if (d.kcal) { t.k += +d.kcal || 0; t.p += +d.p || 0; t.f += +d.f || 0; t.c += +d.c || 0; t.n++; } return t; }, { k: 0, p: 0, f: 0, c: 0, n: 0 });
+    var h = '<div class="tg-heroW m-' + esc(r.mode || 'self') + '"><button type="button" class="tg-backf" data-a="back" aria-label="Назад к рецептам"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
+      '<span class="tg-steam" aria-hidden="true"><i></i><i></i><i></i></span><span class="tg-emo" aria-hidden="true">' + emoji(r) + '</span></div>';
+    h += '<div class="tg-dt"><h2 class="tg-title">' + esc(r.title) + '</h2>' +
+      '<p class="tg-meta">' + [esc(String(r.totalTime || '').replace('≈ ', '')), MODE_NAME[r.mode] ? MODE_NAME[r.mode].toLowerCase() : '', r.baseGuests ? r.baseGuests + ' порц.' : '', r.ai ? 'от нейросети' : r.manual ? 'твой рецепт' : ''].filter(Boolean).join(' · ') + '</p>' +
+      (tot.n ? '<div class="tg-kbju"><span><b>' + tot.k + '</b> ккал</span><span>Б <b>' + tot.p + '</b></span><span>Ж <b>' + tot.f + '</b></span><span>У <b>' + tot.c + '</b></span></div>' : '') +
       (r.tagline ? '<p class="tg-lede">' + esc(r.tagline) + '</p>' : '') + '</div>';
-    h += '<div class="tg-acts"><button type="button" class="nav-btn primary lib-go" data-id="' + esc(r.id) + '">' + (on ? 'Продолжить готовку →' : 'Готовим это') + '</button></div>';
-    if ((r.dishes || []).length) h += '<section class="tg-sec"><h3 class="tg-sec-h">На тарелке</h3><ul class="tg-dishes">' + r.dishes.map(function (d) {
+    if ((r.dishes || []).length > 1) h += '<section class="tg-sec"><h3 class="tg-sec-h">На тарелке</h3><ul class="tg-dishes">' + r.dishes.map(function (d) {
       return '<li><b>' + esc(d.name) + '</b>' + (d.kcal ? '<small>' + d.kcal + ' ккал · Б ' + d.p + ' · Ж ' + d.f + ' · У ' + d.c + '</small>' : '') + '</li>';
     }).join('') + '</ul></section>';
     if (ch && adm) h += '<section class="tg-sec tg-chefrow">' + CROWN + '<span>Админ <b>' + esc(adm.nick) + '</b> поставил</span><b class="lib-score ' + scCls(ch) + '">' + ch + '<small>/10</small></b></section>';
@@ -202,6 +236,7 @@
     var thr = SOC().thread(r.id, reviews[r.id]); if (thr) h += '<section class="tg-sec">' + thr + '</section>';
     h += '<div class="tg-more">' + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
       '<button type="button" class="ghost-btn tg-del" data-id="' + esc(r.id) + '">Убрать из книги</button></div>';
+    h += '<div class="tg-cta"><button type="button" class="nav-btn primary lib-go" data-id="' + esc(r.id) + '">' + (on ? 'Продолжить готовку →' : 'Готовим это') + '</button></div>';
     return h;
   }
 
@@ -331,6 +366,13 @@
   function bind() {
     on('#libMenu', function () { if (window.KukingDrawer) window.KukingDrawer.open(); });
     on('#libClose', close);
+    on('[data-pf]', function (b) {
+      var a = b.getAttribute('data-pf'), St = window.KukingSettings, Soc = SOC();
+      if (a === 'login' || a === 'account') St && St.open('account');
+      if (a === 'ai' || a === 'look' || a === 'install') St && St.open(a);
+      if (a === 'friends') Soc.open();
+      if (a === 'anketa' && Soc.openAnketa) Soc.openAnketa();
+    });
     on('.lib-fresh', function () { window.Fresh.spin(freshCtx); });
     on('[data-open]', function (b) { if (Date.now() < noClickUntil) return; go('detail', b.getAttribute('data-open')); });
     gestures();
@@ -341,7 +383,7 @@
     on('[data-a=editnew]', function () { draft = blankDraft(); go('edit'); });
     on('[data-a=editme]', function (b) { var r = byId(b.getAttribute('data-id')); draft = JSON.parse(JSON.stringify(r.manual._draft || blankDraft())); draft.id = r.id; go('edit'); });
     var q = ov.querySelector('#libQ');
-    if (q) q.addEventListener('input', function () { query = q.value; var l = ov.querySelector('.tg-list'), list = visible(); if (l) l.outerHTML = list.length ? '<ul class="tg-list">' + list.map(row).join('') + '</ul>' : '<ul class="tg-list"><li class="small tg-none">Ничего не нашёл.</li></ul>'; else render(); on('[data-open]', function (b) { if (Date.now() < noClickUntil) return; go('detail', b.getAttribute('data-open')); }); gestures(); });
+    if (q) q.addEventListener('input', function () { query = q.value; var l = ov.querySelector('.tg-lists'); if (!l) { render(); return; } l.innerHTML = listsHTML(visible()); on('.tg-lists [data-open]', function (b) { if (Date.now() < noClickUntil) return; go('detail', b.getAttribute('data-open')); }); gestures(); });
     on('[data-for]', function (b) { forMode = b.getAttribute('data-for'); lset('kuking:for', forMode); render(); });
     on('.tg-sort', function () { sortOpen = !sortOpen; render(); });
     on('[data-sort]', function (b) { sortBy = b.getAttribute('data-sort'); sortOpen = false; lset('kuking:sort2', sortBy); render(); });
@@ -537,13 +579,43 @@
   };
   if (window.KukingSocial && window.KukingSocial.onChange) window.KukingSocial.onChange(function () { if (!ov.hidden && !typing()) keepY(render); });
 
-  /* свайп от левого края — шторка */
+  /* ---------- таб-бар снизу: Рецепты · План · Чаты · Профиль ---------- */
+  var SUB = { detail: 1, create: 1, edit: 1 }, TAB = 'list';
+  var TABS = [['list', 'Рецепты', '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/>'],
+    ['plan', 'План', '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>'],
+    ['chats', 'Чаты', '<path d="M4 5h16v11H9l-5 4z"/>'],
+    ['profile', 'Профиль', '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>']];
+  var bar = document.createElement('nav'); bar.className = 'tg-tabs'; bar.setAttribute('aria-label', 'Разделы'); document.body.appendChild(bar);
+  function syncTabs() {
+    var socOpen = window.KukingSocial && window.KukingSocial.isOpen && window.KukingSocial.isOpen();
+    var cur = socOpen ? 'chats' : (SUB[view] ? TAB : view);
+    var show = !ov.hidden && (!SUB[view] || socOpen);
+    var n = SOC().badge ? SOC().badge() : 0;
+    bar.innerHTML = TABS.map(function (t) {
+      return '<button type="button" data-tab="' + t[0] + '"' + (cur === t[0] ? ' aria-current="page"' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true">' + t[2] + '</svg><span>' + t[1] + '</span>' +
+        (t[0] === 'chats' && n ? '<em>' + n + '</em>' : '') + '</button>';
+    }).join('');
+    bar.classList.toggle('on', show);
+    document.documentElement.classList.toggle('tabs-on', show);
+  }
+  bar.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-tab]'); if (!b) return;
+    var t = b.getAttribute('data-tab'), Soc = SOC();
+    if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) Soc.open(); else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
+    if (Soc.isOpen && Soc.isOpen()) Soc.close();
+    if (t === view) { ov.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    TAB = t; dir = ''; view = t; stagger = t === 'list'; render(); ov.scrollTop = 0;
+  });
+  if (window.KukingSocial && window.KukingSocial.onClose) window.KukingSocial.onClose(function () { syncTabs(); });
+  new MutationObserver(function () { syncTabs(); document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden); }).observe(ov, { attributes: true, attributeFilter: ['hidden'] });
+
+  /* свайп от левого края — назад */
   (function () {
     var sx = null, sy = 0;
-    ov.addEventListener('touchstart', function (e) { var t = e.touches[0]; sx = t.clientX < 24 && view === 'list' ? t.clientX : null; sy = t.clientY; }, { passive: true });
+    ov.addEventListener('touchstart', function (e) { var t = e.touches[0]; sx = t.clientX < 24 && SUB[view] ? t.clientX : null; sy = t.clientY; }, { passive: true });
     ov.addEventListener('touchmove', function (e) {
       if (sx == null) return; var t = e.touches[0];
-      if (t.clientX - sx > 50 && Math.abs(t.clientY - sy) < 40) { sx = null; if (window.KukingDrawer) window.KukingDrawer.open(); }
+      if (t.clientX - sx > 60 && Math.abs(t.clientY - sy) < 40) { sx = null; var b = ov.querySelector('[data-a=back]'); if (b) b.click(); }
     }, { passive: true });
   })();
 

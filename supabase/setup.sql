@@ -158,6 +158,7 @@ create table if not exists public.profile_info (
   updated_at timestamptz not null default now()
 );
 alter table public.profile_info add column if not exists skill smallint check (skill between 1 and 10);
+alter table public.profile_info add column if not exists avatar text check (char_length(avatar) <= 400);
 alter table public.profile_info enable row level security;
 grant select, insert, update on public.profile_info to authenticated;
 drop policy if exists "info read" on public.profile_info;
@@ -166,6 +167,24 @@ drop policy if exists "info insert own" on public.profile_info;
 create policy "info insert own" on public.profile_info for insert to authenticated with check (auth.uid() = id);
 drop policy if exists "info update own" on public.profile_info;
 create policy "info update own" on public.profile_info for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
+
+-- ================= аватарки (Storage, бакет avatars: читать всем, писать только в свою папку) =================
+do $av$
+begin
+  insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    values ('avatars', 'avatars', true, 1048576, array['image/jpeg', 'image/png', 'image/webp'])
+    on conflict (id) do update set public = true;
+  drop policy if exists "avatars read" on storage.objects;
+  create policy "avatars read" on storage.objects for select using (bucket_id = 'avatars');
+  drop policy if exists "avatars insert own" on storage.objects;
+  create policy "avatars insert own" on storage.objects for insert to authenticated with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+  drop policy if exists "avatars update own" on storage.objects;
+  create policy "avatars update own" on storage.objects for update to authenticated using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+  drop policy if exists "avatars delete own" on storage.objects;
+  create policy "avatars delete own" on storage.objects for delete to authenticated using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+exception when others then
+  raise notice 'Хранилище аватарок не настроилось: %', sqlerrm;
+end $av$;
 
 -- ================= пуши =================
 create table if not exists public.push_subs (

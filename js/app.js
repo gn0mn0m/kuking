@@ -432,20 +432,25 @@
     M.groups.forEach(function (g, gi) {
       var list = items.filter(function (i) { return i.g === gi; });
       if (!list.length) return;
-      var card = h('section', 'tool-zone shop-zone');
+      var card = h('section', 'shop-zone');
       card.innerHTML = '<h3 class="label">' + E('group.' + gi, g) + '</h3>';
-      var tg = h('div', 'tool-grid ing-grid');
+      var ul = h('ul', 'chk-list');
       list.forEach(function (i) {
-        var b = h('div', 'tool-card ing-card' + (state.have[i.id] ? ' got' : ''));
-        b.setAttribute('role', 'button'); b.tabIndex = 0; b.style.setProperty('--i', ci++);
-        b.setAttribute('aria-pressed', String(!!state.have[i.id]));
-        b.innerHTML = '<span class="tc-txt"><span class="tc-name">' + E('ing.' + i.id, i.name) + '</span>' + (i.buy ? '<span class="badge-buy">докупить</span>' : '') + '</span><span class="ing-am">' + esc(qty(i.id)) + '</span>';
-        function flip() { state.have[i.id] = !state.have[i.id]; store.set('have', state.have); b.classList.toggle('got', state.have[i.id]); b.setAttribute('aria-pressed', String(state.have[i.id])); count(); }
+        var b = h('li', 'chk' + (state.have[i.id] ? ' on' : ''));
+        b.setAttribute('role', 'checkbox'); b.tabIndex = 0; b.style.setProperty('--i', ci++);
+        b.setAttribute('aria-checked', String(!!state.have[i.id]));
+        b.innerHTML = '<span class="chk-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span>' +
+          '<span class="chk-name">' + E('ing.' + i.id, i.name) + (i.buy ? '<span class="badge-buy">докупить</span>' : '') + '</span><span class="chk-am">' + esc(qty(i.id)) + '</span>';
+        function flip() {
+          state.have[i.id] = !state.have[i.id]; store.set('have', state.have);
+          b.classList.toggle('on', state.have[i.id]); b.setAttribute('aria-checked', String(state.have[i.id])); count();
+          if (state.have[i.id] && items.every(function (x) { return state.have[x.id]; })) shopDone(); else shopCancel();
+        }
         b.addEventListener('click', function (e) { if (!editing && !e.target.closest('[contenteditable=true]')) flip(); });
         b.addEventListener('keydown', function (e) { if (editing || e.target !== b) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
-        tg.appendChild(b);
+        ul.appendChild(b);
       });
-      card.appendChild(tg);
+      card.appendChild(ul);
       grid.appendChild(card);
     });
     el.appendChild(grid);
@@ -503,10 +508,33 @@
     });
     el.querySelector('#shopReset').addEventListener('click', function () {
       state.have = {}; store.set('have', {});
-      el.querySelectorAll('.ing-card').forEach(function (c) { c.classList.remove('got'); c.setAttribute('aria-pressed', 'false'); }); count();
+      el.querySelectorAll('.chk').forEach(function (c) { c.classList.remove('on'); c.setAttribute('aria-checked', 'false'); }); count(); shopCancel();
     });
+    /* всё есть — короткая плашка и сам переход дальше, как в посуде */
+    var shopT = 0, shopAt = state.idx;
+    function shopCancel() { clearTimeout(shopT); dropHud(); }
+    function shopDone() {
+      shopCancel();
+      var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (navigator.vibrate) { try { navigator.vibrate([20, 40, 20]); } catch (e) {} }
+      showHud('Всё на месте', 'Теперь посуда', 'продукты собраны', calm ? 1200 : 2000);
+      shopT = setTimeout(function () { if (state.idx === shopAt) go(shopAt + 1, 1); setTimeout(dropHud, 200); }, calm ? 1200 : 2000);
+    }
     count();
   }
+
+  /* плашка «готово → дальше»: появляется быстро, галка рисуется, полоска показывает, когда перелистнёт */
+  function showHud(kicker, title, sub, ms) {
+    dropHud();
+    var bn = h('div', 'done-hud'); bn.setAttribute('role', 'status');
+    bn.innerHTML = '<span class="dh-check" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="23"/><path d="M15 27l7 7 15-16"/></svg></span>' +
+      '<span class="dh-k">' + kicker + '</span><span class="dh-t">' + title + '</span><span class="dh-s">' + sub + '</span><span class="dh-bar"><i style="animation-duration:' + ms + 'ms"></i></span>';
+    bn.addEventListener('click', dropHud);
+    document.body.appendChild(bn);
+    requestAnimationFrame(function () { bn.classList.add('on'); });
+    return bn;
+  }
+  function dropHud() { document.querySelectorAll('.done-hud').forEach(function (n) { n.classList.remove('on'); setTimeout(function () { n.remove(); }, 260); }); }
 
   function buildTools(s, el) {
     var all = [], k = 's' + state.idx;
@@ -522,7 +550,7 @@
       ['#prev', '#next'].forEach(function (q) { var n = $(q); if (n) n.removeEventListener('click', onNav); });
     }
     function dropBanner() {
-      document.querySelectorAll('.tools-go, .tools-sweep').forEach(function (n) { n.classList.remove('on'); setTimeout(function () { n.remove(); }, 800); });
+      document.querySelectorAll('.tools-go, .tools-sweep').forEach(function (n) { n.classList.remove('on'); setTimeout(function () { n.remove(); }, 800); }); dropHud();
       flyers.forEach(function (f) { f.remove(); }); flyers = [];
       el.classList.remove('flown');
     }
@@ -561,20 +589,13 @@
       clearFx(); dropBanner();
       var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
       ['#prev', '#next'].forEach(function (q) { var n = $(q); if (n) n.addEventListener('click', onNav); });
-      el.classList.remove('all-set'); void el.offsetWidth; el.classList.add('all-set');
       if (navigator.vibrate) { try { navigator.vibrate([30, 60, 30]); } catch (e) {} }
-      var bn = h('div', 'tools-go');
-      bn.setAttribute('role', 'status');
-      bn.innerHTML = '<span class="tg-k">Арсенал собран</span><span class="tg-t">Погнали резать</span><span class="tg-s">ножи наточены, доски на месте</span><span class="tg-bar"><i></i></span>';
-      fxT.push(setTimeout(function () {
-        document.body.appendChild(bn);
-        requestAnimationFrame(function () { bn.classList.add('on'); });
-      }, calm ? 0 : 750));
+      showHud('Арсенал собран', 'Погнали резать', 'ножи наточены, доски на месте', calm ? 1300 : 2300);
       goT = setTimeout(function () {
-        clearFx(); el.classList.remove('all-set');
+        clearFx();
         if (state.idx === slideAt) go(slideAt + 1, 1);
-        setTimeout(dropBanner, 450);
-      }, calm ? 1800 : 3300);
+        setTimeout(dropBanner, 200);
+      }, calm ? 1300 : 2300);
     }
     function cancelGo() { clearFx(); el.classList.remove('all-set'); dropBanner(); }
     M.tools.forEach(function (z, zi) {
@@ -633,8 +654,8 @@
       var li = h('li', 'act');
       li.innerHTML = '<div class="act-text">' + E(a._k, a.t) + '</div>' + (a.tool ? '<span class="tool-chip">' + ico('pin') + E(a._k + '.tool', a.tool) + '</span>' : '') +
         (a.cut && window.Cuts && SKILL <= 8 ? window.Cuts.html(a.cut) : '') +
-        (a.how && SKILL <= 7 ? '<details class="act-how"' + (SKILL <= 4 ? ' open' : '') + '><summary>🔰 Как это сделать</summary><p>' + E(a._k + '.how', a.how) + '</p></details>' : '') +
-        (a.clean ? '<p class="act-clean"><span aria-hidden="true">🧽</span> ' + E(a._k + '.clean', a.clean) + '</p>' : '');
+        (a.how && SKILL <= 7 ? '<details class="act-how"' + (SKILL <= 4 ? ' open' : '') + '><summary>Как это сделать</summary><p>' + E(a._k + '.how', a.how) + '</p></details>' : '') +
+        (a.clean ? '<p class="act-clean"><b>Уборка</b> ' + E(a._k + '.clean', a.clean) + '</p>' : '');
       if (a.timer) {
         var box = h('div', 'act-timer');
         li.appendChild(box);

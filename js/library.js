@@ -124,6 +124,20 @@
     bind(); syncTabs();
   }
   var PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+  var DICE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="9" cy="9" r="1.3" class="f"/><circle cx="15" cy="15" r="1.3" class="f"/><circle cx="15" cy="9" r="1.3" class="f"/><circle cx="9" cy="15" r="1.3" class="f"/></svg>';
+  var I = { /* значки в цветных квадратиках, как в Настройках iPhone */
+    anketa: ['#ff9f0a', '<path d="M6 4h9l3 3v13H6z"/><path d="M9 12h6M9 16h4"/>'],
+    friends: ['#30b356', '<circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M15.5 6a3 3 0 0 1 0 6M17.5 14.2c1.9.6 3 2.2 3.3 4.8"/>'],
+    ai: ['#8e5cf7', '<path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z"/><path d="M18 15l.8 1.8 1.7.7-1.7.8L18 20l-.8-1.7-1.7-.8 1.7-.7z"/>'],
+    look: ['#ff375f', '<path d="M12 4a8 8 0 1 0 0 16c1.2 0 1.8-.9 1.4-1.9-.5-1.2.3-2.1 1.5-2.1H17a3 3 0 0 0 3-3c0-5-3.6-9-8-9z"/><circle cx="8" cy="11" r="1.1" class="f"/><circle cx="11" cy="7.5" r="1.1" class="f"/><circle cx="15.5" cy="8.5" r="1.1" class="f"/>'],
+    account: ['#8e8e93', '<circle cx="12" cy="9" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>'],
+    install: ['#0a84ff', '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M12 8v6M9.5 11.5L12 14l2.5-2.5"/>'],
+    login: ['#0a84ff', '<path d="M10 17l5-5-5-5"/><path d="M15 12H4"/><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/>'],
+    spark: ['#8e5cf7', '<path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z"/>'],
+    dice: ['#ff9f0a', '<rect x="5" y="5" width="14" height="14" rx="3.5"/><circle cx="9.5" cy="9.5" r="1.2" class="f"/><circle cx="14.5" cy="14.5" r="1.2" class="f"/>'],
+    pen: ['#30b356', '<path d="M5 19h4L19 9l-4-4L5 15z"/><path d="M13.5 6.5l4 4"/>']
+  };
+  function icoSq(k) { var x = I[k]; return '<span class="pf-ico" style="background:' + x[0] + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + x[1] + '</svg></span>'; }
   function bigHead(title, right) {
     return '<header class="tg-head"><span class="tg-mini" aria-hidden="true">' + title + '</span><span class="tg-nav-r">' + (right || '') + '</span></header>' +
       '<h2 class="lib-title tg-big" id="libTitle">' + title + '</h2>';
@@ -134,7 +148,7 @@
   }
   function listHTML() {
     var list = visible(), all = R.filter(function (r) { return !isHid(r.id); });
-    var h = bigHead('Кукинг', '<button type="button" class="tg-ic lib-fresh" aria-label="Крутить свежак" title="Свежак: рулетка идей">🎲</button>' +
+    var h = bigHead('Кукинг', '<button type="button" class="tg-ic lib-fresh" aria-label="Рулетка идей" title="Рулетка идей">' + DICE + '</button>' +
       '<button type="button" class="tg-ic tg-plus" data-a="create" aria-label="Новый рецепт">' + PLUS + '</button>');
     h += '<div class="tg-tools"><label class="tg-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
       '<input id="libQ" type="search" placeholder="Поиск по рецептам" autocomplete="off" value="' + esc(query) + '" aria-label="Поиск по рецептам"></label>' +
@@ -154,33 +168,93 @@
   function listsHTML(list) {
     var pins = list.filter(function (r) { return isPin(r.id); }), rest = list.filter(function (r) { return !isPin(r.id); });
     if (!list.length) return '<p class="small tg-none">Ничего не нашёл.</p>';
-    return (pins.length ? '<h3 class="tg-sec-t">📌 Закреплённые</h3><ul class="tg-list tg-group">' + pins.map(row).join('') + '</ul>' : '') +
+    return (pins.length ? '<h3 class="tg-sec-t">Закреплённые</h3><ul class="tg-list tg-group">' + pins.map(row).join('') + '</ul>' : '') +
       (rest.length ? (pins.length ? '<h3 class="tg-sec-t">Все рецепты</h3>' : '') + '<ul class="tg-list tg-group">' + rest.map(row).join('') + '</ul>' : '');
   }
   /* ---------- План (скоро) и Профиль ---------- */
+  /* ---------- План: неделя как в Календаре iPhone ---------- */
+  var plan = load('kuking:plan', {}), planDay = today(), planIntro = lget('kuking:planIntro') === '1';
+  var DOW = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], DOW_FULL = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+  var MON = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  function dKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function dParse(k) { var x = k.split('-'); return new Date(+x[0], +x[1] - 1, +x[2]); }
+  function savePlan() {
+    Object.keys(plan).forEach(function (k) { if (!plan[k] || !plan[k].length) delete plan[k]; });
+    lset('kuking:plan', JSON.stringify(plan));
+    if (db) db.collection('meta').doc('plan').set({ days: plan, updatedAt: new Date().toISOString() }).catch(function () {});
+  }
+  var CAL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
   function planHTML() {
-    return bigHead('План') + '<div class="tg-empty"><div class="tg-empty-pic" aria-hidden="true">📅</div><h3>План на неделю — скоро</h3>' +
-      '<p class="small">Выберешь, на сколько дней и сколько раз в день готовишь, — нейросеть разложит блюда по дням под твои БЖУ и соберёт один список покупок.</p></div>';
+    if (!planIntro) return bigHead('План') +
+      '<div class="pl-intro"><div class="pl-art" aria-hidden="true">' + [0, 1, 2, 3, 4, 5, 6].map(function (i) { return '<i style="--i:' + i + '"' + (i === 2 || i === 4 ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
+      '<h3>Неделя без вопроса «что пожрать»</h3><p class="small">Раскидай рецепты по дням — и в магазин за один заход.</p>' +
+      '<ol class="pl-steps"><li><b>Выбери день</b><span>лента дней сверху, как в Календаре</span></li><li><b>Добавь блюдо</b><span>из своей книги, в пару тапов</span></li><li><b>Готовь по плану</b><span>сегодняшнее блюдо — прямо тут</span></li></ol>' +
+      '<button type="button" class="nav-btn primary pl-start" data-a="planStart">Начать планировать</button></div>';
+    var t0 = new Date(); t0.setHours(0, 0, 0, 0); t0.setDate(t0.getDate() - ((t0.getDay() + 6) % 7)); // с понедельника этой недели
+    var days = []; for (var i = 0; i < 21; i++) { var d = new Date(t0); d.setDate(t0.getDate() + i); days.push(d); }
+    var td = today(), sel = dParse(planDay), ids = (plan[planDay] || []).filter(byId);
+    var tot = ids.reduce(function (t, id) { (byId(id).dishes || []).forEach(function (x) { t.k += +x.kcal || 0; t.p += +x.p || 0; }); return t; }, { k: 0, p: 0 });
+    var h = bigHead('План', '<button type="button" class="tg-ic" data-a="planToday" aria-label="К сегодняшнему дню">' + CAL + '</button>');
+    h += '<div class="pl-strip" role="tablist" aria-label="Дни">' + days.map(function (d) {
+      var k = dKey(d), n = (plan[k] || []).filter(byId).length;
+      return '<button type="button" role="tab" class="pl-day' + (k === td ? ' today' : '') + (d < t0 || k < td ? ' past' : '') + '" data-day="' + k + '" aria-selected="' + (k === planDay) + '" aria-label="' + DOW_FULL[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()] + (n ? ', блюд: ' + n : '') + '">' +
+        '<span class="pl-dow">' + DOW[d.getDay()] + '</span><b>' + d.getDate() + '</b><i class="pl-dot' + (n ? ' on' : '') + '"></i></button>';
+    }).join('') + '</div>';
+    h += '<div class="pl-head"><h3>' + (planDay === td ? 'Сегодня' : DOW_FULL[sel.getDay()]) + '<small>' + sel.getDate() + ' ' + MON[sel.getMonth()] + '</small></h3>' +
+      (tot.k ? '<span class="pl-sum"><b>' + tot.k + '</b> ккал · Б <b>' + tot.p + '</b></span>' : '') + '</div>';
+    if (ids.length) h += '<ul class="tg-list tg-group pl-list">' + ids.map(function (id) {
+      var r = byId(id);
+      return '<li class="tg-li pl-li"><button type="button" class="tg-row" data-open="' + esc(id) + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
+        '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b><small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span><span class="tg-l2"><span class="tg-sub">' + esc(r.tagline || '') + '</span></span></span></button>' +
+        '<button type="button" class="pl-x" data-unplan="' + esc(id) + '" aria-label="Убрать из плана">' + '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></li>';
+    }).join('') + '</ul>';
+    else h += '<div class="pl-empty"><p>На этот день ничего нет</p></div>';
+    h += '<button type="button" class="pl-add" data-a="planAdd"><span>' + PLUS + '</span>Добавить блюдо</button>';
+    var week = 0; days.slice(0, 7).forEach(function (d) { week += (plan[dKey(d)] || []).filter(byId).length; });
+    h += '<p class="pl-week">На этой неделе ' + (week ? 'запланировано блюд: <b>' + week + '</b>' : 'пока пусто') + '</p>';
+    return h;
+  }
+  function planPicker() {
+    var list = R.filter(function (r) { return !isHid(r.id); }).slice().reverse();
+    var m = document.createElement('div'); m.className = 'pk-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Выбери блюдо');
+    var d = dParse(planDay);
+    m.innerHTML = '<div class="pk-sheet"><span class="set-grab" aria-hidden="true"></span><div class="pk-head"><b>' + (planDay === today() ? 'На сегодня' : DOW_FULL[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()]) + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div>' +
+      (list.length ? '<ul class="tg-list tg-group">' + list.map(function (r) {
+        var on = (plan[planDay] || []).indexOf(r.id) >= 0;
+        return '<li class="tg-li"><button type="button" class="tg-row pk-row' + (on ? ' on' : '') + '" data-pk="' + esc(r.id) + '" aria-pressed="' + on + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
+          '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b><small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span><span class="tg-l2"><span class="tg-sub">' + esc(r.tagline || '') + '</span></span></span>' +
+          '<span class="chk-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span></button></li>';
+      }).join('') + '</ul>' : '<p class="small">Книга пустая — сначала создай рецепт.</p>') + '</div>';
+    document.body.appendChild(m); requestAnimationFrame(function () { m.classList.add('on'); });
+    function shut() { m.classList.remove('on'); setTimeout(function () { m.remove(); }, 300); keepY(render); }
+    m.addEventListener('click', function (e) {
+      if (e.target === m) return shut();
+      var b = e.target.closest('[data-pk]'); if (!b) return;
+      var id = b.getAttribute('data-pk'); if (id === 'x') return shut();
+      var arr = plan[planDay] = plan[planDay] || [], i = arr.indexOf(id);
+      if (i >= 0) arr.splice(i, 1); else arr.push(id);
+      b.classList.toggle('on', i < 0); b.setAttribute('aria-pressed', String(i < 0)); savePlan();
+    });
   }
   function chev() { return '<svg class="pf-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'; }
-  function pfRow(a, ico, label, sub) { return '<button type="button" class="pf-row" data-pf="' + a + '"><span class="pf-ico" aria-hidden="true">' + ico + '</span><span class="pf-t">' + label + '</span>' + (sub ? '<span class="pf-sub">' + sub + '</span>' : '') + chev() + '</button>'; }
+  function pfRow(a, ico, label, sub) { return '<button type="button" class="pf-row" data-pf="' + a + '">' + icoSq(ico) + '<span class="pf-t">' + label + '</span>' + (sub ? '<span class="pf-sub">' + sub + '</span>' : '') + chev() + '</button>'; }
   function profileHTML() {
     var S = window.KukingStore, Soc = SOC(), me = Soc.me && Soc.me(), u = S && S.user && S.user();
     var inf = me && Soc.info ? (Soc.info(me.id) || {}) : {}, name = inf.name || (me && me.nick) || (u ? u.email : 'Гость');
     var n = Soc.badge ? Soc.badge() : 0, sk = +lget('kuking:skill') || 0;
     var h = bigHead('Профиль');
-    h += '<button type="button" class="pf-card" data-pf="' + (u ? 'anketa' : 'login') + '"><span class="pf-av' + (me && me.is_admin ? ' chef' : '') + '" aria-hidden="true">' + esc(String(name).charAt(0).toUpperCase()) + (me && me.is_admin ? CROWN : '') + '</span>' +
+    h += '<button type="button" class="pf-card" data-pf="' + (u ? 'anketa' : 'login') + '"><span class="pf-av' + (me && me.is_admin ? ' chef' : '') + '" aria-hidden="true">' + (inf.avatar ? '<img src="' + esc(inf.avatar) + '" alt="">' : esc(String(name).charAt(0).toUpperCase())) + (me && me.is_admin ? CROWN : '') + '</span>' +
       '<span class="pf-who"><b>' + esc(name) + '</b>' + (me ? '<span class="pf-nick">@' + esc(me.nick) + (me.is_admin ? ' <span class="soc-chef adm">' + CROWN + 'админ</span>' : ' <span class="soc-chef">шеф</span>') + '</span>' : '<span class="pf-nick">' + (u ? 'заполни анкету' : 'войди, чтобы дружить и хранить рецепты') + '</span>') + '</span>' + chev() + '</button>';
-    h += '<div class="pf-group">' + (u ? pfRow('anketa', '📝', 'Анкета', sk ? 'уровень ' + sk + '/10' : '') : pfRow('login', '🔑', 'Войти или зарегистрироваться')) +
-      (Soc.enabled && u ? pfRow('friends', '👥', 'Друзья', n ? '<em class="pf-badge">' + n + '</em>' : '') : '') + '</div>';
-    h += '<div class="pf-group">' + pfRow('ai', '✨', 'Нейросеть', window.KukingAI && window.KukingAI.ready() ? 'подключена' : 'не подключена') +
-      pfRow('look', '🎨', 'Цвет приложения') + pfRow('account', '👤', 'Аккаунт') + pfRow('install', '📲', 'Установка на iPhone') + '</div>';
+    h += '<div class="pf-group">' + (u ? pfRow('anketa', 'anketa', 'Анкета', sk ? 'уровень ' + sk + '/10' : '') : pfRow('login', 'login', 'Войти или зарегистрироваться')) +
+      (Soc.enabled && u ? pfRow('friends', 'friends', 'Друзья', n ? '<em class="pf-badge">' + n + '</em>' : '') : '') + '</div>';
+    h += '<div class="pf-group">' + pfRow('ai', 'ai', 'Нейросеть', window.KukingAI && window.KukingAI.ready() ? 'подключена' : 'не подключена') +
+      pfRow('look', 'look', 'Цвет приложения') + pfRow('account', 'account', 'Аккаунт') + pfRow('install', 'install', 'Установка на iPhone') + '</div>';
     h += '<p class="pf-ver">Кукинг ' + esc((window.KUKING_CONFIG || {}).version || '') + '</p>';
     return h;
   }
   function emptyHTML() {
     var S = window.KukingStore, signed = S && S.user && S.user();
-    return '<div class="tg-empty"><div class="tg-empty-pic" aria-hidden="true">🍳</div><h3>Книга пустая — и это норм</h3>' +
+    return '<div class="tg-empty"><div class="tg-empty-pic" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M14 34h36c0 10-8 18-18 18s-18-8-18-18z"/><path d="M12 32h40"/><path d="M26 26c-3-4 3-6 0-11M32 25c-3-4 3-6 0-11M38 26c-3-4 3-6 0-11"/></svg></div><h3>Книга пустая — и это норм</h3>' +
       '<p class="small">Тут будут твои рецепты: придумай с нейросетью, напиши сам или забери у кентов.</p>' +
       '<button type="button" class="nav-btn primary" data-a="create">Создать первый рецепт</button>' +
       (S && S.enabled && !signed ? '<button type="button" class="ghost-btn" data-a="login">Войти в аккаунт</button>' : '') + '</div>';
@@ -245,14 +319,14 @@
   function createHTML() {
     var ai = window.KukingAI && window.KukingAI.ready();
     var h = '<header class="tg-head tg-head-sub"><button type="button" class="tg-back" data-a="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Рецепты</button><span class="tg-head-t">Новый рецепт</span></header>';
-    h += '<section class="tg-sec tg-make"><h3 class="tg-sec-h">✨ Нейросеть по твоей идее</h3>' +
+    h += '<section class="tg-sec tg-make"><h3 class="tg-mk-h">' + icoSq('spark') + 'Нейросеть по твоей идее</h3>' +
       '<form id="libIdea" class="tg-idea"><input id="libIdeaIn" type="text" maxlength="120" placeholder="Например: сочная шаурма как в Стамбуле" value="' + esc(idea) + '" aria-label="Идея блюда" required>' +
       '<div class="tg-chips">' + [['self', 'Для себя'], ['romance', 'Романтика'], ['friends', 'Друзья']].map(function (m) { return '<button type="button" class="tg-chip m-' + m[0] + '" data-im="' + m[0] + '" aria-pressed="' + (ideaMode === m[0]) + '">' + m[1] + '</button>'; }).join('') + '</div>' +
       '<button type="submit" class="nav-btn primary">Сгенерировать</button></form>' +
       (ai ? '' : '<p class="small">Нужен ключ к нейросети — <button type="button" class="lib-link" data-a="setup">подключить</button>.</p>') + '</section>';
-    h += '<section class="tg-sec tg-make"><h3 class="tg-sec-h">🎲 10 идей под твой вкус</h3>' +
+    h += '<section class="tg-sec tg-make"><h3 class="tg-mk-h">' + icoSq('dice') + '10 идей под твой вкус</h3>' +
       (themesOpen ? themesBlock() : '<p class="small">Нейросеть посмотрит оценки, комменты и анкеты и предложит 10 блюд.</p><button type="button" class="nav-btn lib-themes">Показать идеи</button>') + '</section>';
-    h += '<section class="tg-sec tg-make"><h3 class="tg-sec-h">✍️ Написать самому</h3><p class="small">Продукты, посуда, шаги с таймерами и подача — соберётся такое же слайд-шоу.</p>' +
+    h += '<section class="tg-sec tg-make"><h3 class="tg-mk-h">' + icoSq('pen') + 'Написать самому</h3><p class="small">Продукты, посуда, шаги с таймерами и подача — соберётся такое же слайд-шоу.</p>' +
       '<button type="button" class="nav-btn" data-a="editnew">Открыть редактор</button></section>';
     return h;
   }
@@ -366,6 +440,12 @@
   function bind() {
     on('#libMenu', function () { if (window.KukingDrawer) window.KukingDrawer.open(); });
     on('#libClose', close);
+    on('[data-a=planStart]', function () { planIntro = true; lset('kuking:planIntro', '1'); dir = 'fwd'; render(); });
+    on('[data-a=planToday]', function () { planDay = today(); render(); var t = ov.querySelector('.pl-day[aria-selected=true]'); if (t) t.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); });
+    on('[data-day]', function (b) { planDay = b.getAttribute('data-day'); var x = ov.scrollLeft; keepY(render); var sc = ov.querySelector('.pl-strip'); var t = ov.querySelector('.pl-day[aria-selected=true]'); if (sc && t) sc.scrollLeft = t.offsetLeft - sc.clientWidth / 2 + t.clientWidth / 2; });
+    on('[data-a=planAdd]', planPicker);
+    on('[data-unplan]', function (b) { var id = b.getAttribute('data-unplan'); plan[planDay] = (plan[planDay] || []).filter(function (x) { return x !== id; }); savePlan(); keepY(render); });
+    var strip = ov.querySelector('.pl-strip'); if (strip && !strip.dataset.c) { strip.dataset.c = 1; var t0 = strip.querySelector('.pl-day[aria-selected=true]'); if (t0) strip.scrollLeft = t0.offsetLeft - strip.clientWidth / 2 + t0.clientWidth / 2; }
     on('[data-pf]', function (b) {
       var a = b.getAttribute('data-pf'), St = window.KukingSettings, Soc = SOC();
       if (a === 'login' || a === 'account') St && St.open('account');
@@ -550,6 +630,9 @@
         add.forEach(function (r) { R.push(r); });
         if (!ov.hidden && !typing()) keepY(render);
       }, function () {});
+      db.collection('meta').doc('plan').get().then(function (x) {
+        var v = x && x.exists && x.data(); if (v && v.days) { Object.keys(v.days).forEach(function (k) { if (!plan[k]) plan[k] = v.days[k]; }); lset('kuking:plan', JSON.stringify(plan)); if (!ov.hidden && view === 'plan') keepY(render); }
+      }).catch(function () {});
       db.collection('meta').doc('ideas').get().then(function (x) {
         var v = x && x.exists && x.data();
         if (v && Array.isArray(v.items) && !window.Fresh.themes.length) { window.Fresh.setIdeas(v.items, v.sig || ''); if (!ov.hidden) keepY(render); }

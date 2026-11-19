@@ -52,17 +52,15 @@ window.Confetti = (function () {
     if (opts.anchor) { var r = opts.anchor.getBoundingClientRect(); ax = r.left + r.width / 2; ay = r.top + r.height / 2; }
     queue = [];
     t0 = performance.now(); last = t0;
-    burst(ax, ay, reduce ? 70 : 220, P);
-    burst(ax - W * 0.18, ay + 10, reduce ? 0 : 120, P * 0.7);
-    burst(ax + W * 0.18, ay + 10, reduce ? 0 : 120, P * 0.7);
-    cannons(reduce ? 20 : 90);
-    rain(reduce ? 60 : 180);
-    var dur = reduce ? 2500 : 6500;
-    for (var t = 200; t < dur; t += rnd(160, 340)) queue.push({ at: t, fn: launch });
+    burst(ax, ay, reduce ? 50 : 150, P * 0.85);
+    burst(ax - W * 0.18, ay + 10, reduce ? 0 : 60, P * 0.6);
+    burst(ax + W * 0.18, ay + 10, reduce ? 0 : 60, P * 0.6);
+    cannons(reduce ? 10 : 40);
+    rain(reduce ? 30 : 80);
+    var dur = reduce ? 1500 : 3600;
+    for (var t = 300; t < dur; t += rnd(420, 700)) queue.push({ at: t, fn: launch });
     if (!reduce) {
-      queue.push({ at: 1100, fn: function () { burst(ax, ay - 20, 160, P * 0.9); } });
-      queue.push({ at: 2600, fn: function () { cannons(60); } });
-      queue.push({ at: 4200, fn: function () { burst(ax, ay, 200, P); rain(90); } });
+      queue.push({ at: 1100, fn: function () { burst(ax, ay - 20, 90, P * 0.8); } });
     }
     queue.sort(function (a, b) { return a.at - b.at; });
     if (!raf) raf = requestAnimationFrame(frame);

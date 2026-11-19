@@ -160,7 +160,7 @@
       '<span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
       '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b><small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span>' +
       '<span class="tg-l2"><span class="tg-sub">' + (MODE_SHORT[r.mode] ? '<span class="tg-mode m-' + r.mode + '">' + MODE_SHORT[r.mode] + '</span>' : '') + esc(r.tagline || '') + '</span>' +
-      (scoreHTML(r.id) || (!sc ? '<span class="tg-new">' + (r.ai ? 'от нейросети' : 'новый') + '</span>' : '')) + '</span></span></button></li>';
+      (scoreHTML(r.id) || (!sc ? '<span class="tg-new" title="Ещё не готовил" aria-label="Новый"></span>' : '')) + '</span></span></button></li>';
   }
 
   /* карточка рецепта */

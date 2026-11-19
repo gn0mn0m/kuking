@@ -205,11 +205,11 @@
   API.testPush = function () { return fnCall('test'); };
   function pushCard(after) {
     var st = pushState(), h = '<div class="soc-push card"><h3 class="soc-form-h">🎂 Пуши на днюху</h3>';
-    if (st === 'on') h += '<p class="small">Включены. В днюху кента прилетит малява в 9 утра по Москве, в твою — поздравление.</p><button type="button" class="ghost-btn" data-a="ptest">Проверить пуш</button>';
+    if (st === 'on') h += '<p class="small">Включены. В твою днюху в 9 утра по Москве прилетит поздравление от хаты.</p><button type="button" class="ghost-btn" data-a="ptest">Проверить пуш</button>';
     else if (st === 'install') h += '<p class="small">На iPhone пуши работают только из приложения на экране «Домой»: Safari → Поделиться → «На экран „Домой“», открой оттуда и включи тут.</p>';
     else if (st === 'denied') h += '<p class="small">Уведомления запрещены. Включи: Настройки iPhone → Уведомления → Кукинг.</p>';
     else if (st === 'nope') h += '<p class="small">Этот браузер пуши не умеет.</p>';
-    else h += '<p class="small">В днюху кента — малява в 9 утра по Москве, в твою — поздравление от хаты. Больше ничего не шлём, без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
+    else h += '<p class="small">В твою днюху в 9 утра по Москве прилетит поздравление от хаты. Больше ничего не шлём, без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
     if (after) h += '<button type="button" class="' + (st === 'off' ? 'ghost-btn' : 'nav-btn primary') + '" data-a="pdone">' + (st === 'off' ? 'Потом' : 'Дальше') + '</button>';
     return h + (msg ? '<p class="set-msg">' + esc(msg) + '</p>' : '') + '</div>';
   }

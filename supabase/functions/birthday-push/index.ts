@@ -1,6 +1,6 @@
 // Кукинг: пуши на днюху. Supabase → Edge Functions → функция birthday-push.
 // action "init" — отдать публичный ключ пушей (создаёт ключи при первом вызове);
-// action "run"  — раз в день по расписанию: поздравить именинников и разослать друзьям;
+// action "run"  — раз в день по расписанию: поздравить именинника (только его самого);
 // action "test" — пробный пуш себе (нужен вход).
 import webpush from 'npm:web-push@3.6.7';
 import postgres from 'npm:postgres@3.4.4';
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       if (!u.ok) return json({ error: 'not signed in' }, 401);
       const me = await u.json();
       await keys();
-      const n = await send([me.id], { title: '🔥 Кукинг на связи', body: 'Пуши работают. В днюху кентов тебе прилетит малява.' });
+      const n = await send([me.id], { title: '🔥 Кукинг на связи', body: 'Пуши работают. В твою днюху прилетит поздравление.' });
       return json({ sent: n });
     }
 
@@ -74,10 +74,6 @@ Deno.serve(async (req) => {
       let total = 0;
       for (const b of born) {
         total += await send([b.id], { title: `🎂 С днюхой, ${b.name}!`, body: 'Вся хата поздравляет. Сегодня ты не у плиты — пусть кенты кормят тебя.' });
-        const rec = b.is_admin
-          ? await sql`select id from public.profiles where id <> ${b.id}`
-          : await sql`select case when a = ${b.id} then b else a end as id from public.friends where status = 'accepted' and ${b.id} in (a, b)`;
-        total += await send(rec.map((r) => r.id), { title: `🎂 Сегодня днюха у ${b.name}`, body: 'Поздравь кента — а лучше накорми. Открой «Кукинг» и подбери ему что-нибудь неотразимое.' });
       }
       return json({ birthdays: born.length, sent: total });
     }

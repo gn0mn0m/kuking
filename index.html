@@ -17,6 +17,7 @@
 <style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}*,*::before,*::after{box-sizing:inherit}body{margin:0}img{max-width:100%}[hidden]{display:none!important}html{-webkit-text-size-adjust:100%}button,a,label{-webkit-tap-highlight-color:transparent}</style>
 </head>
 <body>
+<div class="sb-strip" aria-hidden="true"></div>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Marck+Script&family=Yeseva+One&display=swap">
@@ -367,7 +368,7 @@ body.editing .tool-card { cursor: default; }
 .lib-btn { display: inline-flex; align-items: center; gap: 6px; }
 .home-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .lib-btn { border: 1px solid var(--orange); background: none; color: var(--orange); border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: .82rem; }
-.lib-ov { position: fixed; inset: 0; z-index: 40; background: radial-gradient(1100px 620px at 88% -12%, color-mix(in srgb, var(--orange) 15%, transparent), transparent 62%), radial-gradient(900px 520px at -8% 112%, color-mix(in srgb, var(--green) 11%, transparent), transparent 60%), var(--bg); overflow-y: auto; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
+.lib-ov { position: fixed; inset: 0; z-index: 40; background: radial-gradient(1100px 620px at 88% -12%, color-mix(in srgb, var(--orange) 15%, transparent), transparent 62%), radial-gradient(900px 520px at -8% 112%, color-mix(in srgb, var(--green) 11%, transparent), transparent 60%), var(--bg); overflow-y: auto; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
 .lib-panel { max-width: 1100px; margin: 0 auto; padding: 6px 0 22px; }
 .lib-title { font-family: var(--f-display); font-weight: 400; font-size: clamp(2.6rem, 7vw, 4.4rem); line-height: 1; margin: 6px 0 14px; color: var(--orange); }
 .lib-note { display: grid; gap: 8px; margin-top: 10px; }
@@ -386,7 +387,9 @@ body.editing .tool-card { cursor: default; }
 .lib-note-view.can-open:hover { background: color-mix(in srgb, var(--green) 20%, transparent); }
 .lib-cm-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .lib-note-view p { white-space: pre-wrap; }
-.lib-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; position: sticky; top: 0; z-index: 6; background: var(--bg); padding-block: 4px 10px; margin-bottom: 10px; border-bottom: 1px solid var(--line); box-shadow: 0 calc(-1 * max(16px, env(safe-area-inset-top, 0px))) 0 0 var(--bg); }
+.lib-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; position: sticky; top: 0; z-index: 6; background: var(--bg); margin: 0 calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 10px calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding: calc(env(safe-area-inset-top, 0px) + 14px) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); }
+/* полоса под часами и батареей: всегда тёмная, чтобы белые цифры статус-бара читались */
+.sb-strip { position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); background: #1b0f12; z-index: 100; pointer-events: none; }
 .lib-head .lib-title { margin-block: 0; }
 .lib-rand { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; min-height: 40px; }
 .lib-rand .label { margin: 0 6px 0 0; }

@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       if (!u.ok) return json({ error: 'not signed in' }, 401);
       const me = await u.json();
       await keys();
-      const n = await send([me.id], { title: '🔥 Кукинг на связи', body: 'Пуши работают. В твою днюху прилетит поздравление.' });
+      const n = await send([me.id], { title: '🔥 Кукинг на связи', body: 'Уведомления работают.' });
       return json({ sent: n });
     }
 

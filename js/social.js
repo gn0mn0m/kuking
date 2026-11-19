@@ -88,7 +88,7 @@
       if (me && me.is_admin) S.claimLegacy();
       var chef = !!(me && me.is_admin), was = false; try { was = localStorage.getItem('kuking:chef') === '1'; } catch (e) {}
       if (chef !== was) { try { if (chef) localStorage.setItem('kuking:chef', '1'); else localStorage.removeItem('kuking:chef'); } catch (e) {} location.reload(); return; }
-      emit(); if (!ov.hidden) render();
+      emit(); if (!ov.hidden && !busyForm()) render();
     }).catch(function () {});
   }
   API.refresh = refresh;
@@ -166,14 +166,34 @@
       (open ? '<svg class="soc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>' : '</div>') +
       (act ? '<span class="soc-act">' + act + '</span>' : '') + '</li>';
   }
+  /* черновик анкеты: что ввёл — не пропадёт, даже если экран перерисуется */
+  var fd = null;
+  function busyForm() { var a = document.activeElement; return !!(ov.querySelector('#socNick') || (a && ov.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.value)); }
+  function fv(k, dflt) { return fd && fd[k] != null ? fd[k] : dflt; }
+  var nickState = '', nickTimer = null;
+  function checkNick(v) {
+    clearTimeout(nickTimer);
+    var hint = ov.querySelector('#socNickHint'); if (!hint) return;
+    if (me && v.toLowerCase() === me.nick.toLowerCase()) { nickState = ''; hint.textContent = ''; hint.className = 'soc-nick-hint'; return; }
+    if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(v)) { nickState = 'bad'; hint.textContent = v ? '3–20 символов: буквы, цифры, _' : ''; hint.className = 'soc-nick-hint bad'; return; }
+    hint.textContent = 'проверяю…'; hint.className = 'soc-nick-hint';
+    nickTimer = setTimeout(function () {
+      S.req('GET', 'profiles?select=id&nick=ilike.' + q(v.replace(/_/g, '\\_')) + '&limit=1').then(function (rows) {
+        var h = ov.querySelector('#socNickHint'); if (!h || ov.querySelector('#socNickIn').value.trim() !== v) return;
+        var taken = rows && rows.length && rows[0].id !== uid();
+        nickState = taken ? 'taken' : 'ok';
+        h.textContent = taken ? '✕ занят — придумай другой' : '✓ свободен'; h.className = 'soc-nick-hint ' + (taken ? 'bad' : 'ok');
+      }).catch(function () { var h = ov.querySelector('#socNickHint'); if (h) h.textContent = ''; });
+    }, 450);
+  }
   function nickForm(first) {
     var i = info[uid()] || {};
-    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — кенты увидят, нейросеть учтёт, а в днюху тебя поздравят. Первый в хате становится шефом.</p>' : '<h3 class="soc-form-h">Анкета</h3>') +
-      '<label class="set-f"><span>Ник — по нему найдут кенты</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(me ? me.nick : '') + '"></label>' +
-      '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(i.name || '') + '" placeholder="Как к тебе обращаться"></label>' +
-      '<label class="set-f"><span>День рождения</span><input id="socBday" type="date" autocomplete="bday" min="1930-01-01" max="2025-12-31" value="' + esc(i.bday || '') + '"></label>' +
-      '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(i.likes || '') + '" placeholder="Грузинская, острое, бургеры…"></label>' +
-      '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(i.avoid || '') + '" placeholder="Кинза, грибы, рыба…"></label>' +
+    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — кенты увидят, нейросеть учтёт. Первый в хате становится шефом.</p>' : '<h3 class="soc-form-h">Анкета</h3>') +
+      '<label class="set-f"><span>Ник — по нему найдут кенты</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(fv('nick', me ? me.nick : '')) + '"><small id="socNickHint" class="soc-nick-hint" aria-live="polite"></small></label>' +
+      '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(fv('name', i.name || '')) + '" placeholder="Как к тебе обращаться"></label>' +
+      '<label class="set-f"><span>День рождения</span><input id="socBday" type="date" autocomplete="bday" min="1930-01-01" max="2025-12-31" value="' + esc(fv('bday', i.bday || '')) + '"></label>' +
+      '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(fv('likes', i.likes || '')) + '" placeholder="Грузинская, острое, бургеры…"></label>' +
+      '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary">' + (first ? 'Погнали' : 'Сохранить') + '</button>' + (first ? '' : '<button type="button" class="ghost-btn" data-a="nickx">Отмена</button>') + '</div>' +
       (nickMsg ? '<p class="set-msg">' + esc(nickMsg) + '</p>' : '') + '</form>';
   }
@@ -207,12 +227,12 @@
   API.enablePush = enablePush;
   API.testPush = function () { return fnCall('test'); };
   function pushCard(after) {
-    var st = pushState(), h = '<div class="soc-push card"><h3 class="soc-form-h">🎂 Пуши на днюху</h3>';
-    if (st === 'on') h += '<p class="small">Включены. В твою днюху в 9 утра по Москве прилетит поздравление от хаты.</p><button type="button" class="ghost-btn" data-a="ptest">Проверить пуш</button>';
+    var st = pushState(), h = '<div class="soc-push card"><h3 class="soc-form-h">🔔 Уведомления</h3>';
+    if (st === 'on') h += '<p class="small">Включены.</p><button type="button" class="ghost-btn" data-a="ptest">Проверить пуш</button>';
     else if (st === 'install') h += '<p class="small">На iPhone пуши работают только из приложения на экране «Домой»: Safari → Поделиться → «На экран „Домой“», открой оттуда и включи тут.</p>';
     else if (st === 'denied') h += '<p class="small">Уведомления запрещены. Включи: Настройки iPhone → Уведомления → Кукинг.</p>';
     else if (st === 'nope') h += '<p class="small">Этот браузер пуши не умеет.</p>';
-    else h += '<p class="small">В твою днюху в 9 утра по Москве прилетит поздравление от хаты. Больше ничего не шлём, без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
+    else h += '<p class="small">Разреши «Кукингу» присылать уведомления. Без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
     if (after) h += '<button type="button" class="' + (st === 'off' ? 'ghost-btn' : 'nav-btn primary') + '" data-a="pdone">' + (st === 'off' ? 'Потом' : 'Дальше') + '</button>';
     return h + (msg ? '<p class="set-msg">' + esc(msg) + '</p>' : '') + '</div>';
   }
@@ -304,7 +324,7 @@
     if (a === 'back') { view = 'list'; render(); return; }
     if (a === 'login') { close(); if (window.KukingSettings) window.KukingSettings.open('account'); return; }
     if (a === 'nick') { view = view === 'nick' ? 'list' : 'nick'; nickMsg = ''; render(); var i = ov.querySelector('#socNickIn'); if (i) i.focus(); return; }
-    if (a === 'nickx') { view = 'list'; render(); return; }
+    if (a === 'nickx') { fd = null; view = 'list'; render(); return; }
     if (a === 'profile') { viewing = id; view = 'profile'; render(); ov.querySelectorAll('.soc-page')[1].scrollTop = 0; return; }
     if (a === 'invite') return invite();
     if (a === 'pon') { msg = 'Включаю…'; render(); enablePush().then(function () { msg = ''; render(); toast('Пуши включены'); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
@@ -340,17 +360,24 @@
       }).catch(function () { found = []; render(); });
     });
     var nf = ov.querySelector('#socNick');
+    if (nf) {
+      var map = { socNickIn: 'nick', socName: 'name', socBday: 'bday', socLikes: 'likes', socAvoid: 'avoid' };
+      nf.addEventListener('input', function (e) { var k = map[e.target.id]; if (!k) return; fd = fd || {}; fd[k] = e.target.value; if (k === 'nick') checkNick(e.target.value.trim()); });
+      nf.addEventListener('change', function (e) { var k = map[e.target.id]; if (k) { fd = fd || {}; fd[k] = e.target.value; } });
+      var ni = ov.querySelector('#socNickIn'); if (ni && ni.value && (!me || ni.value !== me.nick)) checkNick(ni.value.trim());
+    }
     if (nf) nf.addEventListener('submit', function (e) {
       e.preventDefault(); if (busy) return;
       var v = function (id) { return ov.querySelector(id).value.trim(); };
       var nick = v('#socNickIn'), first = !me;
       var data = { id: uid(), name: v('#socName') || null, bday: v('#socBday') || null, likes: v('#socLikes') || null, avoid: v('#socAvoid') || null, updated_at: new Date().toISOString() };
       if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { nickMsg = 'Ник: 3–20 символов, буквы, цифры, _'; render(); return; }
+      if (nickState === 'taken') { nickMsg = 'Ник занят — придумай другой'; render(); return; }
       busy = true; nickMsg = 'Сохраняю…'; render();
       var step = me ? (me.nick === nick ? Promise.resolve() : S.req('PATCH', 'profiles?id=eq.' + q(uid()), { nick: nick }))
         : S.req('POST', 'profiles', { id: uid(), nick: nick }).then(function () { return S.rpc('claim_admin'); });
       step.then(function () { return S.req('POST', 'profile_info?on_conflict=id', [data], 'resolution=merge-duplicates,return=minimal'); })
-        .then(function () { busy = false; nickMsg = ''; view = first && pushState() !== 'nope' ? 'push' : 'list'; return refresh().then(acceptPending); })
+        .then(function () { busy = false; nickMsg = ''; fd = null; view = first && pushState() !== 'nope' ? 'push' : 'list'; return refresh().then(acceptPending); })
         .catch(function (er) { busy = false; nickMsg = /duplicate|unique|23505|409/i.test(String(er && (er.message || er.code))) ? 'Ник занят — придумай другой' : 'Не вышло: ' + (er && er.message); render(); });
     });
     bindReplies(ov, render);

@@ -1,6 +1,5 @@
-/* Настройки сборки. Supabase: Project Settings → API. anon-ключ публичный по задумке — права режут правила в базе. */
 window.KUKING_CONFIG = {
-  version: '1.0.0',
-  supabaseUrl: '',
-  supabaseAnonKey: ''
+  version: '1.1.0',
+  supabaseUrl: 'https://akwijavguhthhxpdjgfq.supabase.co',
+  supabaseAnonKey: 'sb_publishable_SuPpHmpSzJYEyUpKDrJ5zw_FR-V3MAj' // публичный ключ, ему место в приложении
 };

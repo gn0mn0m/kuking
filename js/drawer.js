@@ -18,7 +18,7 @@
     var n = Soc.badge ? Soc.badge() : 0;
     el.innerHTML = '<nav class="dr-panel"><button type="button" class="dr-me" data-a="me">' +
       '<span class="dr-av' + (me && me.is_admin ? ' chef' : '') + '" aria-hidden="true">' + esc(String(name).charAt(0).toUpperCase()) + '</span>' +
-      '<span class="dr-me-t"><b>' + esc(name) + '</b>' + (me && me.is_admin ? '<span class="soc-chef">шеф</span>' : '') + '<small>' + (me ? '@' + esc(me.nick) : u ? 'заполни анкету' : 'войди, чтобы дружить и хранить рецепты') + '</small></span></button>' +
+      '<span class="dr-me-t"><b>' + esc(name) + '</b>' + (me ? (me.is_admin ? '<span class="soc-chef adm"><svg class="soc-crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 11H5z"/></svg>админ</span>' : '<span class="soc-chef">шеф</span>') : '') + '<small>' + (me ? '@' + esc(me.nick) : u ? 'заполни анкету' : 'войди, чтобы дружить и хранить рецепты') + '</small></span></button>' +
       '<div class="dr-list">' +
       '<button type="button" class="dr-it" data-a="book">' + IC.book + '<span>Рецепты</span></button>' +
       (Soc.enabled ? '<button type="button" class="dr-it" data-a="friends">' + IC.friends + '<span>Друзья</span>' + (n ? '<em>' + n + '</em>' : '') + '</button>' : '') +

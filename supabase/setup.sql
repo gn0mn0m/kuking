@@ -157,6 +157,7 @@ create table if not exists public.profile_info (
   avoid text check (char_length(avoid) <= 300),
   updated_at timestamptz not null default now()
 );
+alter table public.profile_info add column if not exists skill smallint check (skill between 1 and 10);
 alter table public.profile_info enable row level security;
 grant select, insert, update on public.profile_info to authenticated;
 drop policy if exists "info read" on public.profile_info;

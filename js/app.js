@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var M = window.MENU;
+  var SKILL = +(function () { try { return localStorage.getItem('kuking:skill'); } catch (e) { return 0; } })() || 5; // уровень готовки 1–10 из анкеты
   if (!M) return; // рецептов ещё нет — живём на главной
   var $ = function (s, r) { return (r || document).querySelector(s); };
   function h(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
@@ -426,24 +427,24 @@
       '<a class="send-btn send-tg" id="sendTg" href="#" target="_blank" rel="noopener">В Telegram</a>' +
       '<button type="button" class="send-btn send-ghost" id="sendCopy">Скопировать</button></div>' +
       '<p class="note">' + E(k + '.note', s.note) + '</p>';
-    var grid = h('div', 'shop-grid');
+    var grid = h('div', 'shop-grid tiles'), ci = 0;
     M.groups.forEach(function (g, gi) {
       var list = items.filter(function (i) { return i.g === gi; });
       if (!list.length) return;
-      var card = h('section', 'card shop-card');
+      var card = h('section', 'tool-zone shop-zone');
       card.innerHTML = '<h3 class="label">' + E('group.' + gi, g) + '</h3>';
+      var tg = h('div', 'tool-grid ing-grid');
       list.forEach(function (i) {
-        var row = h('label', 'item');
-        row.setAttribute('for', 'have-' + i.id);
-        row.innerHTML = '<input type="checkbox" id="have-' + i.id + '"' + (state.have[i.id] ? ' checked' : '') + '>' +
-          '<span class="box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>' +
-          '<span class="nm">' + E('ing.' + i.id, i.name) + (i.buy ? '<span class="badge-buy">докупить</span>' : '') + '</span>' +
-          '<span class="am">' + esc(qty(i.id)) + '</span>';
-        row.querySelector('input').addEventListener('change', function (e) {
-          state.have[i.id] = e.target.checked; store.set('have', state.have); count();
-        });
-        card.appendChild(row);
+        var b = h('div', 'tool-card ing-card' + (state.have[i.id] ? ' got' : ''));
+        b.setAttribute('role', 'button'); b.tabIndex = 0; b.style.setProperty('--i', ci++);
+        b.setAttribute('aria-pressed', String(!!state.have[i.id]));
+        b.innerHTML = '<span class="tc-txt"><span class="tc-name">' + E('ing.' + i.id, i.name) + '</span>' + (i.buy ? '<span class="badge-buy">докупить</span>' : '') + '</span><span class="ing-am">' + esc(qty(i.id)) + '</span>';
+        function flip() { state.have[i.id] = !state.have[i.id]; store.set('have', state.have); b.classList.toggle('got', state.have[i.id]); b.setAttribute('aria-pressed', String(state.have[i.id])); count(); }
+        b.addEventListener('click', function (e) { if (!editing && !e.target.closest('[contenteditable=true]')) flip(); });
+        b.addEventListener('keydown', function (e) { if (editing || e.target !== b) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+        tg.appendChild(b);
       });
+      card.appendChild(tg);
       grid.appendChild(card);
     });
     el.appendChild(grid);
@@ -501,7 +502,7 @@
     });
     el.querySelector('#shopReset').addEventListener('click', function () {
       state.have = {}; store.set('have', {});
-      el.querySelectorAll('.item input').forEach(function (c) { c.checked = false; }); count();
+      el.querySelectorAll('.ing-card').forEach(function (c) { c.classList.remove('got'); c.setAttribute('aria-pressed', 'false'); }); count();
     });
     count();
   }
@@ -629,7 +630,10 @@
     actions.forEach(function (a) {
       if (a.divider) { ol.appendChild(h('li', 'act-div', esc(a.divider))); return; }
       var li = h('li', 'act');
-      li.innerHTML = '<div class="act-text">' + E(a._k, a.t) + '</div>' + (a.tool ? '<span class="tool-chip">' + ico('pin') + E(a._k + '.tool', a.tool) + '</span>' : '');
+      li.innerHTML = '<div class="act-text">' + E(a._k, a.t) + '</div>' + (a.tool ? '<span class="tool-chip">' + ico('pin') + E(a._k + '.tool', a.tool) + '</span>' : '') +
+        (a.cut && window.Cuts && SKILL <= 8 ? window.Cuts.html(a.cut) : '') +
+        (a.how && SKILL <= 7 ? '<details class="act-how"' + (SKILL <= 4 ? ' open' : '') + '><summary>🔰 Как это сделать</summary><p>' + E(a._k + '.how', a.how) + '</p></details>' : '') +
+        (a.clean ? '<p class="act-clean"><span aria-hidden="true">🧽</span> ' + E(a._k + '.clean', a.clean) + '</p>' : '');
       if (a.timer) {
         var box = h('div', 'act-timer');
         li.appendChild(box);

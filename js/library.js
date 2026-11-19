@@ -81,6 +81,9 @@
 
   /* ---------- фильтры и порядок ---------- */
   var SORTS = [['', 'Новые сверху'], ['old', 'Старые сверху'], ['fast', 'Быстрее'], ['slow', 'Дольше'], ['hi', 'Оценка выше'], ['lo', 'Оценка ниже']];
+  var pinned = load('kuking:pinned', []);
+  function isPin(id) { return pinned.indexOf(id) >= 0; }
+  function togglePin(id) { if (isPin(id)) pinned = pinned.filter(function (x) { return x !== id; }); else pinned.unshift(id); lset('kuking:pinned', JSON.stringify(pinned)); }
   var sortBy = lget('kuking:sort2'), forMode = lget('kuking:for'), query = '', sortOpen = false;
   function mins(r) {
     var t = String(r.totalTime || ''), h = /(\d+(?:[.,]\d+)?)\s*ч/.exec(t), m = /(\d+)\s*мин/.exec(t);
@@ -99,7 +102,7 @@
       hi: function (x, y) { return rv(y.id).score - rv(x.id).score; }, lo: function (x, y) { return (rv(x.id).score || 99) - (rv(y.id).score || 99); } }[sortBy];
     if (by) a.sort(by);
     if (sortBy === 'old') a.reverse();
-    return a;
+    return a.filter(function (r) { return isPin(r.id); }).sort(function (x, y) { return pinned.indexOf(x.id) - pinned.indexOf(y.id); }).concat(a.filter(function (r) { return !isPin(r.id); }));
   }
 
   /* ---------- экраны: list | detail | create | edit ---------- */
@@ -151,14 +154,15 @@
   function scoreHTML(id) {
     var sc = rv(id).score, ch = chefOf(id);
     if (!sc && !ch) return '';
-    return '<span class="tg-score">' + (ch ? '<span class="tg-chef ' + scCls(ch) + '" title="Оценка шефа">' + CROWN + ch + '</span>' : '') +
+    return '<span class="tg-score">' + (ch ? '<span class="tg-chef ' + scCls(ch) + '" title="Оценка админа">' + CROWN + ch + '</span>' : '') +
       (sc ? '<span class="tg-mine ' + scCls(sc) + '" title="Твоя оценка">' + sc + '<small>/10</small></span>' : '') + '</span>';
   }
   function row(r) {
     var on = active && r.id === active.id, sc = rv(r.id).score;
-    return '<li><button type="button" class="tg-row' + (on ? ' on' : '') + '" data-open="' + esc(r.id) + '">' +
+    return '<li class="tg-li" data-id="' + esc(r.id) + '"><div class="tg-swipe" aria-hidden="true"><span class="sw-pin">' + (isPin(r.id) ? 'Открепить' : 'Закрепить') + '</span><span class="sw-del">Удалить</span></div>' +
+      '<button type="button" class="tg-row' + (on ? ' on' : '') + (isPin(r.id) ? ' pinned' : '') + '" data-open="' + esc(r.id) + '" aria-description="Смахни вправо — закрепить, влево — удалить, удерживай — меню">' +
       '<span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
-      '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b><small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span>' +
+      '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b>' + (isPin(r.id) ? '<svg class="tg-pinico" viewBox="0 0 24 24" aria-label="Закреплён"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg>' : '') + '<small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span>' +
       '<span class="tg-l2"><span class="tg-sub">' + (MODE_SHORT[r.mode] ? '<span class="tg-mode m-' + r.mode + '">' + MODE_SHORT[r.mode] + '</span>' : '') + esc(r.tagline || '') + '</span>' +
       (scoreHTML(r.id) || (!sc ? '<span class="tg-new" title="Ещё не готовил" aria-label="Новый"></span>' : '')) + '</span></span></button></li>';
   }
@@ -192,7 +196,7 @@
     if ((r.dishes || []).length) h += '<section class="tg-sec"><h3 class="tg-sec-h">На тарелке</h3><ul class="tg-dishes">' + r.dishes.map(function (d) {
       return '<li><b>' + esc(d.name) + '</b>' + (d.kcal ? '<small>' + d.kcal + ' ккал · Б ' + d.p + ' · Ж ' + d.f + ' · У ' + d.c + '</small>' : '') + '</li>';
     }).join('') + '</ul></section>';
-    if (ch && adm) h += '<section class="tg-sec tg-chefrow">' + CROWN + '<span>Шеф <b>' + esc(adm.nick) + '</b> поставил</span><b class="lib-score ' + scCls(ch) + '">' + ch + '<small>/10</small></b></section>';
+    if (ch && adm) h += '<section class="tg-sec tg-chefrow">' + CROWN + '<span>Админ <b>' + esc(adm.nick) + '</b> поставил</span><b class="lib-score ' + scCls(ch) + '">' + ch + '<small>/10</small></b></section>';
     h += rateBlock(r);
     var thr = SOC().thread(r.id, reviews[r.id]); if (thr) h += '<section class="tg-sec">' + thr + '</section>';
     h += '<div class="tg-more">' + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
@@ -327,7 +331,8 @@
     on('#libMenu', function () { if (window.KukingDrawer) window.KukingDrawer.open(); });
     on('#libClose', close);
     on('.lib-fresh', function () { window.Fresh.spin(freshCtx); });
-    on('[data-open]', function (b) { go('detail', b.getAttribute('data-open')); });
+    on('[data-open]', function (b) { if (Date.now() < noClickUntil) return; go('detail', b.getAttribute('data-open')); });
+    gestures();
     on('[data-a=back]', function () { if (view === 'edit' && draft && draft.id) go('detail', draft.id, true); else go('list', undefined, true); });
     on('[data-a=create]', function () { go('create'); });
     on('[data-a=login]', function () { if (window.KukingSettings) window.KukingSettings.open('account'); });
@@ -335,7 +340,7 @@
     on('[data-a=editnew]', function () { draft = blankDraft(); go('edit'); });
     on('[data-a=editme]', function (b) { var r = byId(b.getAttribute('data-id')); draft = JSON.parse(JSON.stringify(r.manual._draft || blankDraft())); draft.id = r.id; go('edit'); });
     var q = ov.querySelector('#libQ');
-    if (q) q.addEventListener('input', function () { query = q.value; var l = ov.querySelector('.tg-list'), list = visible(); if (l) l.outerHTML = list.length ? '<ul class="tg-list">' + list.map(row).join('') + '</ul>' : '<ul class="tg-list"><li class="small tg-none">Ничего не нашёл.</li></ul>'; else render(); on('[data-open]', function (b) { go('detail', b.getAttribute('data-open')); }); });
+    if (q) q.addEventListener('input', function () { query = q.value; var l = ov.querySelector('.tg-list'), list = visible(); if (l) l.outerHTML = list.length ? '<ul class="tg-list">' + list.map(row).join('') + '</ul>' : '<ul class="tg-list"><li class="small tg-none">Ничего не нашёл.</li></ul>'; else render(); on('[data-open]', function (b) { if (Date.now() < noClickUntil) return; go('detail', b.getAttribute('data-open')); }); gestures(); });
     on('[data-for]', function (b) { forMode = b.getAttribute('data-for'); lset('kuking:for', forMode); render(); });
     on('.tg-sort', function () { sortOpen = !sortOpen; render(); });
     on('[data-sort]', function (b) { sortBy = b.getAttribute('data-sort'); sortOpen = false; lset('kuking:sort2', sortBy); render(); });
@@ -377,6 +382,77 @@
       on('[data-del]', function (b) { readDraft(); var k = b.getAttribute('data-del'), i = +b.getAttribute('data-i'), a = k === 'ing' ? draft.ing : k === 'tool' ? draft.tools : draft.steps; if (a.length > 1) a.splice(i, 1); keepY(render); });
     }
   }
+  /* ---------- жесты по строке: вправо — закрепить, влево — удалить, удержание — меню ---------- */
+  var noClickUntil = 0, TH = 84;
+  function removeRow(id) {
+    hidden[id] = Date.now(); saveHidden();
+    var li = ov.querySelector('.tg-li[data-id="' + cssq(id) + '"]');
+    function after() { keepY(render); toastUndo('«' + titleOf(id) + '» убран', function () { delete hidden[id]; saveHidden(); keepY(render); }); }
+    if (li) { li.style.height = li.offsetHeight + 'px'; li.classList.add('gone'); requestAnimationFrame(function () { li.style.height = '0px'; }); setTimeout(after, 260); } else after();
+  }
+  function cssq(id) { return window.CSS && CSS.escape ? CSS.escape(id) : id; }
+  function gestures() {
+    ov.querySelectorAll('.tg-li').forEach(function (li) {
+      var row = li.querySelector('.tg-row'), id = li.getAttribute('data-id'), x0 = 0, y0 = 0, dx = 0, mode = '', lp = null;
+      function reset() { row.style.transition = ''; row.style.transform = ''; li.classList.remove('sw-l', 'sw-r', 'sw-go'); }
+      row.addEventListener('touchstart', function (e) {
+        var t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; mode = '';
+        if (x0 < 24) return; // край экрана — шторка
+        lp = setTimeout(function () { lp = null; mode = 'menu'; noClickUntil = Date.now() + 600; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) {} li.classList.add('pressed'); menu(id); }, 480);
+      }, { passive: true });
+      row.addEventListener('touchmove', function (e) {
+        var t = e.touches[0], mx = t.clientX - x0, my = t.clientY - y0;
+        if (lp && (Math.abs(mx) > 8 || Math.abs(my) > 8)) { clearTimeout(lp); lp = null; }
+        if (!mode && Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my) * 1.4) mode = 'swipe';
+        if (!mode && Math.abs(my) > 10) mode = 'scroll';
+        if (mode !== 'swipe') return;
+        dx = mx; row.style.transition = 'none'; row.style.transform = 'translateX(' + (dx > 0 ? Math.min(dx, 160) : Math.max(dx, -160)) + 'px)';
+        li.classList.toggle('sw-r', dx > 0); li.classList.toggle('sw-l', dx < 0); li.classList.toggle('sw-go', Math.abs(dx) > TH);
+      }, { passive: true });
+      row.addEventListener('touchend', function () {
+        if (lp) { clearTimeout(lp); lp = null; }
+        li.classList.remove('pressed');
+        if (mode !== 'swipe') return;
+        noClickUntil = Date.now() + 400;
+        row.style.transition = 'transform .25s cubic-bezier(.22,1,.36,1)';
+        if (dx > TH) { row.style.transform = ''; setTimeout(function () { togglePin(id); keepY(render); }, 180); }
+        else if (dx < -TH) { row.style.transform = 'translateX(-110%)'; setTimeout(function () { removeRow(id); }, 200); }
+        else { row.style.transform = ''; setTimeout(reset, 260); }
+      });
+      row.addEventListener('touchcancel', function () { if (lp) clearTimeout(lp); lp = null; reset(); });
+      row.addEventListener('contextmenu', function (e) { e.preventDefault(); menu(id); });
+    });
+  }
+  function menu(id) {
+    var r = byId(id); if (!r) return;
+    var m = document.createElement('div'); m.className = 'ctx-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', r.title);
+    var items = [['open', 'Открыть'], ['cook', active && active.id === id ? 'Продолжить готовку' : 'Готовим это'], ['pin', isPin(id) ? 'Открепить' : 'Закрепить наверху'],
+      r.manual ? ['edit', 'Править'] : null, ['del', 'Удалить']].filter(Boolean);
+    m.innerHTML = '<div class="ctx-card"><div class="ctx-head"><span class="tg-av m-' + esc(r.mode || 'self') + '">' + emoji(r) + '</span><b>' + esc(r.title) + '</b></div>' +
+      items.map(function (x) { return '<button type="button" class="ctx-it' + (x[0] === 'del' ? ' danger' : '') + '" data-c="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    document.body.appendChild(m); requestAnimationFrame(function () { m.classList.add('on'); var f = m.querySelector('.ctx-it'); if (f) f.focus(); });
+    function shut() { m.classList.remove('on'); setTimeout(function () { m.remove(); }, 220); }
+    m.addEventListener('click', function (e) {
+      if (e.target === m) return shut();
+      var b = e.target.closest('[data-c]'); if (!b) return;
+      var c = b.getAttribute('data-c'); shut();
+      if (c === 'open') go('detail', id);
+      if (c === 'cook') choose(id);
+      if (c === 'pin') { togglePin(id); keepY(render); }
+      if (c === 'edit') { draft = JSON.parse(JSON.stringify(r.manual._draft || blankDraft())); draft.id = r.id; go('edit'); }
+      if (c === 'del') removeRow(id);
+    });
+    m.addEventListener('keydown', function (e) { if (e.key === 'Escape') shut(); });
+  }
+  function toastUndo(text, undo) {
+    var old = document.querySelector('.undo-toast'); if (old) old.remove();
+    var t = document.createElement('div'); t.className = 'undo-toast'; t.setAttribute('role', 'status');
+    t.innerHTML = '<span>' + esc(text) + '</span><button type="button">Вернуть</button>';
+    document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add('on'); });
+    var gone = setTimeout(function () { t.classList.remove('on'); setTimeout(function () { t.remove(); }, 300); }, 4500);
+    t.querySelector('button').addEventListener('click', function () { clearTimeout(gone); t.remove(); undo(); });
+  }
+
   function keepY(fn) { var y = ov.scrollTop; fn(); ov.scrollTop = y; }
 
   /* ---------- контекст для нейросети ---------- */

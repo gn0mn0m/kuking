@@ -103,18 +103,28 @@
   document.body.appendChild(ov);
   var view = 'list', viewing = null, found = null, searchQ = '', msg = '', busy = false, nickMsg = '', timer = null;
 
+  /* вторая страница (профиль друга или анкета) живёт, пока экран уезжает назад — без мигания */
+  var page2 = null, lastHTML = '', anketaFrom = 'friends';
   function render() {
     var keep = document.activeElement && ov.contains(document.activeElement) && document.activeElement.id;
-    var pos = ov.querySelector('.soc-page.cur') ? ov.querySelector('.soc-page.cur').scrollTop : 0;
-    ov.innerHTML = '<div class="soc-wrap' + (view === 'profile' ? ' deep' : '') + '">' +
-      '<section class="soc-page' + (view === 'list' ? ' cur' : '') + '">' + listHTML() + '</section>' +
-      '<section class="soc-page' + (view === 'profile' ? ' cur' : '') + '">' + (viewing ? profileHTML(viewing) : '') + '</section></div>';
+    var pages = ov.querySelectorAll('.soc-page'), deep = view === 'profile' || view === 'nick';
+    var pos = [pages[0] ? pages[0].scrollTop : 0, pages[1] ? pages[1].scrollTop : 0];
+    if (view === 'profile') page2 = 'profile'; if (view === 'nick') page2 = 'nick';
+    var html = '<section class="soc-page' + (!deep ? ' cur' : '') + '">' + listHTML() + '</section>' +
+      '<section class="soc-page' + (deep ? ' cur' : '') + '">' + (page2 === 'nick' ? anketaPage() : viewing ? profileHTML(viewing) : '') + '</section>';
+    var wrap = ov.querySelector('.soc-wrap');
+    if (wrap && html === lastHTML) { wrap.classList.toggle('deep', deep); return; } // ничего не поменялось — не трогаем экран
+    lastHTML = html;
+    var wasDeep = wrap ? wrap.classList.contains('deep') : deep;
+    ov.innerHTML = '<div class="soc-wrap' + ((ov.hidden ? deep : wasDeep) ? ' deep' : '') + '">' + html + '</div>';
+    wrap = ov.querySelector('.soc-wrap');
+    if (!ov.hidden && wasDeep !== deep) { void wrap.offsetWidth; wrap.classList.toggle('deep', deep); }
     bind();
-    var cur = ov.querySelector('.soc-page.cur'); if (cur) cur.scrollTop = pos;
+    pages = ov.querySelectorAll('.soc-page'); pages[0].scrollTop = pos[0]; pages[1].scrollTop = wasDeep === deep ? pos[1] : 0;
     if (keep) { var el = ov.querySelector('#' + keep); if (el) { el.focus(); if (el.setSelectionRange && el.value) el.setSelectionRange(el.value.length, el.value.length); } }
   }
   function head(title, back) {
-    return '<header class="soc-head">' + (back ? '<button type="button" class="ghost-btn soc-back" data-a="back" aria-label="Назад">← Друзья</button>' : '<h2 class="soc-title">' + (view === 'nick' || !me ? 'Анкета' : 'Друзья') + '</h2>') +
+    return '<header class="soc-head">' + (back ? '<button type="button" class="ghost-btn soc-back" data-a="back" aria-label="Назад">← Друзья</button>' : '<h2 class="soc-title">' + (!me ? 'Анкета' : 'Друзья') + '</h2>') +
       (back ? '<span class="soc-head-t">' + esc(title) + '</span>' : '') + '<button type="button" class="ghost-btn" data-a="close">Готово</button></header>';
   }
 
@@ -126,8 +136,7 @@
     var m = uid(), h = head();
     var mi = info[m] || {};
     h += '<div class="soc-me">' + avatar(me, true) + '<div class="soc-me-t">' + nickHTML(me) + '<span class="small">' + esc([mi.name, mi.bday ? bdayText(mi.bday) : ''].filter(Boolean).join(' · ') || 'это ты') + '</span></div>' +
-      '<button type="button" class="ghost-btn" data-a="nick">анкета</button></div>';
-    if (view === 'nick') h += nickForm(false);
+      '<button type="button" class="ghost-btn" data-a="nick">Анкета</button></div>';
     if (view === 'push') h += pushCard(true);
     h += '<div class="soc-invite"><button type="button" class="nav-btn primary" data-a="invite">Позвать по ссылке</button>' +
       '<p class="small">Кинь ссылку в чат — друг тапнет, войдёт, и вы сразу кенты. Или пусть найдёт тебя по нику <b>' + esc(me.nick) + '</b>.</p></div>';
@@ -188,7 +197,7 @@
   }
   var FDK = 'kuking:anketa', fd = null; try { fd = JSON.parse(localStorage.getItem(FDK)); } catch (e) {}
   function saveFd() { try { if (fd) localStorage.setItem(FDK, JSON.stringify(fd)); else localStorage.removeItem(FDK); } catch (e) {} }
-  function busyForm() { var a = document.activeElement; return !!(ov.querySelector('#socNick') || (a && ov.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.value)); }
+  function busyForm() { var a = document.activeElement; return busy || !!(ov.querySelector('#socNick') && fd) || !!(a && ov.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); }
   function fv(k, dflt) { return fd && fd[k] != null ? fd[k] : dflt; }
   var nickState = '', nickTimer = null;
   function checkNick(v) {
@@ -225,17 +234,77 @@
   }
   function nickForm(first) {
     var i = info[uid()] || {};
-    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — кенты увидят, нейросеть учтёт. Первый в хате становится админом.</p>' : '<h3 class="soc-form-h">Анкета</h3>') +
+    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — кенты увидят, нейросеть учтёт. Первый в хате становится админом.</p>' : '') +
       '<div class="soc-avpick"><span class="soc-avprev" id="socAvPrev">' + (fv('avatar', i.avatar) ? '<img src="' + esc(fv('avatar', i.avatar)) + '" alt="">' : '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>') + '</span>' +
-      '<label class="ghost-btn soc-avbtn">' + (fv('avatar', i.avatar) ? 'Сменить фото' : 'Добавить фото') + '<input id="socAvIn" type="file" accept="image/*" hidden></label><small id="socAvMsg" class="soc-nick-hint"></small></div>' +
+      '<label class="ghost-btn soc-avbtn">' + (fv('avatar', i.avatar) ? 'Сменить фото' : 'Добавить фото') + '<input id="socAvIn" type="file" accept="image/*" hidden></label>' + (fv('avatar', i.avatar) ? '<button type="button" class="lib-link soc-avdel" data-a="avdel">Убрать</button>' : '') + '<small id="socAvMsg" class="soc-nick-hint"></small></div>' +
       '<label class="set-f"><span>Ник — по нему найдут кенты</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(fv('nick', me ? me.nick : '')) + '"><small id="socNickHint" class="soc-nick-hint" aria-live="polite"></small></label>' +
       '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(fv('name', i.name || '')) + '" placeholder="Как к тебе обращаться"></label>' +
       '<label class="set-f"><span>День рождения</span><input id="socBday" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="дд.мм.гггг" value="' + esc(String(fv('bday', isoToRu(i.bday))).replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$3.$2.$1')) + '"></label>' +
       '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(fv('likes', i.likes || '')) + '" placeholder="Грузинская, острое, бургеры…"></label>' +
       '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
       '<label class="set-f soc-skill"><span>Уровень готовки: <b id="socSkillV">' + esc(fv('skill', i.skill || mySkill())) + '</b> из 10 <em id="socSkillT">' + skillText(fv('skill', i.skill || mySkill())) + '</em></span><input id="socSkill" type="range" min="1" max="10" step="1" value="' + esc(fv('skill', i.skill || mySkill())) + '" aria-describedby="socSkillT"></label>' +
-      '<div class="set-row"><button type="submit" class="nav-btn primary">' + (first ? 'Погнали' : 'Сохранить') + '</button>' + (first ? '' : '<button type="button" class="ghost-btn" data-a="nickx">Отмена</button>') + '</div>' +
-      (nickMsg ? '<p class="set-msg' + (/…$/.test(nickMsg) ? ' busy' : '') + '">' + esc(nickMsg) + '</p>' : '') + '</form>';
+      '<div class="set-row"><button type="submit" class="nav-btn primary soc-save" id="socSave"><span>' + (first ? 'Погнали' : 'Сохранить') + '</span></button></div>' +
+      '<div class="soc-msgw' + (nickMsg ? ' open' : '') + '" id="socMsgW"><div><p class="set-msg' + (/…$/.test(nickMsg) ? ' busy' : '') + '" id="socNickMsg" aria-live="polite">' + esc(nickMsg) + '</p></div></div></form>';
+  }
+
+  function anketaPage() {
+    var back = anketaFrom === 'friends' && me;
+    var h = '<header class="soc-head">' + (back ? '<button type="button" class="ghost-btn soc-back" data-a="nickx">← Друзья</button><span class="soc-head-t">Анкета</span>' : '<h2 class="soc-title">Анкета</h2>') +
+      '<button type="button" class="ghost-btn" data-a="' + (back ? 'close' : 'nickx') + '">' + (back ? 'Готово' : 'Закрыть') + '</button></header>';
+    if (!loaded) return h + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-card"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
+    return h + nickForm(false);
+  }
+  function setNickMsg(t, kind) {
+    nickMsg = t || '';
+    var w = ov.querySelector('#socMsgW'), p = ov.querySelector('#socNickMsg'); if (!w || !p) return;
+    if (t) { p.textContent = t; p.className = 'set-msg' + (kind === 'ok' ? ' ok' : '') + (/…$/.test(t) ? ' busy' : ''); }
+    w.classList.toggle('open', !!t);
+    if (t && kind === 'bad') { p.classList.remove('shake'); void p.offsetWidth; p.classList.add('shake'); if (window.kHaptic) window.kHaptic(20); }
+  }
+  /* ---------- редактор фото: двигай пальцем, щипком ближе ---------- */
+  function cropper(file) {
+    return new Promise(function (ok, no) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onerror = function () { URL.revokeObjectURL(url); no(new Error('это не картинка')); };
+      img.onload = function () {
+        var W = img.naturalWidth, H = img.naturalHeight;
+        var c = document.createElement('div'); c.className = 'crop-ov'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', 'Фото профиля');
+        c.innerHTML = '<div class="crop-top"><button type="button" class="ghost-btn" data-c="x">Отмена</button><b>Фото профиля</b><button type="button" class="nav-btn primary" data-c="ok">Готово</button></div>' +
+          '<div class="crop-stage"><img alt="" draggable="false"><div class="crop-mask" aria-hidden="true"></div></div>' +
+          '<div class="crop-bar"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg><input type="range" min="1" max="4" step="0.01" value="1" aria-label="Приблизить"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/></svg></div>' +
+          '<p class="small crop-hint">Двигай пальцем, разведи двумя — ближе</p>';
+        document.body.appendChild(c);
+        var stage = c.querySelector('.crop-stage'), im = c.querySelector('img'), rng = c.querySelector('input');
+        im.src = url; im.style.width = W + 'px'; im.style.height = H + 'px';
+        var S0 = 1, D = 1, z = 1, tx = 0, ty = 0;
+        function size() { var r = stage.getBoundingClientRect(); D = Math.min(r.width, r.height) - 32; S0 = D / Math.min(W, H); }
+        function clamp() { var sc = S0 * z, mx = Math.max(0, (W * sc - D) / 2), my = Math.max(0, (H * sc - D) / 2); tx = Math.max(-mx, Math.min(mx, tx)); ty = Math.max(-my, Math.min(my, ty)); }
+        function draw() { clamp(); im.style.transform = 'translate(' + (tx - W / 2) + 'px,' + (ty - H / 2) + 'px) scale(' + (S0 * z) + ')'; rng.value = z; }
+        size(); draw();
+        requestAnimationFrame(function () { c.classList.add('on'); });
+        var pts = {}, last = null;
+        function snap() { var k = Object.keys(pts); if (k.length >= 2) { var a = pts[k[0]], b = pts[k[1]]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) }; } if (k.length === 1) return { x: pts[k[0]].x, y: pts[k[0]].y, d: 0 }; return null; }
+        stage.addEventListener('pointerdown', function (e) { stage.setPointerCapture(e.pointerId); pts[e.pointerId] = { x: e.clientX, y: e.clientY }; last = snap(); stage.classList.add('drag'); });
+        stage.addEventListener('pointermove', function (e) { if (!pts[e.pointerId]) return; pts[e.pointerId] = { x: e.clientX, y: e.clientY }; var n = snap(); if (!n || !last) { last = n; return; }
+          if (n.d && last.d) z = Math.max(1, Math.min(4, z * n.d / last.d));
+          tx += n.x - last.x; ty += n.y - last.y; last = n; draw(); });
+        function up(e) { delete pts[e.pointerId]; last = snap(); if (!last) stage.classList.remove('drag'); }
+        stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+        stage.addEventListener('wheel', function (e) { e.preventDefault(); z = Math.max(1, Math.min(4, z * (e.deltaY < 0 ? 1.08 : 0.93))); draw(); }, { passive: false });
+        rng.addEventListener('input', function () { z = +rng.value; draw(); });
+        function done(v) { c.classList.remove('on'); setTimeout(function () { c.remove(); URL.revokeObjectURL(url); }, 320); if (v) ok(v); else no(null); }
+        c.addEventListener('click', function (e) {
+          var b = e.target.closest('[data-c]'); if (!b) return;
+          if (b.getAttribute('data-c') === 'x') return done(null);
+          var n = 320, cv = document.createElement('canvas'); cv.width = n; cv.height = n;
+          var sc = S0 * z, side = D / sc, sx = W / 2 - tx / sc - side / 2, sy = H / 2 - ty / sc - side / 2;
+          var g = cv.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, sx, sy, side, side, 0, 0, n, n);
+          var q = 0.85, d = cv.toDataURL('image/jpeg', q); while (d.length > 85000 && q > 0.4) { q -= 0.1; d = cv.toDataURL('image/jpeg', q); }
+          done(d);
+        });
+      };
+      img.src = url;
+    });
   }
 
   /* ---------- пуши ---------- */
@@ -361,9 +430,11 @@
     var id = b.getAttribute('data-id'), m = uid();
     if (a === 'close') return close();
     if (a === 'back') { view = 'list'; render(); return; }
+
     if (a === 'login') { close(); if (window.KukingSettings) window.KukingSettings.open('account'); return; }
-    if (a === 'nick') { view = view === 'nick' ? 'list' : 'nick'; nickMsg = ''; render(); var i = ov.querySelector('#socNickIn'); if (i) i.focus(); return; }
-    if (a === 'nickx') { fd = null; saveFd(); view = 'list'; render(); return; }
+    if (a === 'nick') { anketaFrom = 'friends'; view = 'nick'; nickMsg = ''; render(); return; }
+    if (a === 'nickx') { fd = null; saveFd(); nickMsg = ''; if (anketaFrom === 'profile') { close(); return; } view = 'list'; render(); return; }
+    if (a === 'avdel') { fd = fd || {}; fd.avatar = ''; saveFd(); var pv = ov.querySelector('#socAvPrev'); pv.classList.add('swap'); setTimeout(function () { pv.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>'; pv.classList.remove('swap'); }, 180); b.remove(); var mm = ov.querySelector('#socAvMsg'); mm.textContent = 'Фото уберу после «Сохранить»'; mm.className = 'soc-nick-hint'; return; }
     if (a === 'profile') { viewing = id; view = 'profile'; render(); ov.querySelectorAll('.soc-page')[1].scrollTop = 0; return; }
     if (a === 'invite') return invite();
     if (a === 'pon') { msg = 'Включаю…'; render(); enablePush().then(function () { msg = ''; render(); toast('Пуши включены'); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
@@ -404,11 +475,12 @@
       var avIn = ov.querySelector('#socAvIn');
       if (avIn) avIn.addEventListener('change', function () {
         var f = avIn.files && avIn.files[0]; if (!f) return;
-        var m = ov.querySelector('#socAvMsg'); m.textContent = 'Загружаю…'; m.className = 'soc-nick-hint';
-        uploadAvatar(f).then(function (url) {
+        var m = ov.querySelector('#socAvMsg'); avIn.value = '';
+        cropper(f).then(function (url) {
           fd = fd || {}; fd.avatar = url; saveFd();
-          ov.querySelector('#socAvPrev').innerHTML = '<img src="' + esc(url) + '" alt="">'; m.textContent = 'Фото готово — жми «Сохранить»'; m.className = 'soc-nick-hint ok';
-        }).catch(function (e) { m.textContent = 'Не загрузилось: ' + (e && e.message || ''); m.className = 'soc-nick-hint bad'; });
+          var pv = ov.querySelector('#socAvPrev'); pv.innerHTML = '<img src="' + esc(url) + '" alt="">'; pv.classList.remove('pop'); void pv.offsetWidth; pv.classList.add('pop');
+          m.textContent = 'Фото готово — жми «Сохранить»'; m.className = 'soc-nick-hint ok'; if (window.kHaptic) window.kHaptic(10);
+        }).catch(function (e) { if (!e) return; m.textContent = 'Не открылось: ' + (e.message || ''); m.className = 'soc-nick-hint bad'; });
       });
       var sk = ov.querySelector('#socSkill'); if (sk) sk.addEventListener('input', function () { ov.querySelector('#socSkillV').textContent = sk.value; ov.querySelector('#socSkillT').textContent = skillText(sk.value); });
       var map = { socNickIn: 'nick', socName: 'name', socBday: 'bday', socLikes: 'likes', socAvoid: 'avoid', socSkill: 'skill', socAvIn: '' };
@@ -421,12 +493,13 @@
       var v = function (id) { return ov.querySelector(id).value.trim(); };
       var nick = v('#socNickIn'), first = !me;
       var bdIso = ruToIso(v('#socBday'));
-      if (bdIso === false) { nickMsg = 'Днюха: число.месяц.год, например 05.03.1999'; render(); return; }
-      var data = { id: uid(), avatar: (fd && fd.avatar) || (info[uid()] || {}).avatar || null, name: v('#socName') || null, bday: bdIso, likes: v('#socLikes') || null, avoid: v('#socAvoid') || null, skill: +v('#socSkill') || 5, updated_at: new Date().toISOString() };
+      if (bdIso === false) { setNickMsg('Днюха: число.месяц.год, например 05.03.1999', 'bad'); return; }
+      var data = { id: uid(), avatar: fd && fd.avatar != null ? (fd.avatar || null) : (info[uid()] || {}).avatar || null, name: v('#socName') || null, bday: bdIso, likes: v('#socLikes') || null, avoid: v('#socAvoid') || null, skill: +v('#socSkill') || 5, updated_at: new Date().toISOString() };
       try { localStorage.setItem('kuking:skill', String(data.skill)); } catch (e) {}
-      if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { nickMsg = 'Ник: 3–20 символов, буквы, цифры, _'; render(); return; }
-      if (nickState === 'taken') { nickMsg = 'Ник занят — придумай другой'; render(); return; }
-      busy = true; nickMsg = 'Сохраняю…'; render();
+      if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { setNickMsg('Ник: 3–20 символов, буквы, цифры, _', 'bad'); return; }
+      if (nickState === 'taken') { setNickMsg('Ник занят — придумай другой', 'bad'); return; }
+      busy = true; setNickMsg(''); var sv = ov.querySelector('#socSave'); if (sv) { sv.classList.add('busy'); sv.disabled = true; }
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       var step = me ? (me.nick === nick ? Promise.resolve() : S.req('PATCH', 'profiles?id=eq.' + q(uid()), { nick: nick }))
         : S.req('POST', 'profiles', { id: uid(), nick: nick }).then(function () { return S.rpc('claim_admin'); });
       function saveInfo(d) {
@@ -439,8 +512,18 @@
         });
       }
       step.then(function () { return saveInfo(data); })
-        .then(function () { busy = false; nickMsg = ''; fd = null; saveFd(); if (needSql) toast('Сохранил. Уровень и фото заработают в базе после свежего SQL'); view = first && pushState() !== 'nope' ? 'push' : 'list'; return refresh().then(acceptPending); })
-        .catch(function (er) { busy = false; nickMsg = /duplicate|unique|23505|409/i.test(String(er && (er.message || er.code))) ? 'Ник занят — придумай другой' : 'Не вышло: ' + (er && er.message); render(); });
+        .then(function () { fd = null; saveFd(); return refresh(); })
+        .then(function () {
+          busy = false; if (needSql) toast('Сохранил. Уровень и фото заработают в базе после свежего SQL');
+          var sv2 = ov.querySelector('#socSave'); if (sv2) { sv2.classList.remove('busy'); sv2.classList.add('ok'); sv2.querySelector('span').textContent = 'Сохранено'; }
+          if (window.kHaptic) window.kHaptic(12); emit();
+          setTimeout(function () {
+            if (first) { view = pushState() !== 'nope' ? 'push' : 'list'; render(); acceptPending(); return; }
+            if (anketaFrom === 'profile') close(); else { view = 'list'; render(); }
+          }, 750);
+        })
+        .catch(function (er) { busy = false; var sv3 = ov.querySelector('#socSave'); if (sv3) { sv3.classList.remove('busy'); sv3.disabled = false; }
+          setNickMsg(/duplicate|unique|23505|409/i.test(String(er && (er.message || er.code))) ? 'Ник занят — придумай другой' : 'Не вышло: ' + (er && er.message), 'bad'); });
     });
     bindReplies(ov, render);
   }
@@ -484,22 +567,24 @@
   var last = null;
   function open(personId) {
     last = document.activeElement;
-    view = personId ? 'profile' : 'list'; viewing = personId || viewing; found = null; msg = '';
+    if (personId === '#anketa') { view = 'nick'; page2 = 'nick'; personId = null; } else { view = personId ? 'profile' : 'list'; viewing = personId || viewing; if (personId) page2 = 'profile'; }
+    found = null; msg = ''; lastHTML = '';
     render(); ov.hidden = false; requestAnimationFrame(function () { ov.classList.add('on'); (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} }); });
     refresh(); clearInterval(timer); timer = setInterval(function () { if (!document.hidden) refresh(); }, 20000);
   }
   function close() {
     ov.classList.remove('on'); clearInterval(timer);
-    setTimeout(function () { ov.hidden = true; view = 'list'; }, 320);
+    setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; }, 360);
     if (last && last.focus) last.focus();
     (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} });
   }
   var closeSubs = [];
   API.open = open; API.close = close;
+  API.mode = function () { return view === 'nick' && anketaFrom === 'profile' ? 'anketa' : 'friends'; };
   API.isOpen = function () { return !ov.hidden && ov.classList.contains('on'); };
   API.onClose = function (f) { closeSubs.push(f); };
-  API.openAnketa = function () { open(); view = 'nick'; nickMsg = ''; render(); var i = ov.querySelector('#socNickIn'); if (i) i.focus(); };
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) { if (view === 'profile') { view = 'list'; render(); } else close(); } });
+  API.openAnketa = function () { anketaFrom = 'profile'; nickMsg = ''; open('#anketa'); };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) { if (view === 'profile' || (view === 'nick' && anketaFrom === 'friends')) { view = 'list'; render(); } else close(); } });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
   API.enabled = true;
 

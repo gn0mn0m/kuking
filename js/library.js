@@ -119,7 +119,7 @@
     var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : view === 'plan' ? planHTML() : view === 'profile' ? profileHTML() : listHTML();
     document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden);
     var old = ov.firstElementChild;
-    if (dir && old && !ov.hidden && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    if ((dir === 'fwd' || dir === 'back') && old && !ov.hidden && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
       /* как в iOS: старый экран уезжает, а не исчезает */
       document.querySelectorAll('.tg-out').forEach(function (x) { x.remove(); });
       var r = old.getBoundingClientRect(), o = ov.getBoundingClientRect();
@@ -130,7 +130,7 @@
       out.appendChild(old); ov.parentNode.insertBefore(out, dir === 'back' ? ov.nextSibling : ov);
       setTimeout(function () { out.remove(); }, 480);
     }
-    ov.innerHTML = '<div class="tg-screen' + (dir ? ' in-' + dir : '') + (stagger && view === 'list' ? ' stagger' : '') + '">' + html + '</div>';
+    ov.innerHTML = '<div class="tg-screen' + (dir ? ' in-' + dir : '') + (stagger ? ' stagger' : '') + '">' + html + '</div>';
     dir = ''; stagger = false;
     ov.querySelectorAll('.tg-li').forEach(function (li, i) { if (i < 12) li.style.setProperty('--i', i); });
     bind(); syncTabs();
@@ -205,7 +205,24 @@
     syncTasks();
   }
   function hasMeat(r) { return (r.ingredients || []).some(function (i) { return /говяд|свин|баран|телят|куриц|курин|бедр|бёдр|крыл|фарш|мяс|индей|утк|лосос|сёмг|семг|рыб|форел|кревет/i.test(i.name); }); }
-  function marinated(r) { return JSON.stringify(r.slides || []).search(/маринад|маринуй|замарин/i) >= 0; }
+  /* тексты действий из шагов рецепта */
+  function stepItems(r) {
+    var out = [];
+    (r.slides || []).forEach(function (s, si) { if (s.type !== 'step') return;
+      (function walk(o) { if (!o || typeof o !== 'object') return; if (Array.isArray(o)) return o.forEach(walk); if (typeof o.t === 'string') out.push({ t: o.t, step: s.title || s.short || '', si: si }); Object.keys(o).forEach(function (k) { if (k !== 't' && o[k] && typeof o[k] === 'object') walk(o[k]); }); })(s);
+    });
+    return out;
+  }
+  var AHEAD_RE = /заранее|на ночь|накануне|с вечера|за \d+[–-]?\d*\s*(ч(?![а-яё])|час)|минимум \d+\s*час|от \d+\s*час|\d+\s*(ч(?![а-яё])|час[а-я]*)\s*в холодильник/i;
+  /* что надо сделать ДО готовки: из поля ahead или из текста шагов («замаринуй на ночь») */
+  function aheadOf(r) {
+    if (Array.isArray(r.ahead) && r.ahead.length) return r.ahead.map(function (a) { return { what: a.what || 'Подготовка', hours: +a.hours || 8, text: a.text || '' }; });
+    var hit = stepItems(r).filter(function (x) { return /маринад|маринуй|замарин/i.test(x.t) && AHEAD_RE.test(x.t); })[0];
+    if (!hit) return [];
+    var m = /(\d+)\s*(ч(?![а-яё])|час)/i.exec(hit.t), h = /ночь|накануне|вечера/i.test(hit.t) ? 12 : m ? +m[1] : 8;
+    return [{ what: 'Замариновать', hours: Math.max(h, 1), text: hit.t }];
+  }
+  function marinated(r) { return aheadOf(r).length > 0; }
   function hm(t) { return String(t || '19:00').slice(0, 5); }
   function minus(t, h) { var x = hm(t).split(':'), m = (+x[0] * 60 + +x[1] - h * 60 + 1440) % 1440; return String((m / 60) | 0).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
   /* подготовка на 21 день вперёд: [{key, day, time, kind, title, sub, ids}] */
@@ -228,13 +245,21 @@
         var r = byId(id);
         if (c.meat === 'frozen' && hasMeat(r)) {
           var sday = c.shop === 'week' ? (out.filter(function (x) { return x.kind === 'shop' && x.ids.indexOf(id) >= 0; })[0] || {}).day : c.shop === 'delivery' ? k : null;
-          if (sday && sday < addDays(k, -1)) out.push({ key: 'freeze:' + k + ':' + id, day: sday, time: c.shop === 'delivery' ? '' : minus(c.shopTime, -1), kind: 'freeze', title: 'Мясо — в морозилку', sub: 'для «' + r.title + '»', ids: [id] });
-          if (sday && sday < addDays(k, -1)) out.push({ key: 'thaw:' + k + ':' + id, day: addDays(k, -1), time: '20:00', kind: 'thaw', title: 'Достать мясо в холодильник', sub: 'разморозится к завтрашнему ужину', ids: [id] });
+          if (sday && sday < addDays(k, aheadOf(r).some(function (a) { return a.hours >= 10; }) ? -2 : -1)) out.push({ key: 'freeze:' + k + ':' + id, day: sday, time: c.shop === 'delivery' ? '' : minus(c.shopTime, -1), kind: 'freeze', title: 'Мясо — в морозилку', sub: 'для «' + r.title + '»', ids: [id] });
+          var early = aheadOf(r).some(function (a) { return a.hours >= 10; }), tday = addDays(k, early ? -2 : -1); // маринад на ночь — размораживаем на сутки раньше
+          if (sday && sday < tday) out.push({ key: 'thaw:' + k + ':' + id, day: tday, time: '20:00', kind: 'thaw', title: 'Достать мясо в холодильник', sub: early ? 'разморозится к маринаду' : 'разморозится к завтрашнему ужину', ids: [id] });
         }
-        if (marinated(r)) out.push({ key: 'mar:' + k + ':' + id, day: k, time: '09:00', kind: 'marinade', title: 'Замариновать', sub: 'для «' + r.title + '» — к вечеру пропитается', ids: [id] });
+        aheadOf(r).forEach(function (a, ai) {
+          var cm = +hm(c.cook).split(':')[0] * 60 + +hm(c.cook).split(':')[1] - a.hours * 60, dd = k;
+          while (cm < 0) { cm += 1440; dd = addDays(dd, -1); }
+          if (a.hours >= 10) { dd = addDays(k, -1); cm = 21 * 60; } // на ночь — вечером накануне
+          var tm = String((cm / 60) | 0).padStart(2, '0') + ':' + String(cm % 60).padStart(2, '0');
+          out.push({ key: 'mar:' + k + ':' + id + (ai ? ':' + ai : ''), day: dd, time: tm, kind: 'marinade', title: a.what, sub: 'для «' + r.title + '» — за ' + a.hours + ' ч до готовки', ids: [id], ahead: a });
+        });
         out.push({ key: 'cook:' + k + ':' + id, day: k, time: hm(c.cook), kind: 'cook', title: r.title, sub: String(r.totalTime || '').replace('≈ ', ''), ids: [id], dish: id });
       });
     });
+    if (c.empty !== 'off' && planIntro) for (var e = 1; e <= 7; e++) { var ek = addDays(t, e); if (!(plan[ek] || []).filter(byId).length) out.push({ key: 'empty:' + ek, day: addDays(ek, -1), time: c.emptyTime || '18:00', kind: 'empty', title: 'На ' + (e === 1 ? 'завтра' : dayName(ek).toLowerCase()) + ' ничего не запланировано', sub: 'Выбери блюдо — успеешь закупиться', ids: [], target: ek }); }
     return out.sort(function (x, y) { return (x.day + (x.time || '00:00')).localeCompare(y.day + (y.time || '00:00')); });
   }
   /* пуши: будущие напоминания кладём на сервер, он присылает их вовремя */
@@ -246,8 +271,8 @@
       var me = S.user().id, now = Date.now();
       var rows = tasksAll().filter(function (x) { return x.time && !doneTasks[x.key]; }).map(function (x) {
         var d = dParse(x.day), hhmm = x.time.split(':'); d.setHours(+hhmm[0], +hhmm[1], 0, 0);
-        var title = x.kind === 'cook' ? 'Сегодня готовим: ' + x.title : x.title;
-        var body = x.kind === 'shop' ? 'Список покупок — в «Плане»: ' + x.sub : x.sub;
+        var title = x.kind === 'cook' ? 'Сегодня готовим: ' + x.title : x.kind === 'empty' ? 'На завтра пусто' : x.title;
+        var body = x.kind === 'shop' ? 'Список покупок — в «Плане»: ' + x.sub : x.kind === 'empty' ? 'Открой «План» и накидай блюдо — успеешь закупиться.' : x.sub;
         return { user_id: me, key: x.key, at: d.toISOString(), title: title, body: body, sent: false, _t: d.getTime() };
       }).filter(function (x) { return x._t > now; }).map(function (x) { delete x._t; return x; });
       S.req('DELETE', 'plan_tasks?user_id=eq.' + encodeURIComponent(me) + '&sent=eq.false').then(function () {
@@ -260,6 +285,7 @@
     freeze: ['#0a84ff', '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/><path d="M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5"/>'],
     thaw: ['#64d2ff', '<path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/>'],
     marinade: ['#bf5af2', '<path d="M7 4h10M8 4v4l-3 5v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6l-3-5V4"/><path d="M5 14h14"/>'],
+    empty: ['#8e8e93', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M8 3v4M16 3v4M12 13v4M10 15h4"/>'],
     cook: ['#ff9f0a', '<path d="M5 12h14v2a7 7 0 0 1-14 0z"/><path d="M3 12h18"/><path d="M9 9c-1-1.5 1-2.2 0-4M12 9c-1-1.5 1-2.2 0-4M15 9c-1-1.5 1-2.2 0-4"/>']
   };
   function tIco(k) { var x = TK[k]; return '<span class="pf-ico" style="background:' + x[0] + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + x[1] + '</svg></span>'; }
@@ -269,13 +295,15 @@
     var dn = !!doneTasks[x.key], past = x.day < tday;
     if (x.kind === 'cook') {
       var r = byId(x.dish);
-      return '<li class="ag-it ag-cook' + (dn ? ' done' : '') + '"><span class="ag-time">' + esc(x.time) + '</span>' +
+      return '<li class="ag-it ag-cook' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '"><span class="ag-time">' + esc(x.time) + '</span>' +
         '<button type="button" class="ag-main" data-open="' + esc(x.dish) + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span><span class="ag-t"><b>' + esc(r.title) + '</b><small>' + esc(x.sub) + '</small></span></button>' +
         '<button type="button" class="pl-x" data-unplan="' + esc(x.dish) + '" data-pday="' + x.day + '" aria-label="Убрать из плана"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></li>';
     }
-    return '<li class="ag-it' + (dn ? ' done' : '') + '"><span class="ag-time">' + esc(x.time || '') + '</span>' +
-      '<button type="button" class="ag-main" data-task="' + esc(x.key) + '"' + (x.kind === 'shop' ? ' data-shop="' + esc(x.key) + '"' : '') + '>' + tIco(x.kind) + '<span class="ag-t"><b>' + esc(x.title) + '</b><small>' + esc(x.sub) + '</small></span>' +
-      (x.kind === 'shop' ? '<span class="ag-more">Список</span>' : '') + '</button>' +
+    if (x.kind === 'empty') return '<li class="ag-it ag-empty" data-k="' + esc(x.key) + '"><span class="ag-time">' + esc(x.time || '') + '</span>' +
+      '<button type="button" class="ag-main" data-add="' + x.target + '">' + tIco('empty') + '<span class="ag-t"><b>' + esc(x.title) + '</b><small>' + esc(x.sub) + '</small></span><span class="ag-more">Добавить</span></button></li>';
+    return '<li class="ag-it' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '"><span class="ag-time">' + esc(x.time || '') + '</span>' +
+      '<button type="button" class="ag-main"' + (x.kind === 'shop' ? ' data-shop="' + esc(x.key) + '"' : ' data-task="' + esc(x.key) + '"') + '>' + tIco(x.kind) + '<span class="ag-t"><b>' + esc(x.title) + '</b><small>' + esc(x.sub) + '</small></span>' +
+      '<span class="ag-more">' + (x.kind === 'shop' ? 'Список' : 'Как') + '</span></button>' +
       '<button type="button" class="ag-chk' + (dn ? ' on' : '') + '" data-tdone="' + esc(x.key) + '" role="checkbox" aria-checked="' + dn + '" aria-label="Сделано"><span class="chk-box"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span></button></li>';
   }
   function planHTML() {
@@ -284,24 +312,91 @@
       '<h3>Неделя без вопроса «что пожрать»</h3><p class="small">Раскидай блюда по дням — «Кукинг» сам напомнит, когда закупиться, достать мясо и встать к плите.</p>' +
       '<ol class="pl-steps"><li><b>Скажи, как закупаешься</b><span>раз в неделю, в день готовки или доставкой</span></li><li><b>Добавь блюда в дни</b><span>из своей книги, в пару тапов</span></li><li><b>Лови напоминания</b><span>закупка, морозилка, маринад, готовка</span></li></ol>' +
       '<button type="button" class="nav-btn primary pl-start" data-a="planStart">Начать</button></div>';
-    var td = today(), all = tasksAll(), head = bigHead('План', '<button type="button" class="tg-ic" data-a="planCfg" aria-label="Настройки плана">' + GEAR + '</button>');
+    var td = today(), all = tasksAll().filter(function (x) { return x.kind !== 'empty' || x.day === td; }), head = bigHead('План', '<button type="button" class="tg-ic pl-calbtn" data-a="calToggle" aria-expanded="' + calOpen + '" aria-label="Календарь на месяц">' + CAL + '</button><button type="button" class="tg-ic" data-a="planCfg" aria-label="Настройки плана">' + GEAR + '</button>');
     var t0 = dParse(td); t0.setDate(t0.getDate() - ((t0.getDay() + 6) % 7));
     var strip = '<div class="pl-strip" role="tablist" aria-label="Дни">';
     for (var i = 0; i < 21; i++) { var d = new Date(t0); d.setDate(t0.getDate() + i); var k = dKey(d), n = (plan[k] || []).filter(byId).length, tk = all.filter(function (x) { return x.day === k && x.kind !== 'cook'; }).length;
       strip += '<button type="button" class="pl-day' + (k === td ? ' today' : '') + (k < td ? ' past' : '') + '" data-jump="' + k + '" aria-label="' + DOW_FULL[d.getDay()] + ', ' + dayDate(k) + '"><span class="pl-dow">' + DOW[d.getDay()] + '</span><b>' + d.getDate() + '</b><span class="pl-dots">' + (n ? '<i class="c"></i>' : '') + (tk ? '<i class="t"></i>' : '') + '</span></button>'; }
     strip += '</div>';
-    var h = head + strip + '<div class="ag">';
-    for (var j = 0; j < 14; j++) {
-      var k2 = addDays(td, j), items = all.filter(function (x) { return x.day === k2; });
-      h += '<section class="ag-day' + (items.length ? '' : ' empty') + '" id="ag-' + k2 + '" style="--i:' + Math.min(j, 8) + '"><header class="ag-h"><b>' + dayName(k2) + '</b><span>' + (j > 1 ? '' : DOW_FULL[dParse(k2).getDay()].toLowerCase() + ', ') + dayDate(k2) + '</span><button type="button" class="ag-add" data-add="' + k2 + '" aria-label="Добавить блюдо на ' + dayDate(k2) + '">' + PLUS + '</button></header>' +
+    var h = head + strip + '<div class="pl-cal' + (calOpen ? ' open' : '') + '" id="plCal"><div class="pl-cal-in"><div class="pl-month">' + monthHTML() + '</div></div></div><div class="ag">';
+    var keys = []; for (var j0 = 0; j0 < 14; j0++) keys.push(addDays(td, j0));
+    Object.keys(plan).sort().forEach(function (k3) { if (k3 > keys[13] && (plan[k3] || []).filter(byId).length) keys.push(k3); });
+    for (var j = 0; j < keys.length; j++) {
+      var k2 = keys[j], items = all.filter(function (x) { return x.day === k2; });
+      if (j === 14) h += '<h3 class="tg-sec-t ag-later">Дальше</h3>';
+      h += '<section class="ag-day' + (items.length ? '' : ' empty') + '" id="ag-' + k2 + '" style="--i:' + Math.min(j, 8) + '"><header class="ag-h"><b>' + dayName(k2) + '</b><span>' + (j > 1 ? '' : DOW_FULL[dParse(k2).getDay()].toLowerCase() + ', ') + dayDate(k2) + (j >= 14 ? ', ' + DOW_FULL[dParse(k2).getDay()].toLowerCase() : '') + '</span><button type="button" class="ag-add" data-add="' + k2 + '" aria-label="Добавить блюдо на ' + dayDate(k2) + '">' + PLUS + '</button></header>' +
         (items.length ? '<ul class="ag-list">' + items.map(function (x) { return taskRow(x, td); }).join('') + '</ul>' : '') + '</section>';
     }
     return h + '</div>';
   }
+  /* месяц целиком: тап по дню — сразу планировать */
+  var calOpen = false, calMonth = null, MON_N = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+  function monthHTML() {
+    var td = today(), m0 = dParse((calMonth || td.slice(0, 7)) + '-01'), all = tasksAll();
+    var lead = (m0.getDay() + 6) % 7, dim = new Date(m0.getFullYear(), m0.getMonth() + 1, 0).getDate(), isCur = !calMonth || calMonth <= td.slice(0, 7);
+    var h = '<div class="pm-head"><button type="button" class="pm-nav" data-cm="-1" aria-label="Предыдущий месяц"' + (isCur ? ' disabled' : '') + '><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><b>' + MON_N[m0.getMonth()] + ' ' + m0.getFullYear() + '</b><button type="button" class="pm-nav" data-cm="1" aria-label="Следующий месяц"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>';
+    h += '<div class="pm-grid">' + ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(function (d) { return '<span class="pm-dow">' + d + '</span>'; }).join('');
+    for (var i = 0; i < lead; i++) h += '<span></span>';
+    for (var d = 1; d <= dim; d++) {
+      var k = dKey(new Date(m0.getFullYear(), m0.getMonth(), d)), ids = (plan[k] || []).filter(byId), tk = all.filter(function (x) { return x.day === k && x.kind !== 'cook' && x.kind !== 'empty'; }).length;
+      h += '<button type="button" class="pm-d' + (k === td ? ' today' : '') + (ids.length ? ' has' : '') + '" data-cal="' + k + '"' + (k < td ? ' disabled' : '') + ' aria-label="' + dayDate(k) + (ids.length ? ', блюд: ' + ids.length : '') + '"><b>' + d + '</b><span class="pl-dots">' + (ids.length ? '<i class="c"></i>' : '') + (tk ? '<i class="t"></i>' : '') + '</span></button>';
+    }
+    return h + '</div><p class="small pm-hint">Тапни день — добавишь блюдо</p>';
+  }
+  /* количества в тексте шага: {id} и {id:сколько} */
+  function fmtT(r, t) {
+    var ing = {}; (r.ingredients || []).forEach(function (i) { ing[i.id] = i; });
+    return esc(t).replace(/\{(\w+)(?::([\d.,]+))?\}/g, function (_, id, part) { var i = ing[id]; if (!i) return ''; var a = part != null ? part : i.amount; return '<b class="ts-q">' + esc(String(a).replace('.', ',') + ' ' + (i.unit || '')) + '</b>'; })
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  }
+  function usedIngs(r, texts) {
+    var ids = {}; texts.forEach(function (t) { (t.match(/\{(\w+)/g) || []).forEach(function (m) { ids[m.slice(1)] = 1; }); });
+    return (r.ingredients || []).filter(function (i) { return ids[i.id] && !i.hidden; });
+  }
+  function meats(r) { return (r.ingredients || []).filter(function (i) { return !i.hidden && hasMeat({ ingredients: [i] }); }); }
+  function ingLis(list) { return '<ul class="ts-ings">' + list.map(function (i) { return '<li><span>' + esc(i.name) + '</span><b>' + esc(i.amount ? String(i.amount).replace('.', ',') + ' ' + (i.unit || '') : i.unitText || '') + '</b></li>'; }).join('') + '</ul>'; }
+  /* подробности задачи: что именно делать */
+  function taskSheet(key) {
+    var x = tasksAll().filter(function (t) { return t.key === key; })[0]; if (!x) return;
+    var r = x.ids[0] ? byId(x.ids[0]) : null, dn = !!doneTasks[key], b = '';
+    if (x.kind === 'marinade' && r) {
+      var a = x.ahead || {}, texts = a.text ? [a.text] : stepItems(r).filter(function (i) { return /маринад|маринуй|замарин/i.test(i.t); }).map(function (i) { return i.t; });
+      var used = usedIngs(r, texts);
+      b += (used.length ? '<h4 class="ts-h">Понадобится</h4>' + ingLis(used) : '') + '<h4 class="ts-h">Что делать</h4><ol class="ts-steps">' + texts.map(function (t) { return '<li>' + fmtT(r, t) + '</li>'; }).join('') + '<li>Накрой плёнкой или крышкой и убери в холодильник.</li></ol>' +
+        '<p class="small ts-tip">Вечером в рецепте этот шаг уже сделан — просто пропусти его.</p>';
+    } else if (x.kind === 'freeze' && r) {
+      b += '<h4 class="ts-h">Что убрать</h4>' + ingLis(meats(r)) + '<h4 class="ts-h">Как</h4><ol class="ts-steps"><li>Сразу после магазина разложи по пакетам с застёжкой — <b>плоско, слоем 2–3 см</b>: так быстрее замёрзнет и потом разморозится.</li><li>Выдави воздух, подпиши маркером дату и блюдо.</li><li>В морозилку, на дно, пакеты плашмя.</li></ol>';
+    } else if (x.kind === 'thaw' && r) {
+      b += '<h4 class="ts-h">Что достать</h4>' + ingLis(meats(r)) + '<h4 class="ts-h">Как</h4><ol class="ts-steps"><li>Из морозилки — <b>в холодильник</b>, на нижнюю полку. Не на стол.</li><li>Поставь в миску или на тарелку — натечёт сок.</li><li>' + (/маринад/.test(x.sub) ? 'К вечеру, когда маринуешь, будет мягким: 12–24 часа.' : 'К ужину разморозится: 12–24 часа.') + '</li></ol>' +
+        '<p class="small ts-tip">Забыл? Пакет закрытым в миску с холодной водой, меняй воду каждые 30 минут — 1–2 часа, и готово.</p>';
+    }
+    sheet('<div class="pk-head"><b>' + esc(x.title) + '</b><button type="button" class="ghost-btn" data-pk="x">Закрыть</button></div>' +
+      '<p class="small pk-sub">' + esc(dayName(x.day)) + ', ' + dayDate(x.day) + (x.time ? ' в ' + x.time : '') + (r ? ' · «' + esc(r.title) + '»' : '') + '</p>' + b +
+      '<div class="pk-acts ts-acts"><button type="button" class="nav-btn primary" data-ts="done">' + (dn ? 'Вернуть в дела' : 'Сделано') + '</button>' + (r ? '<button type="button" class="ghost-btn" data-ts="open">Рецепт</button>' : '') + '</div>',
+    function (e, m, shut) {
+      var t = e.target.closest('[data-ts]'); if (!t) return;
+      if (t.getAttribute('data-ts') === 'done') { setDone(key, !doneTasks[key]); shut(true); }
+      else { shut(true); setTimeout(function () { go('detail', r.id); }, 200); }
+    });
+  }
+  /* отметка «сделано» — на месте, без перерисовки */
+  function setDone(k, on) {
+    if (on) doneTasks[k] = Date.now(); else delete doneTasks[k];
+    lset('kuking:planDone', JSON.stringify(doneTasks)); syncTasks();
+    var li = ov.querySelector('.ag-it[data-k="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]');
+    if (li) { li.classList.toggle('done', on); var c = li.querySelector('.ag-chk'); if (c) { c.classList.toggle('on', on); c.setAttribute('aria-checked', String(on)); } }
+    if (on && window.kHaptic) window.kHaptic(10);
+  }
+  /* перерисовать план плавно: новые строки въезжают, старые на месте */
+  function planRefresh() {
+    var before = {}; ov.querySelectorAll('.ag-it[data-k]').forEach(function (li) { before[li.getAttribute('data-k')] = 1; });
+    keepY(render);
+    if (view === 'plan') ov.querySelectorAll('.ag-it[data-k]').forEach(function (li) { if (!before[li.getAttribute('data-k')]) li.classList.add('new'); });
+  }
   /* что сегодня — карточка над списком рецептов */
   function todayCard() {
     if (!planIntro) return '';
-    var td = today(), all = tasksAll().filter(function (x) { return (x.day === td || x.day === addDays(td, 1)) && !doneTasks[x.key]; }).slice(0, 3);
+    var td = today(), all = tasksAll().filter(function (x) { return (x.day === td || (x.day === addDays(td, 1) && x.kind !== 'empty')) && !doneTasks[x.key]; }).slice(0, 3);
     if (!all.length) return '';
     return '<button type="button" class="td-card" data-a="toPlan"><span class="td-k">По плану</span>' + all.map(function (x) {
       return '<span class="td-row">' + tIco(x.kind) + '<span class="td-t"><b>' + esc(x.kind === 'cook' ? x.title : x.title) + '</b><small>' + (x.day === td ? 'сегодня' : 'завтра') + (x.time ? ' в ' + x.time : '') + '</small></span></span>';
@@ -311,7 +406,7 @@
     var m = document.createElement('div'); m.className = 'pk-ov'; m.setAttribute('role', 'dialog');
     m.innerHTML = '<div class="pk-sheet"><span class="set-grab" aria-hidden="true"></span>' + html + '</div>';
     document.body.appendChild(m); requestAnimationFrame(function () { m.classList.add('on'); });
-    function shut() { m.classList.remove('on'); setTimeout(function () { m.remove(); }, 300); keepY(render); }
+    function shut(quiet) { m.classList.remove('on'); setTimeout(function () { m.remove(); }, 320); if (!quiet) planRefresh(); }
     m.addEventListener('click', function (e) { if (e.target === m || e.target.closest('[data-pk=x]')) return shut(); onClick(e, m, shut); });
     return m;
   }
@@ -355,25 +450,32 @@
     });
   }
   function planSettings(first) {
-    var c = JSON.parse(JSON.stringify(cfg())), Soc = SOC(), ps = Soc.pushState ? Soc.pushState() : 'nope';
+    var c = JSON.parse(JSON.stringify(cfg())), Soc = SOC();
+    if (!c.empty) c.empty = 'on';
     function seg(name, opts, cur) { return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-seg="' + name + '" data-v="' + o[0] + '" aria-checked="' + (String(cur) === String(o[0])) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
-    function body() {
-      return '<div class="pk-head"><b>' + (first ? 'Как ты закупаешься?' : 'Настройки плана') + '</b><button type="button" class="ghost-btn" data-pk="x">' + (first ? 'Пропустить' : 'Готово') + '</button></div>' +
-        '<div class="ps"><label class="ps-l">Закупка</label>' + seg('shop', [['week', 'Раз в неделю'], ['day', 'В день готовки'], ['delivery', 'Доставка']], c.shop) +
-        (c.shop === 'week' ? '<label class="ps-l">День и время закупки</label>' + seg('shopDay', [[1, 'Пн'], [2, 'Вт'], [3, 'Ср'], [4, 'Чт'], [5, 'Пт'], [6, 'Сб'], [0, 'Вс']], c.shopDay) + '<input class="ps-time" type="time" data-f="shopTime" value="' + esc(c.shopTime) + '">' : '') +
-        '<label class="ps-l">Мясо и рыбу</label>' + seg('meat', [['fresh', 'Беру свежее'], ['frozen', 'Храню в морозилке']], c.meat) +
-        '<p class="small ps-h">' + (c.meat === 'frozen' ? 'Напомню убрать в морозилку после закупки и достать в холодильник вечером накануне.' : 'Если мясо из морозилки — переключи, напомню про разморозку.') + '</p>' +
-        '<label class="ps-l">Обычно готовлю в</label><input class="ps-time" type="time" data-f="cook" value="' + esc(c.cook) + '">' +
-        '<label class="ps-l">Напоминания на телефон</label>' + (ps === 'on' ? '<p class="small ps-h ok">Включены — пришлю в нужное время.</p>' : ps === 'install' ? '<p class="small ps-h">Поставь «Кукинг» на экран «Домой» и открой оттуда — тогда включатся.</p>' : ps === 'denied' ? '<p class="small ps-h">Запрещены в настройках iPhone → Уведомления → Кукинг.</p>' : ps === 'nope' ? '<p class="small ps-h">Этот браузер не умеет.</p>' : '<button type="button" class="nav-btn" data-pushon="1">Включить уведомления</button>') +
-        '<button type="button" class="nav-btn primary ps-save" data-psave="1">Сохранить</button></div>';
-    }
-    var m = sheet(body(), function (e, mm, shut) {
+    var HINT = { frozen: 'Напомню убрать в морозилку после закупки и достать в холодильник вечером накануне.', fresh: 'Если мясо из морозилки — переключи, напомню про разморозку.' };
+    function pushBlock() { var ps = Soc.pushState ? Soc.pushState() : 'nope';
+      return ps === 'on' ? '<p class="small ps-h ok">Включены — пришлю в нужное время.</p>' : ps === 'install' ? '<p class="small ps-h">Поставь «Кукинг» на экран «Домой» и открой оттуда — тогда включатся.</p>' : ps === 'denied' ? '<p class="small ps-h">Запрещены в настройках iPhone → Уведомления → Кукинг.</p>' : ps === 'nope' ? '<p class="small ps-h">Этот браузер не умеет.</p>' : '<button type="button" class="nav-btn" data-pushon="1">Включить уведомления</button>'; }
+    var m = sheet('<div class="pk-head"><b>' + (first ? 'Как ты закупаешься?' : 'Настройки плана') + '</b><button type="button" class="ghost-btn" data-pk="x">' + (first ? 'Пропустить' : 'Готово') + '</button></div>' +
+      '<div class="ps"><label class="ps-l">Закупка</label>' + seg('shop', [['week', 'Раз в неделю'], ['day', 'В день готовки'], ['delivery', 'Доставка']], c.shop) +
+      '<div class="ps-col' + (c.shop === 'week' ? ' open' : '') + '" id="psWeek"><div class="ps-col-in"><label class="ps-l">День и время закупки</label>' + seg('shopDay', [[1, 'Пн'], [2, 'Вт'], [3, 'Ср'], [4, 'Чт'], [5, 'Пт'], [6, 'Сб'], [0, 'Вс']], c.shopDay) + '<input class="ps-time" type="time" data-f="shopTime" value="' + esc(c.shopTime) + '"></div></div>' +
+      '<label class="ps-l">Мясо и рыбу</label>' + seg('meat', [['fresh', 'Беру свежее'], ['frozen', 'Храню в морозилке']], c.meat) +
+      '<p class="small ps-h" id="psMeatH">' + HINT[c.meat] + '</p>' +
+      '<label class="ps-l">Обычно готовлю в</label><input class="ps-time" type="time" data-f="cook" value="' + esc(c.cook) + '">' +
+      '<label class="ps-l">Если на завтра ничего не выбрано</label>' + seg('empty', [['on', 'Напомнить в 18:00'], ['off', 'Не надо']], c.empty) +
+      '<label class="ps-l">Напоминания на телефон</label><div id="psPush">' + pushBlock() + '</div>' +
+      '<button type="button" class="nav-btn primary ps-save" data-psave="1">Сохранить</button></div>',
+    function (e, mm, shut) {
       var sb = e.target.closest('[data-seg]');
-      if (sb) { var n = sb.getAttribute('data-seg'), v = sb.getAttribute('data-v'); c[n] = /^\d+$/.test(v) && n === 'shopDay' ? +v : v; read(); mm.querySelector('.pk-sheet').innerHTML = '<span class="set-grab" aria-hidden="true"></span>' + body(); return; }
-      if (e.target.closest('[data-pushon]')) { e.target.textContent = 'Включаю…'; (Soc.enablePush ? Soc.enablePush() : Promise.reject()).then(function () { mm.querySelector('.pk-sheet').innerHTML = '<span class="set-grab" aria-hidden="true"></span>' + body(); }).catch(function (x) { e.target.textContent = 'Не вышло: ' + (x && x.message || ''); }); return; }
-      if (e.target.closest('[data-psave]')) { read(); planCfg = c; savePlan(); shut(); }
+      if (sb) { var n = sb.getAttribute('data-seg'), v = sb.getAttribute('data-v'); c[n] = n === 'shopDay' ? +v : v;
+        sb.parentNode.querySelectorAll('[data-seg]').forEach(function (x) { x.setAttribute('aria-checked', String(x === sb)); });
+        if (window.kHaptic) window.kHaptic(6);
+        if (n === 'shop') mm.querySelector('#psWeek').classList.toggle('open', v === 'week');
+        if (n === 'meat') { var h = mm.querySelector('#psMeatH'); h.classList.add('swap'); setTimeout(function () { h.textContent = HINT[v]; h.classList.remove('swap'); }, 160); }
+        return; }
+      if (e.target.closest('[data-pushon]')) { var pb = e.target.closest('[data-pushon]'); pb.classList.add('busy-c'); pb.textContent = 'Включаю…'; (Soc.enablePush ? Soc.enablePush() : Promise.reject()).then(function () { mm.querySelector('#psPush').innerHTML = pushBlock(); }).catch(function (x) { pb.classList.remove('busy-c'); pb.textContent = 'Не вышло: ' + (x && x.message || ''); }); return; }
+      if (e.target.closest('[data-psave]')) { m.querySelectorAll('[data-f]').forEach(function (i) { c[i.getAttribute('data-f')] = i.value || c[i.getAttribute('data-f')]; }); planCfg = c; savePlan(); shut(); }
     });
-    function read() { m.querySelectorAll('[data-f]').forEach(function (i) { c[i.getAttribute('data-f')] = i.value || c[i.getAttribute('data-f')]; }); }
   }
 
   function chev() { return '<svg class="pf-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'; }
@@ -585,6 +687,11 @@
     b.classList.add('tap');
     setTimeout(function () { go('detail', b.getAttribute('data-open')); }, 110);
   }
+  function bindMonth() {
+    ov.querySelectorAll('[data-cal]').forEach(function (b) { if (b._b) return; b._b = 1; b.addEventListener('click', function () { planPicker(b.getAttribute('data-cal')); }); });
+    ov.querySelectorAll('.pl-month [data-cm]').forEach(function (b) { if (b._b) return; b._b = 1; b.addEventListener('click', function () { var td = today(), m0 = dParse((calMonth || td.slice(0, 7)) + '-01'), dlt = +b.getAttribute('data-cm'); m0.setMonth(m0.getMonth() + dlt); calMonth = dKey(m0).slice(0, 7); var box = ov.querySelector('.pl-month');
+      box.innerHTML = monthHTML(); box.classList.remove('sl-l', 'sl-r'); void box.offsetWidth; box.classList.add(dlt < 0 ? 'sl-r' : 'sl-l'); bindMonth(); }); });
+  }
   function bind() {
     on('#libMenu', function () { if (window.KukingDrawer) window.KukingDrawer.open(); });
     on('#libClose', close);
@@ -594,8 +701,13 @@
     on('[data-jump]', function (b) { var el = ov.querySelector('#ag-' + b.getAttribute('data-jump')); if (el) { ov.scrollTo({ top: el.offsetTop - 120, behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } else planPicker(b.getAttribute('data-jump')); });
     on('[data-add]', function (b) { planPicker(b.getAttribute('data-add')); });
     on('[data-shop]', function (b) { shopList(b.getAttribute('data-shop')); });
-    on('[data-tdone]', function (b) { var k = b.getAttribute('data-tdone'); doneTasks[k] = !doneTasks[k]; if (!doneTasks[k]) delete doneTasks[k]; lset('kuking:planDone', JSON.stringify(doneTasks)); keepY(render); syncTasks(); });
-    on('[data-unplan]', function (b) { var id = b.getAttribute('data-unplan'), d = b.getAttribute('data-pday'); plan[d] = (plan[d] || []).filter(function (x) { return x !== id; }); savePlan(); keepY(render); });
+    on('[data-tdone]', function (b) { var k = b.getAttribute('data-tdone'); setDone(k, !doneTasks[k]); });
+    on('[data-task]', function (b) { taskSheet(b.getAttribute('data-task')); });
+    on('[data-unplan]', function (b) { var id = b.getAttribute('data-unplan'), d = b.getAttribute('data-pday'), li = b.closest('.ag-it');
+      plan[d] = (plan[d] || []).filter(function (x) { return x !== id; }); savePlan();
+      if (li) { li.style.height = li.offsetHeight + 'px'; void li.offsetHeight; li.classList.add('gone'); setTimeout(function () { keepY(render); }, 280); } else keepY(render); });
+    on('[data-a=calToggle]', function (b) { calOpen = !calOpen; b.setAttribute('aria-expanded', String(calOpen)); var c = ov.querySelector('#plCal'); if (c) c.classList.toggle('open', calOpen); });
+    bindMonth();
     var strip = ov.querySelector('.pl-strip'); if (strip && !strip.dataset.c) { strip.dataset.c = 1; var t0 = strip.querySelector('.pl-day.today'); if (t0) strip.scrollLeft = t0.offsetLeft - 16; }
     on('[data-pf]', function (b) {
       var a = b.getAttribute('data-pf'), St = window.KukingSettings, Soc = SOC();
@@ -823,7 +935,7 @@
   var bar = document.createElement('nav'); bar.className = 'tg-tabs'; bar.setAttribute('aria-label', 'Разделы'); document.body.appendChild(bar);
   function syncTabs() {
     var socOpen = window.KukingSocial && window.KukingSocial.isOpen && window.KukingSocial.isOpen();
-    var cur = socOpen ? 'chats' : (SUB[view] ? TAB : view);
+    var cur = socOpen ? (window.KukingSocial.mode && window.KukingSocial.mode() === 'anketa' ? 'profile' : 'chats') : (SUB[view] ? TAB : view);
     var show = !ov.hidden && (!SUB[view] || socOpen);
     var n = SOC().badge ? SOC().badge() : 0;
     bar.innerHTML = TABS.map(function (t) {
@@ -839,7 +951,7 @@
     if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) Soc.open(); else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
     if (Soc.isOpen && Soc.isOpen()) Soc.close();
     if (t === view) { ov.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    TAB = t; dir = ''; view = t; stagger = t === 'list'; render(); ov.scrollTop = 0;
+    TAB = t; dir = 'tab'; view = t; stagger = t === 'list' || t === 'plan'; render(); ov.scrollTop = 0;
   });
   if (window.KukingSocial && window.KukingSocial.onClose) window.KukingSocial.onClose(function () { syncTabs(); });
   new MutationObserver(function () { syncTabs(); document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden); }).observe(ov, { attributes: true, attributeFilter: ['hidden'] });

@@ -216,6 +216,7 @@
     '  groups — названия групп продуктов: ["Мясо", "Овощи", "Соус", …]',
     '  ingredients — [{id, g, name, amount, unit, round, buy?}]: id латиницей (beef, rice); g — индекс в groups; amount — число на baseGuests; unit — г, кг, мл, л, шт, ч.л., ст.л.; round — правило округления; buy:true — если надо докупить. Для «по вкусу» вместо amount/unit дай unitText',
     '  dishes — [{name, kcal, p, f, c}] на ОДНУ порцию',
+    '  ahead — ТОЛЬКО если что-то надо сделать заранее, до начала готовки (маринад на ночь, тесто, разморозка, замочить бобовые): [{what, hours, text}] — what до 30 знаков («Замариновать курицу»), hours — за сколько часов до готовки, text — что именно сделать с количествами {id}. Если всё делается по ходу — поля нет.',
     '  phases — [{t:"0:00", name}] таймлайн',
     '  tools — [{zone, items:[{id, icon, name, use}]}] посуда и поверхности',
     '  slides — по порядку: cover {type,short,lede}, shop {type,short,title,note}, tools {type,short,title,note}, step… , serve {type,short,title,dishes,art,points}',

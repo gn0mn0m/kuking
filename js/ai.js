@@ -5,6 +5,7 @@
   'use strict';
   var KEY = 'kuking:ai';
   var PRESETS = {
+    kuking: { label: 'Кукинг · GigaChat (бесплатно, без ключа)', kind: 'server', base: '' },
     openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1' },
     openrouter: { label: 'OpenRouter', kind: 'openai', base: 'https://openrouter.ai/api/v1' },
     gemini: { label: 'Google Gemini', kind: 'gemini', base: 'https://generativelanguage.googleapis.com/v1beta' },
@@ -14,10 +15,18 @@
   function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
   function save(c) { try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) {} }
   var cfg = load();
+  if (!cfg.provider) cfg = { provider: 'kuking' }; // по умолчанию — общая нейросеть через сервер
 
   function err(code, message) { var e = new Error(message || code); e.code = code; return e; }
-  function ready() { return !!(cfg.provider && cfg.key && cfg.model && base()); }
-  function base() { var p = PRESETS[cfg.provider]; return ((cfg.provider === 'custom' ? cfg.base : p && p.base) || '').replace(/\/+$/, ''); }
+  function S() { return window.KukingStore; }
+  function ready() {
+    if (kind() === 'server') return !!(S() && S().enabled && S().user());
+    return !!(cfg.provider && cfg.key && cfg.model && base());
+  }
+  function base() {
+    if (kind() === 'server') return ((window.KUKING_CONFIG || {}).supabaseUrl || '').replace(/\/+$/, '') + '/functions/v1/ai';
+    var p = PRESETS[cfg.provider]; return ((cfg.provider === 'custom' ? cfg.base : p && p.base) || '').replace(/\/+$/, '');
+  }
   function kind() { return (PRESETS[cfg.provider] || {}).kind; }
 
   /* читаем поток SSE: строки data: {...} */
@@ -53,6 +62,16 @@
     var text = '', onText = opts.onText || function () {}, signal = opts.signal, maxOut = opts.maxTokens || 16000;
     function push(delta) { if (!delta) return; text += delta; onText({ text: text, delta: delta }); }
     var k = kind(), req;
+    if (k === 'server') {
+      return S().token().then(function (t) {
+        return fetch(base(), { method: 'POST', signal: signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t, apikey: (window.KUKING_CONFIG || {}).supabaseAnonKey || '' },
+          body: JSON.stringify({ stream: true, max_tokens: maxOut, messages: [{ role: 'user', content: prompt }] }) });
+      }, function () { throw err('not_granted', 'Войди в аккаунт — нейросеть работает для своих'); }).then(function (res) {
+        if (res.status === 404) throw err('provider_error', 'На сервере нет функции ai — её надо загрузить в Supabase');
+        if (!res.ok) return fail(res);
+        return readSSE(res, function (j) { var c = j.choices && j.choices[0]; push(c && c.delta && c.delta.content); }, signal);
+      }).then(function () { return text; });
+    }
     if (k === 'openai') {
       var body = { model: cfg.model, stream: true, max_tokens: maxOut, messages: [{ role: 'user', content: prompt }] };
       req = function (b) {

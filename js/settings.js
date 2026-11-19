@@ -28,13 +28,15 @@
   }
   function aiHTML() {
     var c = AI.get(), P = AI.presets;
-    return '<p class="small">Свежак и «10 идей» работают на твоей нейросети. Ключ хранится <b>только в этом телефоне</b> и уходит напрямую провайдеру. Поставь лимит трат в кабинете провайдера.</p>' +
+    var srv = (P[c.provider] || {}).kind === 'server';
+    return '<p class="small">' + (srv ? 'Нейросеть «Кукинга» работает для всех, кто вошёл: ничего настраивать не надо. Внутри — GigaChat от Сбера.' : 'Ключ хранится <b>только в этом телефоне</b> и уходит напрямую провайдеру. Поставь лимит трат в кабинете провайдера.') + '</p>' +
       '<form class="set-form" id="aiForm">' +
       '<label class="set-f"><span>Провайдер</span><select id="aiProv">' + Object.keys(P).map(function (k) { return '<option value="' + k + '"' + (c.provider === k ? ' selected' : '') + '>' + esc(P[k].label) + '</option>'; }).join('') + '</select></label>' +
       '<label class="set-f" id="aiBaseWrap"' + (c.provider === 'custom' ? '' : ' hidden') + '><span>Адрес API (…/v1)</span><input id="aiBase" type="url" value="' + esc(c.base || '') + '" placeholder="https://…/v1"></label>' +
+ '<div id="aiOwn"' + (srv ? ' hidden' : '') + '>' +
       '<label class="set-f"><span>Ключ</span><input id="aiKey" type="password" autocomplete="off" value="' + esc(c.key || '') + '" placeholder="вставь ключ"></label>' +
       '<label class="set-f"><span>Модель</span><input id="aiModel" type="text" autocomplete="off" autocapitalize="off" value="' + esc(c.model || '') + '" placeholder="точное имя модели из кабинета провайдера"></label>' +
-      '<p class="small">Рецепт — длинная и строгая штука: на слабых моделях он будет кривее. Бери топовую модель своего провайдера.</p>' +
+      '<p class="small">Рецепт — длинная и строгая штука: на слабых моделях он будет кривее. Бери топовую модель своего провайдера.</p></div>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary">Сохранить и проверить</button>' + (c.key ? '<button type="button" class="ghost-btn" data-a="aiclear">Удалить ключ</button>' : '') + '</div></form>' +
       (msg.ai ? '<p class="set-msg' + (msg.aiOk ? ' ok' : '') + '">' + esc(msg.ai) + '</p>' : '');
   }
@@ -105,11 +107,11 @@
     var f = el.querySelector('#aiForm');
     if (f) {
       var prov = el.querySelector('#aiProv');
-      prov.addEventListener('change', function () { el.querySelector('#aiBaseWrap').hidden = prov.value !== 'custom'; });
+      prov.addEventListener('change', function () { el.querySelector('#aiBaseWrap').hidden = prov.value !== 'custom'; el.querySelector('#aiOwn').hidden = (AI.presets[prov.value] || {}).kind === 'server'; });
       f.addEventListener('submit', function (e) {
         e.preventDefault();
         AI.set({ provider: prov.value, base: el.querySelector('#aiBase').value.trim(), key: el.querySelector('#aiKey').value.trim(), model: el.querySelector('#aiModel').value.trim() });
-        if (!AI.ready()) { msg.ai = 'Заполни ключ и модель' + (prov.value === 'custom' ? ' и адрес' : ''); msg.aiOk = false; render(); return; }
+        if (!AI.ready()) { msg.ai = (AI.presets[prov.value] || {}).kind === 'server' ? 'Сначала войди в аккаунт' : 'Заполни ключ и модель' + (prov.value === 'custom' ? ' и адрес' : ''); msg.aiOk = false; render(); return; }
         msg.ai = 'Проверяю…'; msg.aiOk = false; render();
         AI.test().then(function () { msg.ai = 'Нейросеть на связи. Можно крутить свежак.'; msg.aiOk = true; render(); })
           .catch(function (er) { msg.ai = (window.KukingAIMsg ? window.KukingAIMsg(er) : 'Не вышло') + (er && er.message && er.code !== 'not_granted' ? ' — ' + er.message : ''); msg.aiOk = false; render(); });

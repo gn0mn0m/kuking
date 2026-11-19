@@ -19,3 +19,8 @@
 3. Authentication → Sign In / Providers → Email: выключить «Confirm email» (иначе друзьям придёт письмо).
 4. Project Settings → API: Project URL и anon public key → в `js/config.js`.
    `service_role` и пароль базы никуда не вставлять и никому не слать.
+
+## Нейросеть для всех (GigaChat через сервер)
+1. developers.sber.ru → GigaChat API → физлицо → проект → «Authorization key».
+2. Supabase → Edge Functions → Secrets → `GIGACHAT_KEY` = этот ключ.
+3. Edge Functions → Deploy new function → Via Editor → имя `ai` → вставить `supabase/functions/ai/index.ts` → Deploy (Verify JWT оставить включённым).

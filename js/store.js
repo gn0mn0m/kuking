@@ -141,6 +141,7 @@
     },
     db: dbApi,
     req: req,
+    token: token,
     rpc: function (name, args) { return req('POST', 'rpc/' + name, args || {}); },
     claimLegacy: claimLegacy,
     refresh: pullAll

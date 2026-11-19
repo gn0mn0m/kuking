@@ -24,10 +24,17 @@
     var n = (p && p.nick || '?').trim(), h = 0; for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 3;
     return '<span class="soc-av' + (big ? ' big' : '') + ' av' + h + (p && p.is_admin ? ' chef' : '') + '" aria-hidden="true">' + esc(n.charAt(0).toUpperCase()) + (p && p.is_admin ? CROWN : '') + '</span>';
   }
+  var MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  function bdayText(b) { if (!b) return ''; var x = b.split('-'); return +x[2] + ' ' + MONTHS[+x[1] - 1]; }
+  function bdayToday(b) {
+    if (!b) return false; var x = b.split('-'), n = new Date(), m = n.getMonth() + 1, d = n.getDate();
+    var leap = new Date(n.getFullYear(), 1, 29).getDate() === 29;
+    return +x[1] === m && (+x[2] === d || (!leap && m === 2 && d === 28 && +x[2] === 29));
+  }
   function nickHTML(p) { return '<span class="soc-nm"><b class="soc-nick">' + esc(p ? p.nick : 'кто-то') + '</b>' + (p && p.is_admin ? '<span class="soc-chef">шеф</span>' : '') + '</span>'; }
 
   /* ---------- состояние ---------- */
-  var me = null, admin = null, people = {}, links = [], replies = [], reviewsBy = {}, loaded = false, subs = [];
+  var me = null, admin = null, people = {}, info = {}, links = [], replies = [], reviewsBy = {}, loaded = false, subs = [];
   function uid() { return S.user() && S.user().id; }
   function emit() { subs.forEach(function (f) { try { f(); } catch (e) {} }); }
   API.onChange = function (f) { subs.push(f); };
@@ -37,6 +44,12 @@
   API.person = function (id) { return people[id]; };
   API.badge = function () { return links.filter(function (l) { return l.status === 'pending' && l.b === uid(); }).length; };
   API.reviewsOf = function (userId) { return reviewsBy[userId] || {}; };
+  /* кто ест: имя, любимое и что не жрёт — для нейросети */
+  API.eaters = function () {
+    var ids = [uid()].concat(friendIds()); if (admin && ids.indexOf(admin.id) < 0) ids.push(admin.id);
+    return ids.map(function (id) { var i = info[id] || {}, p = people[id] || {}; if (!i.likes && !i.avoid) return null;
+      return { who: (i.name || p.nick || '') + (id === uid() ? ' (это я)' : ''), likes: i.likes || undefined, avoid: i.avoid || undefined }; }).filter(Boolean);
+  };
 
   function friendIds() { var m = uid(); return links.filter(function (l) { return l.status === 'accepted'; }).map(function (l) { return l.a === m ? l.b : l.a; }); }
   function relation(id) {
@@ -58,8 +71,10 @@
       S.req('GET', 'friends?select=a,b,status,created_at&a=eq.' + q(m)),
       S.req('GET', 'friends?select=a,b,status,created_at&b=eq.' + q(m)),
       S.req('GET', 'replies?select=id,recipe_id,review_owner,author,body,created_at&order=created_at.asc&limit=1000'),
-      S.allReviews()
+      S.allReviews(),
+      S.req('GET', 'profile_info?select=id,name,bday,likes,avoid').catch(function () { return []; })
     ]).then(function (r) {
+      info = {}; (r[6] || []).forEach(function (x) { info[x.id] = x; });
       me = r[0] && r[0][0] || null; admin = r[1] && r[1][0] || null;
       if (me) people[me.id] = me; if (admin) people[admin.id] = admin;
       links = (r[2] || []).concat(r[3] || []); replies = r[4] || [];
@@ -101,10 +116,13 @@
     if (!S.user()) return head() + '<div class="soc-empty"><p>Чтобы дружить, надо войти. Без входа ты как сиделец без погонялова.</p><button type="button" class="nav-btn primary" data-a="login">Войти</button></div>';
     if (!loaded) return head() + '<p class="small soc-pad">Секунду, пробиваю по базе…</p>';
     if (!me) return head() + nickForm(true);
+    if (view === 'push') return head() + pushCard(true);
     var m = uid(), h = head();
-    h += '<div class="soc-me">' + avatar(me, true) + '<div class="soc-me-t">' + nickHTML(me) + '<span class="small">это ты</span></div>' +
-      '<button type="button" class="ghost-btn" data-a="nick">ник</button></div>';
+    var mi = info[m] || {};
+    h += '<div class="soc-me">' + avatar(me, true) + '<div class="soc-me-t">' + nickHTML(me) + '<span class="small">' + esc([mi.name, mi.bday ? '🎂 ' + bdayText(mi.bday) : ''].filter(Boolean).join(' · ') || 'это ты') + '</span></div>' +
+      '<button type="button" class="ghost-btn" data-a="nick">анкета</button></div>';
     if (view === 'nick') h += nickForm(false);
+    if (view === 'push') h += pushCard(true);
     h += '<div class="soc-invite"><button type="button" class="nav-btn primary" data-a="invite">Позвать по ссылке</button>' +
       '<p class="small">Кинь ссылку в чат — друг тапнет, войдёт, и вы сразу кенты. Или пусть найдёт тебя по нику <b>' + esc(me.nick) + '</b>.</p></div>';
     h += '<form class="soc-search" id="socFind" role="search"><input id="socQ" type="search" placeholder="Найти по нику" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(searchQ) + '" aria-label="Ник друга"><button type="submit" class="ghost-btn">Найти</button></form>';
@@ -136,7 +154,9 @@
     else if (rel === 'sent') act = '<button type="button" class="ghost-btn soc-sm" data-a="cancel" data-id="' + p.id + '">Отменить</button>';
     else if (rel === 'none' && searching) act = '<button type="button" class="nav-btn primary soc-sm" data-a="add" data-id="' + p.id + '">Добавить</button>';
     var open = rel === 'friend' || p.is_admin;
-    var sub = rel === 'sent' ? 'заявка ушла' : rel === 'incoming' ? 'стучится к тебе' : (stats(p.id) || (open ? 'ещё ничего не оценил' : ''));
+    var pi = info[p.id] || {};
+    var sub = rel === 'sent' ? 'заявка ушла' : rel === 'incoming' ? 'стучится к тебе' : bdayToday(pi.bday) ? '🎂 Сегодня днюха — поздравь!' : (stats(p.id) || (open ? 'ещё ничего не оценил' : ''));
+    if (pi.name && rel !== 'sent' && rel !== 'incoming' && !bdayToday(pi.bday)) sub = pi.name + (sub ? ' · ' + sub : '');
     return '<li class="soc-row' + (p.is_admin ? ' is-chef' : '') + '">' +
       (open ? '<button type="button" class="soc-who" data-a="profile" data-id="' + p.id + '">' : '<div class="soc-who">') +
       avatar(p) + '<span class="soc-who-t">' + nickHTML(p) + (sub ? '<span class="small">' + esc(sub) + '</span>' : '') + '</span>' +
@@ -144,17 +164,66 @@
       (act ? '<span class="soc-act">' + act + '</span>' : '') + '</li>';
   }
   function nickForm(first) {
-    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<p>Придумай ник — по нему тебя найдут кенты. Первый в хате становится шефом.</p>' : '') +
-      '<label class="set-f"><span>Ник: 3–20 букв, цифр или _</span><input id="socNickIn" type="text" autocomplete="nickname" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(me ? me.nick : '') + '"></label>' +
+    var i = info[uid()] || {};
+    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — кенты увидят, нейросеть учтёт, а в днюху тебя поздравят. Первый в хате становится шефом.</p>' : '<h3 class="soc-form-h">Анкета</h3>') +
+      '<label class="set-f"><span>Ник — по нему найдут кенты</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(me ? me.nick : '') + '"></label>' +
+      '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(i.name || '') + '" placeholder="Как к тебе обращаться"></label>' +
+      '<label class="set-f"><span>День рождения</span><input id="socBday" type="date" autocomplete="bday" min="1930-01-01" max="2025-12-31" value="' + esc(i.bday || '') + '"></label>' +
+      '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(i.likes || '') + '" placeholder="Грузинская, острое, бургеры…"></label>' +
+      '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(i.avoid || '') + '" placeholder="Кинза, грибы, рыба…"></label>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary">' + (first ? 'Погнали' : 'Сохранить') + '</button>' + (first ? '' : '<button type="button" class="ghost-btn" data-a="nickx">Отмена</button>') + '</div>' +
       (nickMsg ? '<p class="set-msg">' + esc(nickMsg) + '</p>' : '') + '</form>';
+  }
+
+  /* ---------- пуши ---------- */
+  var FN = ((window.KUKING_CONFIG || {}).supabaseUrl || '').replace(/\/+$/, '') + '/functions/v1/birthday-push';
+  var ANON = (window.KUKING_CONFIG || {}).supabaseAnonKey || '';
+  function standalone() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+  function pushState() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return /iPhone|iPad/.test(navigator.userAgent) && !standalone() ? 'install' : 'nope';
+    if (Notification.permission === 'denied') return 'denied';
+    return localStorage.getItem('kuking:push') === '1' && Notification.permission === 'granted' ? 'on' : 'off';
+  }
+  function b64u(s) { var p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  function fnCall(action) {
+    return S.token().then(function (t) {
+      return fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + t }, body: JSON.stringify({ action: action }) });
+    }).then(function (r) { if (!r.ok) throw new Error(r.status === 404 ? 'функция birthday-push не загружена в Supabase' : 'функция ответила ' + r.status); return r.json(); });
+  }
+  function enablePush() {
+    return Notification.requestPermission().then(function (perm) {
+      if (perm !== 'granted') throw new Error('Ты не разрешил уведомления');
+      return Promise.all([navigator.serviceWorker.ready, fnCall('init')]);
+    }).then(function (r) {
+      var reg = r[0], key = r[1].publicKey;
+      return reg.pushManager.getSubscription().then(function (old) { return old || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) }); });
+    }).then(function (sub) { return S.rpc('save_push', { sub: sub.toJSON() }); })
+      .then(function () { try { localStorage.setItem('kuking:push', '1'); } catch (e) {} });
+  }
+  API.pushState = pushState;
+  API.enablePush = enablePush;
+  API.testPush = function () { return fnCall('test'); };
+  function pushCard(after) {
+    var st = pushState(), h = '<div class="soc-push card"><h3 class="soc-form-h">🎂 Пуши на днюху</h3>';
+    if (st === 'on') h += '<p class="small">Включены. В днюху кента прилетит малява в 9 утра по Москве, в твою — поздравление.</p><button type="button" class="ghost-btn" data-a="ptest">Проверить пуш</button>';
+    else if (st === 'install') h += '<p class="small">На iPhone пуши работают только из приложения на экране «Домой»: Safari → Поделиться → «На экран „Домой“», открой оттуда и включи тут.</p>';
+    else if (st === 'denied') h += '<p class="small">Уведомления запрещены. Включи: Настройки iPhone → Уведомления → Кукинг.</p>';
+    else if (st === 'nope') h += '<p class="small">Этот браузер пуши не умеет.</p>';
+    else h += '<p class="small">В днюху кента — малява в 9 утра по Москве, в твою — поздравление от хаты. Больше ничего не шлём, без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
+    if (after) h += '<button type="button" class="' + (st === 'off' ? 'ghost-btn' : 'nav-btn primary') + '" data-a="pdone">' + (st === 'off' ? 'Потом' : 'Дальше') + '</button>';
+    return h + (msg ? '<p class="set-msg">' + esc(msg) + '</p>' : '') + '</div>';
   }
 
   /* ---------- профиль человека ---------- */
   function profileHTML(id) {
     var p = people[id] || { id: id, nick: '…' }, rv = reviewsBy[id] || {}, mine = reviewsBy[uid()] || {};
     var ids = Object.keys(rv).filter(function (k) { return rv[k].score; }).sort(function (a, b) { return String(rv[b].at || '').localeCompare(String(rv[a].at || '')); });
-    var h = head(p.nick, true) + '<div class="soc-prof">' + avatar(p, true) + '<div>' + nickHTML(p) + '<p class="small">' + esc(stats(id) || 'Оценок пока нет') + '</p></div></div>';
+    var pi = info[id] || {};
+    var h = head(p.nick, true) + '<div class="soc-prof">' + avatar(p, true) + '<div>' + nickHTML(p) + (pi.name ? '<p class="soc-name">' + esc(pi.name) + '</p>' : '') + '<p class="small">' + esc(stats(id) || 'Оценок пока нет') + '</p></div></div>';
+    if (pi.bday || pi.likes || pi.avoid) h += '<dl class="soc-facts">' +
+      (pi.bday ? '<div' + (bdayToday(pi.bday) ? ' class="today"' : '') + '><dt>Днюха</dt><dd>' + (bdayToday(pi.bday) ? '🎂 Сегодня!' : esc(bdayText(pi.bday))) + '</dd></div>' : '') +
+      (pi.likes ? '<div><dt>Любит</dt><dd>' + esc(pi.likes) + '</dd></div>' : '') +
+      (pi.avoid ? '<div><dt>Не жрёт</dt><dd>' + esc(pi.avoid) + '</dd></div>' : '') + '</dl>';
     if (!ids.length) h += '<p class="small soc-pad">Ещё ничего не оценил. Пни его — пусть пожрёт и отпишется.</p>';
     h += '<div class="soc-revs">' + ids.map(function (rid) {
       var d = rv[rid], my = mine[rid] && mine[rid].score, have = hasRecipe(rid);
@@ -235,6 +304,9 @@
     if (a === 'nickx') { view = 'list'; render(); return; }
     if (a === 'profile') { viewing = id; view = 'profile'; render(); ov.querySelectorAll('.soc-page')[1].scrollTop = 0; return; }
     if (a === 'invite') return invite();
+    if (a === 'pon') { msg = 'Включаю…'; render(); enablePush().then(function () { msg = ''; render(); toast('Пуши включены'); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
+    if (a === 'ptest') { msg = 'Шлю…'; render(); API.testPush().then(function (r) { msg = r && r.sent ? 'Ушло — глянь шторку' : 'Подписка не нашлась, включи пуши заново'; if (!(r && r.sent)) try { localStorage.removeItem('kuking:push'); } catch (e) {} render(); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
+    if (a === 'pdone') { msg = ''; view = 'list'; render(); return; }
     if (a === 'add') {
       var rev = links.filter(function (l) { return l.a === id && l.b === m && l.status === 'pending'; })[0];
       return run(rev ? S.req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' }) : S.req('POST', 'friends', { a: m, b: id, status: 'pending' }), rev ? 'Теперь вы кенты' : 'Заявка ушла');
@@ -267,11 +339,15 @@
     var nf = ov.querySelector('#socNick');
     if (nf) nf.addEventListener('submit', function (e) {
       e.preventDefault(); if (busy) return;
-      var nick = ov.querySelector('#socNickIn').value.trim();
-      if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { nickMsg = '3–20 символов: буквы, цифры, _'; render(); return; }
+      var v = function (id) { return ov.querySelector(id).value.trim(); };
+      var nick = v('#socNickIn'), first = !me;
+      var data = { id: uid(), name: v('#socName') || null, bday: v('#socBday') || null, likes: v('#socLikes') || null, avoid: v('#socAvoid') || null, updated_at: new Date().toISOString() };
+      if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { nickMsg = 'Ник: 3–20 символов, буквы, цифры, _'; render(); return; }
       busy = true; nickMsg = 'Сохраняю…'; render();
-      (me ? S.req('PATCH', 'profiles?id=eq.' + q(uid()), { nick: nick }) : S.req('POST', 'profiles', { id: uid(), nick: nick }).then(function () { return S.rpc('claim_admin'); }))
-        .then(function () { busy = false; nickMsg = ''; view = 'list'; return refresh().then(acceptPending); })
+      var step = me ? (me.nick === nick ? Promise.resolve() : S.req('PATCH', 'profiles?id=eq.' + q(uid()), { nick: nick }))
+        : S.req('POST', 'profiles', { id: uid(), nick: nick }).then(function () { return S.rpc('claim_admin'); });
+      step.then(function () { return S.req('POST', 'profile_info?on_conflict=id', [data], 'resolution=merge-duplicates,return=minimal'); })
+        .then(function () { busy = false; nickMsg = ''; view = first && pushState() !== 'nope' ? 'push' : 'list'; return refresh().then(acceptPending); })
         .catch(function (er) { busy = false; nickMsg = /duplicate|unique|23505|409/i.test(String(er && (er.message || er.code))) ? 'Ник занят — придумай другой' : 'Не вышло: ' + (er && er.message); render(); });
     });
     bindReplies(ov, render);

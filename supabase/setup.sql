@@ -148,6 +148,73 @@ drop policy if exists "replies delete" on public.replies;
 create policy "replies delete" on public.replies for delete to authenticated
   using (author = auth.uid() or public.is_admin_user(auth.uid()));
 
+-- ================= анкета: имя, ДР, вкусы =================
+create table if not exists public.profile_info (
+  id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  name text check (char_length(name) <= 40),
+  bday date,
+  likes text check (char_length(likes) <= 300),
+  avoid text check (char_length(avoid) <= 300),
+  updated_at timestamptz not null default now()
+);
+alter table public.profile_info enable row level security;
+grant select, insert, update on public.profile_info to authenticated;
+drop policy if exists "info read" on public.profile_info;
+create policy "info read" on public.profile_info for select to authenticated using (public.can_see(id));
+drop policy if exists "info insert own" on public.profile_info;
+create policy "info insert own" on public.profile_info for insert to authenticated with check (auth.uid() = id);
+drop policy if exists "info update own" on public.profile_info;
+create policy "info update own" on public.profile_info for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
+
+-- ================= пуши =================
+create table if not exists public.push_subs (
+  endpoint text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  sub jsonb not null,
+  created_at timestamptz not null default now()
+);
+alter table public.push_subs enable row level security;
+grant select, delete on public.push_subs to authenticated;
+drop policy if exists "push own" on public.push_subs;
+create policy "push own" on public.push_subs for select to authenticated using (user_id = auth.uid());
+drop policy if exists "push del own" on public.push_subs;
+create policy "push del own" on public.push_subs for delete to authenticated using (user_id = auth.uid());
+
+-- телефон мог принадлежать другому аккаунту — подписка переезжает на того, кто вошёл
+create or replace function public.save_push(sub jsonb) returns boolean
+language plpgsql security definer set search_path = public as
+$$ begin
+  if auth.uid() is null or sub->>'endpoint' is null then return false; end if;
+  insert into public.push_subs (endpoint, user_id, sub) values (sub->>'endpoint', auth.uid(), sub)
+    on conflict (endpoint) do update set user_id = auth.uid(), sub = excluded.sub, created_at = now();
+  return true;
+end $$;
+revoke execute on function public.save_push(jsonb) from public, anon;
+grant execute on function public.save_push(jsonb) to authenticated;
+
+-- служебное: секрет для ежедневного запуска и ключи пушей (наружу не видно)
+create schema if not exists kuking_private;
+revoke all on schema kuking_private from public, anon, authenticated;
+create table if not exists kuking_private.settings (k text primary key, v text not null);
+insert into kuking_private.settings (k, v) values ('cron_secret', replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''))
+  on conflict (k) do nothing;
+
+-- каждый день в 9:00 по Москве (6:00 UTC) — поздравления с днюхой
+do $cron$
+begin
+  create extension if not exists pg_cron with schema pg_catalog;
+  create extension if not exists pg_net with schema extensions;
+  perform cron.schedule('kuking-birthdays', '0 6 * * *', $job$
+    select net.http_post(
+      url := 'https://akwijavguhthhxpdjgfq.supabase.co/functions/v1/birthday-push',
+      headers := jsonb_build_object('Content-Type', 'application/json',
+        'x-cron', (select v from kuking_private.settings where k = 'cron_secret')),
+      body := '{"action":"run"}'::jsonb)
+  $job$);
+exception when others then
+  raise notice 'Расписание не включилось: %', sqlerrm;
+end $cron$;
+
 -- ================= твои старые оценки из книги в Claude =================
 -- лягут без хозяина; при первом входе приложение перепишет их на тебя. Только если оценок ещё нет.
 insert into public.docs (collection, id, user_id, data)

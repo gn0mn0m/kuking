@@ -304,7 +304,8 @@
         }),
         reviews: Object.keys(reviews).sort().map(function (id) { return { recipe: t(id), score: reviews[id].score, comment: reviews[id].comment || undefined }; }),
         removedForever: gone.map(function (id) { return id.indexOf('ai-') === 0 ? 'рецепт от нейросети' : t(id); }),
-        friendsReviews: friendRev.map(function (x) { return { recipe: t(x.id), score: x.score, comment: x.comment || undefined }; })
+        friendsReviews: friendRev.map(function (x) { return { recipe: t(x.id), score: x.score, comment: x.comment || undefined }; }),
+        eaters: window.KukingSocial && window.KukingSocial.eaters ? window.KukingSocial.eaters() : []
       };
     },
     ideasChanged: function (st) {

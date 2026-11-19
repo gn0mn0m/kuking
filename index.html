@@ -680,6 +680,19 @@ button.soc-who:active { transform: scale(.98); background: color-mix(in srgb, va
 .soc-wipe { font-size: .8rem; }
 .soc-nickf { margin-bottom: 14px; }
 @media (prefers-reduced-motion: reduce) { .soc-ov, .soc-wrap { transition: opacity .2s; } .soc-ov { transform: none; opacity: 0; } .soc-ov.on { opacity: 1; } .soc-row, .soc-rev, .soc-rep, .lib-thr-item, .lib-badge { animation: none; } }
+
+.soc-form-h { font-family: var(--f-display); font-weight: 400; font-size: 1.5rem; margin: 0 0 4px; color: var(--orange); }
+.soc-nickf { display: grid; gap: 12px; padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); animation: soc-in .35s ease-out; }
+.soc-nickf .small { margin: 0; }
+.soc-nickf input[type=date] { min-height: 46px; -webkit-appearance: none; appearance: none; text-align: left; }
+.soc-push { display: grid; gap: 10px; margin-bottom: 14px; animation: soc-in .35s ease-out; }
+.soc-push .small { margin: 0; }
+.soc-name { margin: 2px 0 0; font-weight: 600; }
+.soc-facts { margin: -2px 0 14px; display: grid; gap: 6px; }
+.soc-facts > div { display: flex; gap: 10px; padding: 10px 14px; border-radius: 14px; background: color-mix(in srgb, var(--fg) 4%, transparent); border: 1px solid var(--line); }
+.soc-facts > div.today { background: color-mix(in srgb, var(--orange) 16%, var(--surface)); border-color: var(--orange); }
+.soc-facts dt { flex: none; width: 5.5em; font-family: var(--f-mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+.soc-facts dd { margin: 0; overflow-wrap: anywhere; }
 </style>
 
 <div id="app">

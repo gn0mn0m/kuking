@@ -187,12 +187,26 @@
       }).catch(function () { var h = ov.querySelector('#socNickHint'); if (h) h.textContent = ''; });
     }, 450);
   }
+  function isoToRu(b) { if (!b) return ''; var x = b.split('-'); return x[2] + '.' + x[1] + '.' + x[0]; }
+  function ruToIso(t) { // '05.03.1999' → '1999-03-05'; пусто → null; криво → false
+    t = String(t || '').trim(); if (!t) return null;
+    var m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(t); if (!m) return false;
+    var d = +m[1], mo = +m[2], y = +m[3], dt = new Date(y, mo - 1, d);
+    if (y < 1920 || y > new Date().getFullYear() || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return false;
+    return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
+  function maskDate(e) { // цифры → дд.мм.гггг, точки сами
+    var el = e.target, dg = el.value.replace(/\D/g, '').slice(0, 8);
+    var out = dg.slice(0, 2) + (dg.length > 2 ? '.' + dg.slice(2, 4) : '') + (dg.length > 4 ? '.' + dg.slice(4) : '');
+    if (e.inputType && e.inputType.indexOf('delete') === 0 && /\.$/.test(el.value)) out = el.value;
+    el.value = out;
+  }
   function nickForm(first) {
     var i = info[uid()] || {};
     return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — кенты увидят, нейросеть учтёт. Первый в хате становится шефом.</p>' : '<h3 class="soc-form-h">Анкета</h3>') +
       '<label class="set-f"><span>Ник — по нему найдут кенты</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(fv('nick', me ? me.nick : '')) + '"><small id="socNickHint" class="soc-nick-hint" aria-live="polite"></small></label>' +
       '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(fv('name', i.name || '')) + '" placeholder="Как к тебе обращаться"></label>' +
-      '<label class="set-f"><span>День рождения</span><input id="socBday" type="date" autocomplete="bday" min="1930-01-01" max="2025-12-31" value="' + esc(fv('bday', i.bday || '')) + '"></label>' +
+      '<label class="set-f"><span>День рождения</span><input id="socBday" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="дд.мм.гггг" value="' + esc(String(fv('bday', isoToRu(i.bday))).replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$3.$2.$1')) + '"></label>' +
       '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(fv('likes', i.likes || '')) + '" placeholder="Грузинская, острое, бургеры…"></label>' +
       '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary">' + (first ? 'Погнали' : 'Сохранить') + '</button>' + (first ? '' : '<button type="button" class="ghost-btn" data-a="nickx">Отмена</button>') + '</div>' +
@@ -362,6 +376,7 @@
     });
     var nf = ov.querySelector('#socNick');
     if (nf) {
+      var bd = ov.querySelector('#socBday'); if (bd) bd.addEventListener('input', maskDate);
       var map = { socNickIn: 'nick', socName: 'name', socBday: 'bday', socLikes: 'likes', socAvoid: 'avoid' };
       nf.addEventListener('input', function (e) { var k = map[e.target.id]; if (!k) return; fd = fd || {}; fd[k] = e.target.value; saveFd(); if (k === 'nick') checkNick(e.target.value.trim()); });
       nf.addEventListener('change', function (e) { var k = map[e.target.id]; if (k) { fd = fd || {}; fd[k] = e.target.value; saveFd(); } });
@@ -371,7 +386,9 @@
       e.preventDefault(); if (busy) return;
       var v = function (id) { return ov.querySelector(id).value.trim(); };
       var nick = v('#socNickIn'), first = !me;
-      var data = { id: uid(), name: v('#socName') || null, bday: v('#socBday') || null, likes: v('#socLikes') || null, avoid: v('#socAvoid') || null, updated_at: new Date().toISOString() };
+      var bdIso = ruToIso(v('#socBday'));
+      if (bdIso === false) { nickMsg = 'Днюха: число.месяц.год, например 05.03.1999'; render(); return; }
+      var data = { id: uid(), name: v('#socName') || null, bday: bdIso, likes: v('#socLikes') || null, avoid: v('#socAvoid') || null, updated_at: new Date().toISOString() };
       if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { nickMsg = 'Ник: 3–20 символов, буквы, цифры, _'; render(); return; }
       if (nickState === 'taken') { nickMsg = 'Ник занят — придумай другой'; render(); return; }
       busy = true; nickMsg = 'Сохраняю…'; render();

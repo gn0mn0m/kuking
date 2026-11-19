@@ -15,8 +15,9 @@
   function accountHTML() {
     if (!S || !S.enabled) return '<p class="small">Облако ещё не подключено — оценки живут только в этом телефоне.</p>';
     var u = S.user();
-    if (u) return '<p class="set-who">Ты вошёл как <b>' + esc(u.email) + '</b>. Оценки и комменты видят все свои, средняя по компании — на карточках.</p>' +
-      '<button type="button" class="ghost-btn" data-a="out">Выйти</button>';
+    var me = window.KukingSocial && window.KukingSocial.me && window.KukingSocial.me();
+    if (u) return '<p class="set-who">Ты вошёл как <b>' + esc(u.email) + '</b>' + (me ? ', ник <b>' + esc(me.nick) + '</b>' + (me.is_admin ? ' — ты шеф' : '') : '') + '. Твои оценки видят друзья, оценки шефа — все.</p>' +
+      '<div class="set-row">' + (window.KukingSocial && window.KukingSocial.enabled ? '<button type="button" class="nav-btn primary" data-a="friends">Друзья</button>' : '') + '<button type="button" class="ghost-btn" data-a="out">Выйти</button></div>';
     return '<p class="small">Войди, чтобы оценки и комменты были общими для всей хаты и нейросеть училась на вкусах компании.</p>' +
       '<form class="set-form" id="authForm" autocomplete="on">' +
       '<label class="set-f"><span>Почта</span><input id="authEmail" type="email" autocomplete="email" required inputmode="email"></label>' +
@@ -57,6 +58,7 @@
         var a = b.getAttribute('data-a');
         if (a === 'close') close();
         if (a === 'out') { S.signOut(); location.reload(); }
+        if (a === 'friends') { close(); window.KukingSocial.open(); }
         if (a === 'aiclear') { AI.clear(); msg.ai = 'Ключ удалён с телефона'; msg.aiOk = true; render(); }
       });
     });

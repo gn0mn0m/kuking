@@ -45,13 +45,15 @@
       .catch(function (e) { refreshing = null; if (e.code === 'http_400' || e.code === 'unauthorized') { session = null; save(null); emitAuth(); } throw e; });
     return refreshing;
   }
-  function rest(method, query, body, prefer) {
+  /* любой запрос к PostgREST: path = 'таблица?фильтры' или 'rpc/функция' */
+  function req(method, path, body, prefer) {
     return token().then(function (t) {
       var h = { apikey: KEY, Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' };
       if (prefer) h.Prefer = prefer;
-      return fetch(URL_ + '/rest/v1/docs' + (query ? '?' + query : ''), { method: method, headers: h, body: body ? JSON.stringify(body) : undefined }).then(jsonOrThrow);
+      return fetch(URL_ + '/rest/v1/' + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined }).then(jsonOrThrow);
     });
   }
+  function rest(method, query, body, prefer) { return req(method, 'docs' + (query ? '?' + query : ''), body, prefer); }
   function q(s) { return encodeURIComponent(s); }
 
   /* ---------- снимки коллекций: опрос раз в 30 с, при возврате в приложение и после своих записей ---------- */
@@ -124,12 +126,12 @@
     onAuth: function (f) { authSubs.push(f); },
     signUp: function (email, password) {
       return authFetch('signup', { email: email, password: password }).then(function (j) {
-        if (j && j.access_token) { setSession(j); return claimLegacy().then(function () { return 'in'; }); }
+        if (j && j.access_token) { setSession(j); return 'in'; }
         return 'confirm'; // в проекте включено подтверждение почты
       });
     },
     signIn: function (email, password) {
-      return authFetch('token?grant_type=password', { email: email, password: password }).then(function (j) { setSession(j); return claimLegacy(); });
+      return authFetch('token?grant_type=password', { email: email, password: password }).then(function (j) { setSession(j); });
     },
     signOut: function () { session = null; save(null); emitAuth(); },
     /* все оценки всех друзей — для средних на карточках и вкуса в нейросети */
@@ -137,7 +139,11 @@
       if (!session) return Promise.resolve([]);
       return rest('GET', 'select=id,user_id,data&collection=eq.reviews').then(function (rows) { return rows || []; });
     },
-    db: dbApi
+    db: dbApi,
+    req: req,
+    rpc: function (name, args) { return req('POST', 'rpc/' + name, args || {}); },
+    claimLegacy: claimLegacy,
+    refresh: pullAll
   };
   window.KukingStore = api;
 

@@ -91,7 +91,8 @@
       '<div class="lib-panel' + (editing ? ' is-editing' : '') + '" aria-labelledby="libTitle">' +
       '<div class="lib-head"><h2 id="libTitle" class="lib-title">Кукинг</h2>' +
       '<div class="lib-actions"><button type="button" class="ghost-btn lib-gear" id="libSettings" aria-label="Настройки" title="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>' +
-      '<button type="button" class="ghost-btn' + (editing ? ' lib-edit-on' : '') + '" id="libEdit" aria-pressed="' + editing + '">' + (editing ? 'Готово' : 'Править') + '</button>' +
+      (SOC().enabled ? '<button type="button" class="ghost-btn lib-gear lib-friends" id="libFriends" aria-label="Друзья' + (SOC().badge() ? ', заявок: ' + SOC().badge() : '') + '" title="Друзья"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M15.5 4.8a3.3 3.3 0 0 1 0 6.4M17.5 14.8c2.2.6 3.6 2.4 4 5.2"/></svg>' + (SOC().badge() ? '<span class="lib-badge">' + SOC().badge() + '</span>' : '') + '</button>' : '') +
+      '<button type="button" class="ghost-btn lib-editb' + (editing ? ' lib-edit-on' : '') + '" id="libEdit" aria-pressed="' + editing + '" aria-label="' + (editing ? 'Готово' : 'Править') + '">' + (editing ? 'Готово' : '<svg class="lr-narrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg><span class="lr-wide">Править</span>') + '</button>' +
       '<button type="button" class="ghost-btn" id="libClose" aria-label="К рецепту"><span class="lr-wide">К рецепту</span><span class="lr-narrow">Рецепт</span> →</button></div></div>' +
       '<div class="lib-rand">' + (editing ? '<span class="lib-hint">Убрал лишнее — вернуть можно внизу</span>' :
         '<span class="label">Не знаешь, что жрать?</span><button type="button" class="mode-btn lib-fresh">Крутить свежак</button>' +
@@ -104,6 +105,14 @@
     bind();
   }
 
+  function SOC() { return window.KukingSocial || { enabled: false, badge: function () { return 0; }, thread: function () { return ''; }, bindThreads: function () {}, admin: function () { return null; }, me: function () { return null; } }; }
+  var CROWN = '<svg class="soc-crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 11H5z"/></svg>';
+  function chefScore(id) { // оценка шефа — главная на карточке у всех, кроме самого шефа
+    var a = SOC().admin(), m = SOC().me();
+    if (!a || (m && m.id === a.id) || !window.KukingSocial.reviewsOf) return '';
+    var d = window.KukingSocial.reviewsOf(a.id)[id];
+    return d && d.score ? '<span class="lib-chefsc ' + scCls(d.score) + '" title="Оценка шефа">' + CROWN + d.score + '</span>' : '';
+  }
   var MODE_NAME = { self: 'Для себя', romance: 'Романтика', friends: 'Друзья' };
   var SORTS = [['fast', 'Быстрее'], ['slow', 'Дольше'], ['hi', 'Оценка выше'], ['lo', 'Оценка ниже'], ['new', 'Новее'], ['old', 'Старше']];
   var FOR = [['self', 'Для себя'], ['romance', 'Романтика'], ['friends', 'Друзья']];
@@ -187,19 +196,21 @@
         var on = r.id === active.id, sc = rv(r.id).score;
         return '<article class="card lib-card' + (on ? ' on' : '') + '">' +
           (editing ? '<button type="button" class="lib-del" data-id="' + esc(r.id) + '" aria-label="Убрать рецепт ' + esc(r.title) + '" title="Убрать">✕</button>' : '') +
-          '<p class="eyebrow">' + (r.ai ? '<span class="lib-ai">нейросеть</span> ' : '') + esc(r.totalTime || '') + (sc ? ' · <button type="button" class="lib-sc ' + scCls(sc) + '" data-id="' + esc(r.id) + '" aria-expanded="' + !!rating[r.id] + '" aria-label="Оценка ' + sc + ' из 10, ' + (rating[r.id] ? 'свернуть' : 'изменить') + '">' + sc + '/10<svg class="sc-ico" viewBox="0 0 24 24" aria-hidden="true">' + (rating[r.id] ? '<path d="M6 15l6-6 6 6"/>' : '<path d="M6 9l6 6 6-6"/>') + '</svg></button>' : '') +
+          '<p class="eyebrow">' + chefScore(r.id) + (r.ai ? '<span class="lib-ai">нейросеть</span> ' : '') + esc(r.totalTime || '') + (sc ? ' · ' + (chefScore(r.id) ? '<span class="lib-yours">твоя</span> ' : '') + '<button type="button" class="lib-sc ' + scCls(sc) + '" data-id="' + esc(r.id) + '" aria-expanded="' + !!rating[r.id] + '" aria-label="Оценка ' + sc + ' из 10, ' + (rating[r.id] ? 'свернуть' : 'изменить') + '">' + sc + '/10<svg class="sc-ico" viewBox="0 0 24 24" aria-hidden="true">' + (rating[r.id] ? '<path d="M6 15l6-6 6 6"/>' : '<path d="M6 9l6 6 6-6"/>') + '</svg></button>' : '') +
           (MODE_NAME[r.mode] ? ' · <span class="lib-for m-' + r.mode + '">' + MODE_NAME[r.mode] + '</span>' : '') +
           (avgs[r.id] && avgs[r.id].n > 1 ? ' · <span class="lib-avg" title="Средняя у всех">все ' + avgs[r.id].avg + ' · ' + avgs[r.id].n + '</span>' : '') + '</p>' +
           '<h3 class="lib-name">' + esc(r.title) + '</h3>' +
           '<p class="dish-desc">' + esc(r.tagline || '') + '</p>' +
           '<ul class="lib-dishes">' + (r.dishes || []).map(function (d) { return '<li>' + esc(d.name) + '</li>'; }).join('') + '</ul>' +
-          rateBlock(r) +
+          rateBlock(r) + (editing ? '' : SOC().thread(r.id, reviews[r.id])) +
           '<button type="button" class="nav-btn ' + (on ? '' : 'primary') + ' lib-go" data-id="' + esc(r.id) + '">' + (on ? 'Открыт сейчас →' : 'Готовим это') + '</button>' +
           '</article>';
   }
 
   function bind() {
     ov.querySelector('#libClose').addEventListener('click', close);
+    var fb = ov.querySelector('#libFriends'); if (fb) fb.addEventListener('click', function () { SOC().open(); });
+    SOC().bindThreads(ov, function () { var y = ov.scrollTop; render(); ov.scrollTop = y; });
     var gear = ov.querySelector('#libSettings'); if (gear) gear.addEventListener('click', function () { if (window.KukingSettings) window.KukingSettings.open(); });
     ov.querySelector('#libEdit').addEventListener('click', function () { editing = !editing; render(); ov.querySelector('#libEdit').focus(); });
     ov.querySelectorAll('.lib-del').forEach(function (b) { b.addEventListener('click', function () { var id = b.getAttribute('data-id'); if (!isHid(id)) hidden[id] = Date.now(); saveHidden(); render(); }); });
@@ -342,6 +353,21 @@
     }).catch(function () {});
   }
 
+  /* для экрана друзей: есть ли рецепт и «поставить свою оценку» */
+  window.KukingLib = {
+    has: function (id) { return R.some(function (r) { return r.id === id && gone.indexOf(id) < 0; }); },
+    rate: function (id) {
+      if (isHid(id)) { delete hidden[id]; saveHidden(); }
+      editing = false; sortBy = ''; forMode = '';
+      rating[id] = true; edit[id] = true; open();
+      var b = ov.querySelector('.lib-pt[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+      if (b) { var c = b.closest('.lib-card'); c.scrollIntoView({ block: 'center', behavior: 'smooth' }); c.classList.add('lib-flash'); setTimeout(function () { c.classList.remove('lib-flash'); }, 1600); b.focus({ preventScroll: true }); }
+    }
+  };
+  if (window.KukingSocial && window.KukingSocial.onChange) window.KukingSocial.onChange(function () {
+    var typing = document.activeElement && /TEXTAREA|INPUT/.test(document.activeElement.tagName) && ov.contains(document.activeElement);
+    if (!ov.hidden && !typing) { var y = ov.scrollTop; render(); ov.scrollTop = y; }
+  });
   if (btn) btn.addEventListener('click', open);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) close(); });
 

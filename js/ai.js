@@ -60,12 +60,15 @@
     opts = opts || {};
     if (!ready()) return Promise.reject(err('not_granted', 'Нейросеть не настроена'));
     var text = '', onText = opts.onText || function () {}, signal = opts.signal, maxOut = opts.maxTokens || 16000;
+    var sys = '', usr = prompt; if (prompt && typeof prompt === 'object') { sys = prompt.system || ''; usr = prompt.user || ''; }
+    var msgs = (sys ? [{ role: 'system', content: sys }] : []).concat([{ role: 'user', content: usr }]);
+    var temp = opts.temperature != null ? opts.temperature : 0.7;
     function push(delta) { if (!delta) return; text += delta; onText({ text: text, delta: delta }); }
     var k = kind(), req;
     if (k === 'server') {
       return S().token().then(function (t) {
         return fetch(base(), { method: 'POST', signal: signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t, apikey: (window.KUKING_CONFIG || {}).supabaseAnonKey || '' },
-          body: JSON.stringify({ stream: true, max_tokens: maxOut, messages: [{ role: 'user', content: prompt }] }) });
+          body: JSON.stringify({ stream: true, max_tokens: maxOut, temperature: temp, messages: msgs }) });
       }, function () { throw err('not_granted', 'Войди в аккаунт — нейросеть работает для своих'); }).then(function (res) {
         if (res.status === 404) throw err('provider_error', 'На сервере нет функции ai — её надо загрузить в Supabase');
         if (!res.ok) return fail(res);
@@ -73,7 +76,7 @@
       }).then(function () { return text; });
     }
     if (k === 'openai') {
-      var body = { model: cfg.model, stream: true, max_tokens: maxOut, messages: [{ role: 'user', content: prompt }] };
+      var body = { model: cfg.model, stream: true, max_tokens: maxOut, temperature: temp, messages: msgs };
       req = function (b) {
         return fetch(base() + '/chat/completions', { method: 'POST', signal: signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify(b) });
       };
@@ -91,7 +94,7 @@
     if (k === 'anthropic') {
       return fetch(base() + '/messages', { method: 'POST', signal: signal, headers: {
         'Content-Type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'
-      }, body: JSON.stringify({ model: cfg.model, max_tokens: maxOut, stream: true, messages: [{ role: 'user', content: prompt }] }) })
+      }, body: JSON.stringify({ model: cfg.model, max_tokens: maxOut, stream: true, temperature: temp, system: sys || undefined, messages: [{ role: 'user', content: usr }] }) })
         .then(function (res) {
           if (!res.ok) return fail(res);
           return readSSE(res, function (j) { if (j.type === 'content_block_delta' && j.delta) push(j.delta.text); }, signal);
@@ -100,7 +103,7 @@
     if (k === 'gemini') {
       return fetch(base() + '/models/' + encodeURIComponent(cfg.model) + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(cfg.key), {
         method: 'POST', signal: signal, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: maxOut } })
+        body: JSON.stringify({ systemInstruction: sys ? { parts: [{ text: sys }] } : undefined, contents: [{ role: 'user', parts: [{ text: usr }] }], generationConfig: { maxOutputTokens: maxOut, temperature: temp } })
       }).then(function (res) {
         if (!res.ok) return fail(res);
         return readSSE(res, function (j) {
@@ -125,7 +128,7 @@
     return p.catch(function (e) { if (e && (e.name === 'AbortError' || e.code === 'cancelled')) throw err('cancelled'); if (e && e.code) throw e; throw err('network', 'Нет связи с нейросетью: ' + (e && e.message)); });
   }
 
-  var sample = function (prompt, opts) { return wrapAbort(complete(typeof prompt === 'string' ? prompt : prompt.map(function (m) { return m.content; }).join('\n\n'), opts)).then(function (t) { return { text: t, truncated: false }; }); };
+  var sample = function (prompt, opts) { return wrapAbort(complete(Array.isArray(prompt) ? prompt.map(function (m) { return m.content; }).join('\n\n') : prompt, opts)).then(function (t) { return { text: t, truncated: false }; }); };
   sample.json = function (prompt, opts) { return wrapAbort(complete(prompt, opts)).then(extractJSON); };
 
   window.KukingAI = {

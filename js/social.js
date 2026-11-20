@@ -104,7 +104,7 @@
   var view = 'list', viewing = null, found = null, searchQ = '', msg = '', busy = false, nickMsg = '', timer = null;
 
   /* вторая страница (профиль друга или анкета) живёт, пока экран уезжает назад — без мигания */
-  var page2 = null, lastHTML = '', anketaFrom = 'friends';
+  var page2 = null, lastHTML = '', anketaFrom = 'friends', openFrom = 'chats';
   function render() {
     var keep = document.activeElement && ov.contains(document.activeElement) && document.activeElement.id;
     var pages = ov.querySelectorAll('.soc-page'), deep = view === 'profile' || view === 'nick';
@@ -124,6 +124,7 @@
     if (keep) { var el = ov.querySelector('#' + keep); if (el) { el.focus(); if (el.setSelectionRange && el.value) el.setSelectionRange(el.value.length, el.value.length); } }
   }
   function head(title, back) {
+    if (!back && openFrom === 'profile') return '<header class="soc-head"><button type="button" class="ghost-btn soc-back" data-a="close" aria-label="Назад в профиль">← Профиль</button><span class="soc-head-t">' + (!me ? 'Анкета' : 'Друзья') + '</span><span class="soc-head-sp"></span></header>';
     return '<header class="soc-head">' + (back ? '<button type="button" class="ghost-btn soc-back" data-a="back" aria-label="Назад">← Друзья</button>' : '<h2 class="soc-title">' + (!me ? 'Анкета' : 'Друзья') + '</h2>') +
       (back ? '<span class="soc-head-t">' + esc(title) + '</span>' : '') + '<button type="button" class="ghost-btn" data-a="close">Готово</button></header>';
   }
@@ -599,13 +600,38 @@
   }
   function close() {
     ov.classList.remove('on'); clearInterval(timer);
-    setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; }, 360);
+    setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; openFrom = 'chats'; ov.style.transform = ''; ov.style.transition = ''; }, 360);
     if (last && last.focus) last.focus();
     (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} });
   }
   var closeSubs = [];
   API.open = open; API.close = close;
-  API.mode = function () { return view === 'nick' && anketaFrom === 'profile' ? 'anketa' : 'friends'; };
+  API.mode = function () { return view === 'nick' && anketaFrom === 'profile' ? 'anketa' : openFrom === 'profile' ? 'profile' : 'friends'; };
+  API.openFriends = function () { openFrom = 'profile'; open(); };
+  /* смах вправо: со второй страницы — назад, с первой — закрыть; экран идёт за пальцем */
+  (function () {
+    var sx = null, sy = 0, dx = 0, t0 = 0, on = false;
+    ov.addEventListener('touchstart', function (e) { var t = e.touches[0]; on = false; dx = 0; sx = e.target.closest('input, textarea, .crop-ov, .soc-skill, [data-noswipe]') ? null : t.clientX; sy = t.clientY; t0 = Date.now(); }, { passive: true });
+    ov.addEventListener('touchmove', function (e) {
+      if (sx == null) return; var t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy;
+      if (!on) { if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { sx = null; return; } if (mx > 14 && mx > Math.abs(my) * 1.6) on = true; else return; }
+      dx = Math.max(0, mx);
+      var deep = view === 'profile' || view === 'nick';
+      if (deep) { var w = ov.querySelector('.soc-wrap'); if (w) { w.style.transition = 'none'; w.style.transform = 'translateX(calc(-50% + ' + dx + 'px))'; } }
+      else { ov.style.transition = 'none'; ov.style.transform = 'translateX(' + dx + 'px)'; }
+    }, { passive: true });
+    ov.addEventListener('touchend', function () {
+      if (sx == null || !on) { sx = null; return; } sx = null; on = false;
+      var go = dx > ov.clientWidth * 0.3 || (dx > 60 && Date.now() - t0 < 260), deep = view === 'profile' || view === 'nick';
+      var w = ov.querySelector('.soc-wrap');
+      if (deep && view === 'nick' && anketaFrom === 'profile') { if (w) { w.style.transition = ''; w.style.transform = ''; } if (go) { ov.style.transition = 'none'; ov.style.transform = 'translateX(' + dx + 'px)'; void ov.offsetWidth; ov.style.transition = ''; ov.style.transform = ''; if (window.kHaptic) window.kHaptic(6); close(); } }
+      else if (deep) { if (w) { w.style.transition = ''; w.style.transform = go ? 'translateX(0)' : ''; }
+        if (go) { if (window.kHaptic) window.kHaptic(6); setTimeout(function () { if (w) w.style.transform = ''; view = 'list'; render(); }, 340); } }
+      else { ov.style.transition = ''; ov.style.transform = ''; if (go) { if (window.kHaptic) window.kHaptic(6); close(); } }
+    });
+  })();
+  /* потянул вниз — обновить друзей и оценки */
+  setTimeout(function () { if (window.KPull) window.KPull(ov, function (done) { lastHTML = ''; refresh().then(done, done); }, function () { var c = ov.querySelector('.soc-page.cur'); return c ? c.scrollTop : 0; }); }, 0);
   API.isOpen = function () { return !ov.hidden && ov.classList.contains('on'); };
   API.onClose = function (f) { closeSubs.push(f); };
   API.openAnketa = function () { anketaFrom = 'profile'; nickMsg = ''; open('#anketa'); };

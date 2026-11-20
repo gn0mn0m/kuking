@@ -1506,6 +1506,19 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
 /* свайп назад — тень у уезжающего экрана */
 .tg-screen { will-change: auto; }
 @media (prefers-reduced-motion: reduce) { #curtain, .pd, .crew-box, .crew-ov { transition: opacity .2s; } .pd-in.swap > * { animation: none; } }
+
+/* ===== 3.8 ===== */
+.ptr { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 70; width: 36px; height: 36px; border-radius: 18px; display: grid; place-items: center; background: var(--surface-2); color: var(--orange); box-shadow: 0 6px 20px rgba(0,0,0,.35); opacity: 0; transform: translate(-50%, 0); transition: opacity .25s var(--ease-out), transform .3s var(--ease-drawer); pointer-events: none; }
+.ptr svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.ptr.spin svg { animation: spin .7s linear infinite; }
+.ps-ics { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; }
+.ps-ics svg, .pd-ics svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+.pd-foot { display: flex; gap: 8px; margin: 8px 12px 12px; }
+.pd-foot .pd-add { flex: 1; width: auto; margin: 0; }
+.pd-ics { flex: none; width: 50px; min-height: 46px; padding: 0; display: grid; place-items: center; color: var(--orange); }
+.soc-head-sp { width: 1px; }
+.soc-head { position: sticky; } .soc-head .soc-head-t { position: absolute; left: 50%; transform: translateX(-50%); max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.soc-head .soc-head-sp { margin-left: auto; }
 </style>
 
 <div id="app">

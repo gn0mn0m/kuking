@@ -440,23 +440,33 @@
   }
   /* событие в календарь телефона: .ics — айфон сам предложит «Добавить» */
   function calMins(t) { t = String(t || ''); var h = /(\d+)\s*ч/.exec(t), m = /(\d+)\s*мин/.exec(t); return (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0) || 60; }
-  function addToCal(x, r) {
+  function vevent(x, r) {
     var p2 = function (n) { return String(n).padStart(2, '0'); }, d = dParse(x.day), tt = (x.time || '12:00').split(':');
     d.setHours(+tt[0] || 12, +tt[1] || 0, 0, 0);
     var dur = x.kind === 'cook' && r ? calMins(r.totalTime) : x.kind === 'shop' ? 60 : 15, e = new Date(d.getTime() + dur * 60000), n = new Date();
     function f(z) { return z.getFullYear() + p2(z.getMonth() + 1) + p2(z.getDate()) + 'T' + p2(z.getHours()) + p2(z.getMinutes()) + '00'; }
     function u(z) { return z.getUTCFullYear() + p2(z.getUTCMonth() + 1) + p2(z.getUTCDate()) + 'T' + p2(z.getUTCHours()) + p2(z.getUTCMinutes()) + '00Z'; }
-    function q(t) { return String(t).replace(/[\\;,]/g, function (c) { return '\\' + c; }).replace(/\n/g, '\\n'); }
-    var title = x.kind === 'cook' && r ? 'Готовим: ' + r.title : x.title + (r ? ' — ' + r.title : '');
+    function q(t) { return String(t).replace(/[\;,]/g, function (c) { return '\\' + c; }).replace(/\n/g, '\\n'); }
+    var title = x.kind === 'cook' && r ? 'Готовим: ' + r.title : x.title + (r && x.kind !== 'shop' ? ' — ' + r.title : '');
     var desc = (x.sub || '') + (x.kind === 'shop' ? '\nСписок покупок — в «Кукинге», вкладка «План».' : '') + '\nКукинг';
-    var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kuking//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
-      'UID:' + x.key.replace(/[^\w:-]/g, '') + '@kuking', 'DTSTAMP:' + u(n), 'DTSTART:' + f(d), 'DTEND:' + f(e), 'SUMMARY:' + q(title), 'DESCRIPTION:' + q(desc),
-      'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + q(title), 'TRIGGER:-PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    return ['BEGIN:VEVENT', 'UID:' + x.key.replace(/[^\w:-]/g, '') + '@kuking', 'DTSTAMP:' + u(n), 'DTSTART:' + f(d), 'DTEND:' + f(e), 'SUMMARY:' + q(title), 'DESCRIPTION:' + q(desc),
+      'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + q(title), 'TRIGGER:-PT0M', 'END:VALARM', 'END:VEVENT'].join('\r\n');
+  }
+  /* в календарь телефона: .ics — айфон сам предложит «Добавить» (одно дело или все сразу) */
+  function sendIcs(events, name) {
+    var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kuking//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Кукинг'].concat(events, ['END:VCALENDAR']).join('\r\n');
     var url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
-    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) location.href = url; // Safari сам откроет «Добавить в календарь»
-    else { var a = document.createElement('a'); a.href = url; a.download = 'kuking-' + x.day + '.ics'; document.body.appendChild(a); a.click(); a.remove(); }
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) location.href = url;
+    else { var a = document.createElement('a'); a.href = url; a.download = name + '.ics'; document.body.appendChild(a); a.click(); a.remove(); }
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
     if (window.kHaptic) window.kHaptic(8);
+  }
+  function addToCal(x, r) { sendIcs([vevent(x, r)], 'kuking-' + x.day); }
+  function addAllToCal() {
+    var td = today(), list = tasksAll().filter(function (x) { return x.day >= td && x.kind !== 'empty' && !doneTasks[x.key]; });
+    if (!list.length) return false;
+    sendIcs(list.map(function (x) { return vevent(x, x.ids && x.ids[0] ? byId(x.ids[0]) : null); }), 'kuking-plan');
+    return list.length;
   }
   /* отметка «сделано» — на месте, без перерисовки */
   function setDone(k, on) {
@@ -523,8 +533,9 @@
     var txt = order.map(function (k) { var v = sum[k]; return '• ' + v.name + (v.amount ? ' — ' + Math.round(v.amount * 10) / 10 + ' ' + v.unit : v.text ? ' — ' + v.text : ''); }).join('\n');
     sheet('<div class="pk-head"><b>' + esc(x.title) + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div><p class="small pk-sub">' + esc(x.sub) + ' · ' + x.ids.map(function (id) { return '«' + esc(byId(id).title) + '»'; }).join(', ') + '</p>' +
       '<div class="pk-acts"><a class="nav-btn" href="https://t.me/share/url?url=' + encodeURIComponent(' ') + '&text=' + encodeURIComponent('Закупка:\n' + txt) + '" target="_blank" rel="noopener">Отправить в Telegram</a><button type="button" class="ghost-btn" data-copy="1">Скопировать</button></div>' +
-      '<ul class="chk-list">' + rows.join('') + '</ul>',
+      '<ul class="chk-list">' + rows.join('') + '</ul><button type="button" class="ts-cal" data-ics="1">' + CAL + '<span>Закупку — в календарь iPhone</span></button>',
     function (e) {
+      if (e.target.closest('[data-ics]')) { addToCal(x, null); return; }
       if (e.target.closest('[data-copy]')) { try { navigator.clipboard.writeText('Закупка:\n' + txt); e.target.textContent = 'Скопировано'; } catch (x2) {} return; }
       var li = e.target.closest('[data-sh]'); if (!li) return;
       var k = li.getAttribute('data-sh'); have[k] = !have[k]; if (!have[k]) delete have[k];
@@ -546,6 +557,7 @@
       '<label class="ps-l">Обычно готовлю в</label><input class="ps-time" type="time" data-f="cook" value="' + esc(c.cook) + '">' +
       '<label class="ps-l">Если на завтра ничего не выбрано</label>' + seg('empty', [['on', 'Напомнить накануне'], ['off', 'Не надо']], c.empty) + '<p class="small ps-h">Придёт накануне в то время, когда ты обычно готовишь.</p>' +
       '<label class="ps-l">Напоминания на телефон</label><div id="psPush">' + pushBlock() + '</div>' +
+      '<label class="ps-l">Календарь iPhone</label><button type="button" class="nav-btn ps-ics" data-allics="1">' + CAL + 'Все дела плана — в календарь</button><p class="small ps-h">Закупки, морозилка, маринады и готовка разом, с напоминаниями.</p>' +
       '<button type="button" class="nav-btn primary ps-save" data-psave="1">Сохранить</button></div>',
     function (e, mm, shut) {
       var sb = e.target.closest('[data-seg]');
@@ -556,6 +568,7 @@
         if (n === 'meat') { var h = mm.querySelector('#psMeatH'); h.classList.add('swap'); setTimeout(function () { h.textContent = HINT[v]; h.classList.remove('swap'); }, 160); }
         return; }
       if (e.target.closest('[data-pushon]')) { var pb = e.target.closest('[data-pushon]'); pb.classList.add('busy-c'); pb.textContent = 'Включаю…'; (Soc.enablePush ? Soc.enablePush() : Promise.reject()).then(function () { mm.querySelector('#psPush').innerHTML = pushBlock(); }).catch(function (x) { pb.classList.remove('busy-c'); pb.textContent = 'Не вышло: ' + (x && x.message || ''); }); return; }
+      if (e.target.closest('[data-allics]')) { var n = addAllToCal(); if (!n) e.target.closest('[data-allics]').lastChild.textContent = 'В плане пока пусто'; return; }
       if (e.target.closest('[data-psave]')) { m.querySelectorAll('[data-f]').forEach(function (i) { c[i.getAttribute('data-f')] = i.value || c[i.getAttribute('data-f')]; }); planCfg = c; savePlan(); shut(); }
     });
   }
@@ -781,7 +794,7 @@
       return '<li><button type="button" class="pd-dish" data-open="' + esc(id) + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span><span class="ag-t"><b>' + esc(r.title) + '</b><small>' + hm(cfg().cook) + ' · ' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span></button>' +
         '<span class="pd-acts"><button type="button" class="pd-a" data-move="' + esc(id) + '" data-pday="' + k + '" aria-label="Перенести на другой день"><svg viewBox="0 0 24 24"><path d="M4 12h14M13 6l6 6-6 6"/></svg></button><button type="button" class="pd-a danger" data-unplan="' + esc(id) + '" data-pday="' + k + '" aria-label="Убрать из плана"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></span></li>'; }).join('') + '</ul>';
     if (tk.length) h += '<ul class="pd-tasks">' + tk.map(function (x) { return '<li><button type="button" class="pd-task" data-task="' + esc(x.key) + '">' + glyph(x.kind) + '<span>' + esc(x.time || '') + '</span><b>' + esc(x.title) + '</b></button></li>'; }).join('') + '</ul>';
-    return h + (k >= today() ? '<button type="button" class="nav-btn pd-add" data-add="' + k + '">+ Добавить блюдо</button>' : '');
+    return h + (k >= today() ? '<div class="pd-foot"><button type="button" class="nav-btn pd-add" data-add="' + k + '">+ Добавить блюдо</button>' + (ids.length || tk.length ? '<button type="button" class="nav-btn pd-ics" data-dayics="' + k + '" aria-label="Весь день в календарь iPhone">' + CAL + '</button>' : '') + '</div>' : '');
   }
   function showDay(k) {
     var p = ov.querySelector('#plDay'); if (!p) return;
@@ -794,6 +807,8 @@
     root.querySelectorAll('[data-open]').forEach(function (b) { b.onclick = function () { openTap(b); }; });
     root.querySelectorAll('[data-task]').forEach(function (b) { b.onclick = function () { taskSheet(b.getAttribute('data-task')); }; });
     root.querySelectorAll('[data-add]').forEach(function (b) { b.onclick = function () { planPicker(b.getAttribute('data-add')); }; });
+    root.querySelectorAll('[data-dayics]').forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-dayics');
+      sendIcs(tasksAll().filter(function (x) { return x.day === k && x.kind !== 'empty'; }).map(function (x) { return vevent(x, x.ids && x.ids[0] ? byId(x.ids[0]) : null); }), 'kuking-' + k); }; });
     root.querySelectorAll('[data-move]').forEach(function (b) { b.onclick = function () { moveSheet(b.getAttribute('data-move'), b.getAttribute('data-pday')); }; });
     root.querySelectorAll('[data-unplan]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-unplan'), d = b.getAttribute('data-pday'), li = b.closest('li');
       plan[d] = (plan[d] || []).filter(function (x) { return x !== id; }); savePlan(); if (window.kHaptic) window.kHaptic(10);
@@ -858,7 +873,7 @@
       var a = b.getAttribute('data-pf'), St = window.KukingSettings, Soc = SOC();
       if (a === 'login' || a === 'account') St && St.open('account');
       if (a === 'ai' || a === 'look' || a === 'install') St && St.open(a);
-      if (a === 'friends') Soc.open();
+      if (a === 'friends') { if (Soc.openFriends) Soc.openFriends(); else Soc.open(); }
       if (a === 'anketa' && Soc.openAnketa) Soc.openAnketa();
     });
     on('.lib-fresh', function () { window.Fresh.spin(freshCtx); });
@@ -1138,7 +1153,7 @@
   var bar = document.createElement('nav'); bar.className = 'tg-tabs'; bar.setAttribute('aria-label', 'Разделы'); document.body.appendChild(bar);
   function syncTabs() {
     var socOpen = window.KukingSocial && window.KukingSocial.isOpen && window.KukingSocial.isOpen();
-    var cur = socOpen ? (window.KukingSocial.mode && window.KukingSocial.mode() === 'anketa' ? 'profile' : 'chats') : (SUB[view] ? TAB : view);
+    var cur = socOpen ? (window.KukingSocial.mode && window.KukingSocial.mode() !== 'friends' ? 'profile' : 'chats') : (SUB[view] ? TAB : view);
     var show = !ov.hidden && (!SUB[view] || socOpen);
     var n = SOC().badge ? SOC().badge() : 0;
     bar.innerHTML = TABS.map(function (t) {
@@ -1158,6 +1173,32 @@
   });
   if (window.KukingSocial && window.KukingSocial.onClose) window.KukingSocial.onClose(function () { syncTabs(); });
   new MutationObserver(function () { syncTabs(); document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden); }).observe(ov, { attributes: true, attributeFilter: ['hidden'] });
+
+  /* потянул вниз сверху — обновить (заодно подтянет свежую версию) */
+  function pullRefresh(sc, run, topFn) {
+    var top = topFn || function () { return sc.scrollTop; };
+    var ind = document.createElement('div'); ind.className = 'ptr'; ind.setAttribute('aria-hidden', 'true');
+    ind.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>'; document.body.appendChild(ind);
+    var y0 = null, d = 0, armed = false;
+    sc.addEventListener('touchstart', function (e) { y0 = top() <= 0 && !sc.hidden && !e.target.closest('input, textarea, .pk-ov') ? e.touches[0].clientY : null; d = 0; armed = false; }, { passive: true });
+    sc.addEventListener('touchmove', function (e) {
+      if (y0 == null) return; d = e.touches[0].clientY - y0; if (d <= 0 || top() > 0) { ind.style.opacity = 0; return; }
+      var p = Math.min(1, d / 90); ind.style.transition = 'none'; ind.style.opacity = p; ind.style.transform = 'translate(-50%,' + Math.min(70, d * 0.6) + 'px) rotate(' + Math.round(p * 270) + 'deg)';
+      if (p >= 1 && !armed) { armed = true; if (navigator.vibrate) window.kHaptic(8); } else if (p < 1) armed = false;
+    }, { passive: true });
+    sc.addEventListener('touchend', function () {
+      if (y0 == null) return; y0 = null; ind.style.transition = '';
+      if (armed) { if (window.kHaptic) window.kHaptic(); ind.classList.add('spin'); ind.style.transform = 'translate(-50%, 46px)'; run(function () { ind.classList.remove('spin'); ind.style.opacity = 0; ind.style.transform = ''; }); }
+      else { ind.style.opacity = 0; ind.style.transform = ''; }
+    });
+  }
+  pullRefresh(ov, function () {
+    if (SUB[view]) { keepY(render); return; }
+    try { sessionStorage.setItem('kuking:curtain', '1'); sessionStorage.setItem('kuking:tab', TAB); } catch (e) {}
+    var c = document.getElementById('curtain'); if (c) { c.hidden = false; requestAnimationFrame(function () { c.classList.add('on'); }); }
+    setTimeout(function () { location.reload(); }, 260);
+  });
+  window.KPull = pullRefresh;
 
   /* свайп вправо — назад, экран идёт за пальцем (в рецепте — откуда угодно, в формах — от края) */
   (function () {
@@ -1188,4 +1229,5 @@
   var skip = false;
   try { skip = sessionStorage.getItem('kuking:skipHome') === '1'; sessionStorage.removeItem('kuking:skipHome'); } catch (e) {}
   if (!skip || !active) open();
+  try { var rt = sessionStorage.getItem('kuking:tab'); sessionStorage.removeItem('kuking:tab'); if (rt && rt !== 'list' && rt !== 'chats' && !ov.hidden) { TAB = rt; view = rt; render(); } } catch (e) {}
 })();

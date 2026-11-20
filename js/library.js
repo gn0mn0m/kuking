@@ -24,7 +24,7 @@
   var gone = load(GKEY, []);
   function kill(id) { delete hidden[id]; if (gone.indexOf(id) < 0) gone.push(id); }
   Object.keys(hidden).forEach(function (id) { if (Date.now() - hidden[id] > DAY) kill(id); });
-  function saveHidden() { lset(HKEY, JSON.stringify(hidden)); lset(GKEY, JSON.stringify(gone)); }
+  function saveHidden() { lset(HKEY, JSON.stringify(hidden)); lset(GKEY, JSON.stringify(gone)); if (typeof db !== 'undefined' && db) db.collection('meta').doc('gone').set({ ids: gone, hidden: hidden, updatedAt: new Date().toISOString() }).catch(function () {}); }
   saveHidden();
   R = R.filter(function (r) { return gone.indexOf(r.id) < 0; });
   if (window.Fresh) gone.forEach(function (id) { if (/^(ai|my)-/.test(id)) window.Fresh.forget(id); });
@@ -56,8 +56,10 @@
     lset('kuking:opens', JSON.stringify(opens)); lset('kuking:last', JSON.stringify(lastOpen));
     if (active && id === active.id) { close(); return; }
     lset(KEY, id);
-    try { sessionStorage.setItem('kuking:skipHome', '1'); } catch (e) {}
-    location.reload();
+    try { sessionStorage.setItem('kuking:skipHome', '1'); sessionStorage.setItem('kuking:curtain', '1'); } catch (e) {}
+    /* перезагрузка прячется за шторкой — без мигания */
+    var c = document.getElementById('curtain'); if (c) { c.hidden = false; requestAnimationFrame(function () { c.classList.add('on'); }); }
+    setTimeout(function () { location.reload(); }, c ? 200 : 0);
   }
   function open() { view = 'list'; stagger = true; render(); ov.hidden = false; ov.scrollTop = 0; }
   function close() { if (!active) return; ov.hidden = true; if (btn) btn.focus(); }
@@ -309,16 +311,52 @@
     var dn = !!doneTasks[x.key], past = x.day < tday;
     if (x.kind === 'cook') {
       var r = byId(x.dish);
-      return '<li class="ag-it ag-cook' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '"><span class="ag-time">' + esc(x.time) + '</span>' +
+      return '<li class="ag-it ag-cook' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '" data-swk="cook" data-dish="' + esc(x.dish) + '" data-pday="' + x.day + '"><div class="ag-bg"><span class="ag-bg-r"></span><span class="ag-bg-l"><button type="button" class="ag-sw mv" data-agsw="move" tabindex="-1">Перенести</button><button type="button" class="ag-sw del" data-agsw="del" tabindex="-1">Убрать</button></span></div><div class="ag-row"><span class="ag-time">' + esc(x.time) + '</span>' +
         '<button type="button" class="ag-main" data-task="' + esc(x.key) + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span><span class="ag-t"><b>' + esc(r.title) + '</b><small>' + esc(x.sub) + '</small></span></button>' +
-        '<button type="button" class="pl-x" data-unplan="' + esc(x.dish) + '" data-pday="' + x.day + '" aria-label="Убрать из плана"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></li>';
+        '<button type="button" class="pl-x" data-unplan="' + esc(x.dish) + '" data-pday="' + x.day + '" aria-label="Убрать из плана"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></div></li>';
     }
     if (x.kind === 'empty') return '<li class="ag-it ag-empty" data-k="' + esc(x.key) + '"><span class="ag-time">' + esc(x.time || '') + '</span>' +
       '<button type="button" class="ag-main" data-add="' + x.target + '">' + tIco('empty') + '<span class="ag-t"><b>' + esc(x.title) + '</b><small>' + esc(x.sub) + '</small></span><span class="ag-more">Добавить</span></button></li>';
-    return '<li class="ag-it' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '"><span class="ag-time">' + esc(x.time || '') + '</span>' +
+    return '<li class="ag-it' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '" data-swk="task"><div class="ag-bg"><span class="ag-bg-r">' + (dn ? 'Вернуть' : 'Сделано') + '</span><span class="ag-bg-l"></span></div><div class="ag-row"><span class="ag-time">' + esc(x.time || '') + '</span>' +
       '<button type="button" class="ag-main"' + (x.kind === 'shop' ? ' data-shop="' + esc(x.key) + '"' : ' data-task="' + esc(x.key) + '"') + '>' + tIco(x.kind) + '<span class="ag-t"><b>' + esc(x.title) + '</b><small>' + esc(x.sub) + '</small></span>' +
       '<span class="ag-more">' + (x.kind === 'shop' ? 'Список' : 'Как') + '</span></button>' +
-      '<button type="button" class="ag-chk' + (dn ? ' on' : '') + '" data-tdone="' + esc(x.key) + '" role="checkbox" aria-checked="' + dn + '" aria-label="Сделано"><span class="chk-box"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span></button></li>';
+      '<button type="button" class="ag-chk' + (dn ? ' on' : '') + '" data-tdone="' + esc(x.key) + '" role="checkbox" aria-checked="' + dn + '" aria-label="Сделано"><span class="chk-box"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span></button></div></li>';
+  }
+  /* смахи в плане: дело вправо — сделано; блюдо влево — кнопки «Перенести / Убрать», до конца — убрать */
+  function agSwipes() {
+    ov.querySelectorAll('.ag-it[data-swk]').forEach(function (li) {
+      var row = li.querySelector('.ag-row'), kind = li.getAttribute('data-swk'), x0 = 0, y0 = 0, dx = 0, mode = '', base = 0;
+      function back() { base = 0; row.style.transition = 'transform .3s cubic-bezier(.22,1,.36,1)'; row.style.transform = ''; li.classList.remove('sw-open', 'sw-go', 'sw-r', 'sw-l'); }
+      li._reset = back;
+      row.addEventListener('touchstart', function (e) { var t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; mode = li.classList.contains('sw-open') ? 'open' : ''; if (!mode) ov.querySelectorAll('.ag-it.sw-open').forEach(function (x) { if (x !== li && x._reset) x._reset(); }); }, { passive: true });
+      row.addEventListener('touchmove', function (e) {
+        var t = e.touches[0], mx = t.clientX - x0, my = t.clientY - y0;
+        if (mode === 'open' && Math.abs(mx) > 8) mode = 'swipe';
+        if (!mode && Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my) * 1.4) mode = 'swipe';
+        if (!mode && Math.abs(my) > 10) mode = 'scroll';
+        if (mode !== 'swipe') return;
+        dx = mx + base; if (kind === 'task' && dx < 0) dx = 0; if (kind === 'cook' && dx > 0) dx = 0;
+        var W = row.offsetWidth; row.style.transition = 'none'; row.style.transform = 'translateX(' + Math.max(-W * 0.92, Math.min(W * 0.6, dx)) + 'px)';
+        li.classList.toggle('sw-r', dx > 0); li.classList.toggle('sw-l', dx < 0);
+        var go = kind === 'task' ? dx > 90 : dx < -W * 0.62; if (go !== li.classList.contains('sw-go')) { li.classList.toggle('sw-go', go); if (go && navigator.vibrate) window.kHaptic(10); }
+      }, { passive: true });
+      row.addEventListener('touchend', function () {
+        if (mode !== 'swipe') return; noClickUntil = Date.now() + 400;
+        var W = row.offsetWidth;
+        if (kind === 'task' && dx > 90) { back(); setDone(li.getAttribute('data-k'), !doneTasks[li.getAttribute('data-k')]); if (window.kHaptic) window.kHaptic(); var lbl = li.querySelector('.ag-bg-r'); setTimeout(function () { lbl.textContent = doneTasks[li.getAttribute('data-k')] ? 'Вернуть' : 'Сделано'; }, 300); }
+        else if (kind === 'cook' && dx < -W * 0.62) { if (window.kHaptic) window.kHaptic(); unplanLi(li); }
+        else if (kind === 'cook' && dx < -60) { base = -184; row.style.transition = 'transform .3s cubic-bezier(.22,1,.36,1)'; row.style.transform = 'translateX(' + base + 'px)'; li.classList.add('sw-open'); }
+        else back();
+      });
+      li.querySelectorAll('[data-agsw]').forEach(function (b) { b.addEventListener('click', function () {
+        if (window.kHaptic) window.kHaptic(8);
+        if (b.getAttribute('data-agsw') === 'del') unplanLi(li); else { back(); moveSheet(li.getAttribute('data-dish'), li.getAttribute('data-pday')); } }); });
+    });
+  }
+  function unplanLi(li) {
+    var id = li.getAttribute('data-dish'), d = li.getAttribute('data-pday');
+    plan[d] = (plan[d] || []).filter(function (x) { return x !== id; }); savePlan();
+    li.style.height = li.offsetHeight + 'px'; void li.offsetHeight; li.classList.add('gone'); setTimeout(function () { keepY(render); }, 300);
   }
   function planHTML() {
     if (!planIntro) return bigHead('План') +
@@ -332,7 +370,7 @@
     for (var i = 0; i < 21; i++) { var d = new Date(t0); d.setDate(t0.getDate() + i); var k = dKey(d), n = (plan[k] || []).filter(byId).length, tk = all.filter(function (x) { return x.day === k && x.kind !== 'cook'; }).length;
       strip += '<button type="button" class="pl-day' + (k === td ? ' today' : '') + (k < td ? ' past' : '') + (n ? ' has' : '') + '" data-jump="' + k + '" aria-label="' + DOW_FULL[d.getDay()] + ', ' + dayDate(k) + dayLabel(k, all) + '"><span class="pl-dow">' + DOW[d.getDay()] + '</span><b>' + d.getDate() + '</b>' + dayMarks(k, all) + '</button>'; }
     strip += '</div>';
-    var h = head + strip + '<div class="pl-cal' + (calOpen ? ' open' : '') + '" id="plCal"><div class="pl-cal-in"><div class="pl-month">' + monthHTML() + '</div></div></div><div class="ag">';
+    var h = head + strip + '<div class="pl-cal' + (calOpen ? ' open' : '') + '" id="plCal"><div class="pl-cal-in"><div class="pl-month">' + monthHTML() + '</div><div class="pd' + (calSel ? ' open' : '') + '" id="plDay"><div class="pd-in">' + (calSel ? dayPanel(calSel) : '') + '</div></div></div></div><div class="ag">';
     var keys = []; for (var j0 = 0; j0 < 14; j0++) keys.push(addDays(td, j0));
     Object.keys(plan).sort().forEach(function (k3) { if (k3 > keys[13] && (plan[k3] || []).filter(byId).length) keys.push(k3); });
     for (var j = 0; j < keys.length; j++) {
@@ -350,12 +388,14 @@
     var lead = (m0.getDay() + 6) % 7, dim = new Date(m0.getFullYear(), m0.getMonth() + 1, 0).getDate(), isCur = !calMonth || calMonth <= td.slice(0, 7);
     var h = '<div class="pm-head"><button type="button" class="pm-nav" data-cm="-1" aria-label="Предыдущий месяц"' + (isCur ? ' disabled' : '') + '><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><b>' + MON_N[m0.getMonth()] + ' ' + m0.getFullYear() + '</b><button type="button" class="pm-nav" data-cm="1" aria-label="Следующий месяц"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>';
     h += '<div class="pm-grid">' + ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(function (d) { return '<span class="pm-dow">' + d + '</span>'; }).join('');
+    /* текущий месяц — с текущей недели, без прошедших */
+    var d0 = 1; if (isCur) { var tdd = dParse(td).getDate(), wd = (dParse(td).getDay() + 6) % 7; d0 = Math.max(1, tdd - wd); lead = d0 === 1 ? lead : 0; }
     for (var i = 0; i < lead; i++) h += '<span></span>';
-    for (var d = 1; d <= dim; d++) {
+    for (var d = d0; d <= dim; d++) {
       var k = dKey(new Date(m0.getFullYear(), m0.getMonth(), d)), ids = (plan[k] || []).filter(byId);
-      h += '<button type="button" class="pm-d' + (k === td ? ' today' : '') + (ids.length ? ' has' : '') + (k === calSel ? ' sel' : '') + '" data-cal="' + k + '"' + (k < td ? ' disabled' : '') + ' aria-label="' + dayDate(k) + dayLabel(k, all) + '"><b>' + d + '</b>' + dayMarks(k, all) + '</button>';
+      h += '<button type="button" class="pm-d' + (k === td ? ' today' : '') + (ids.length ? ' has' : '') + (k === calSel ? ' sel' : '') + '" data-cal="' + k + '"' + (k < td ? ' data-past="1"' : '') + ' aria-label="' + dayDate(k) + dayLabel(k, all) + '"><b>' + d + '</b>' + dayMarks(k, all) + '</button>';
     }
-    return h + '</div><p class="pm-legend">' + Object.keys(TK_NAME).map(function (x) { return '<span>' + glyph(x) + TK_NAME[x] + '</span>'; }).join('') + '</p><p class="small pm-hint">Тапни день — добавишь блюдо</p>';
+    return h + '</div><p class="pm-legend">' + Object.keys(TK_NAME).map(function (x) { return '<span>' + glyph(x) + TK_NAME[x] + '</span>'; }).join('') + '</p><p class="small pm-hint">Тапни день — что в нём и что поправить</p>';
   }
   /* количества в тексте шага: {id} и {id:сколько} */
   function fmtT(r, t) {
@@ -435,9 +475,11 @@
   /* что сегодня — карточка над списком рецептов */
   function todayCard() {
     if (!planIntro) return '';
-    var td = today(), all = tasksAll().filter(function (x) { return x.day === td && !doneTasks[x.key]; });
+    var td = today(), list = tasksAll().filter(function (x) { return x.day >= td && x.kind !== 'empty' && !doneTasks[x.key]; }), day = list.length ? list[0].day : null;
+    var all = list.filter(function (x) { return x.day === day; });
     if (!all.length) return '';
-    return '<button type="button" class="td-card" data-a="toPlan"><span class="td-k">Сегодня по плану</span>' + all.slice(0, 4).map(function (x) {
+    var lab = day === td ? 'Сегодня по плану' : day === addDays(td, 1) ? 'Завтра по плану' : dayName(day) + ', ' + dayDate(day);
+    return '<button type="button" class="td-card" data-a="toPlan"><span class="td-k">' + esc(lab) + '</span>' + all.slice(0, 4).map(function (x) {
       return '<span class="td-row"><span class="td-time">' + esc(x.time || '') + '</span>' + tIco(x.kind) + '<b class="td-t">' + esc(x.title) + '</b></span>';
     }).join('') + (all.length > 4 ? '<span class="td-more">и ещё ' + (all.length - 4) + '</span>' : '') + '</button>';
   }
@@ -549,7 +591,7 @@
   }
   function row(r) {
     var on = active && r.id === active.id, sc = rv(r.id).score;
-    return '<li class="tg-li" data-id="' + esc(r.id) + '"><div class="tg-swipe" aria-hidden="true"><span class="sw-pin">' + (isPin(r.id) ? 'Открепить' : 'Закрепить') + '</span><span class="sw-del">Удалить</span></div>' +
+    return '<li class="tg-li" data-id="' + esc(r.id) + '"><div class="tg-swipe"><button type="button" class="sw-pin" data-sw="pin" tabindex="-1">' + (isPin(r.id) ? 'Открепить' : 'Закрепить') + '</button><button type="button" class="sw-del" data-sw="del" tabindex="-1">Удалить</button></div>' +
       '<button type="button" class="tg-row' + (on ? ' on' : '') + (isPin(r.id) ? ' pinned' : '') + '" data-open="' + esc(r.id) + '" aria-description="Смахни вправо — закрепить, влево — удалить, удерживай — меню">' +
       '<span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
       '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b>' + (isPin(r.id) ? '<svg class="tg-pinico" viewBox="0 0 24 24" aria-label="Закреплён"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg>' : '') + '<small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span>' +
@@ -719,17 +761,63 @@
 
   /* ---------- события ---------- */
   function $$(s, f) { ov.querySelectorAll(s).forEach(f); }
-  function on(s, f) { $$(s, function (b) { b.addEventListener('click', function (e) { f(b, e); }); }); }
+  function on(s, f) { $$(s, function (b) { if (b.closest('.pd')) return; b.addEventListener('click', function (e) { f(b, e); }); }); }
   /* тап по рецепту: отклик, щелчок, потом переход */
   function openTap(b) {
     if (Date.now() < noClickUntil) return;
+    var oli = b.closest('.tg-li.sw-open'); if (oli) { oli._reset(); return; }
+    if (ov.querySelector('.tg-li.sw-open')) { closeOthers(null); return; }
     noClickUntil = Date.now() + 400;
     if (window.kHaptic) window.kHaptic(8);
     b.classList.add('tap');
-    setTimeout(function () { go('detail', b.getAttribute('data-open')); }, 110);
+    go('detail', b.getAttribute('data-open'));
   }
-  /* тап по числу в ленте — раскрыть календарь на этом дне */
+  /* что в выбранном дне: блюда (рецепт, перенести, убрать) и дела */
+  function dayPanel(k) {
+    var all = tasksAll(), ids = (plan[k] || []).filter(byId), tk = all.filter(function (x) { return x.day === k && x.kind !== 'cook' && x.kind !== 'empty'; });
+    var h = '<div class="pd-head"><b>' + esc(dayName(k)) + '</b><span>' + dayDate(k) + '</span></div>';
+    if (!ids.length && !tk.length) h += '<p class="small pd-empty">Пусто. Добавь блюдо — план сам распишет закупку и подготовку.</p>';
+    if (ids.length) h += '<ul class="pd-list">' + ids.map(function (id) { var r = byId(id);
+      return '<li><button type="button" class="pd-dish" data-open="' + esc(id) + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span><span class="ag-t"><b>' + esc(r.title) + '</b><small>' + hm(cfg().cook) + ' · ' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span></button>' +
+        '<span class="pd-acts"><button type="button" class="pd-a" data-move="' + esc(id) + '" data-pday="' + k + '" aria-label="Перенести на другой день"><svg viewBox="0 0 24 24"><path d="M4 12h14M13 6l6 6-6 6"/></svg></button><button type="button" class="pd-a danger" data-unplan="' + esc(id) + '" data-pday="' + k + '" aria-label="Убрать из плана"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></span></li>'; }).join('') + '</ul>';
+    if (tk.length) h += '<ul class="pd-tasks">' + tk.map(function (x) { return '<li><button type="button" class="pd-task" data-task="' + esc(x.key) + '">' + glyph(x.kind) + '<span>' + esc(x.time || '') + '</span><b>' + esc(x.title) + '</b></button></li>'; }).join('') + '</ul>';
+    return h + (k >= today() ? '<button type="button" class="nav-btn pd-add" data-add="' + k + '">+ Добавить блюдо</button>' : '');
+  }
+  function showDay(k) {
+    var p = ov.querySelector('#plDay'); if (!p) return;
+    var inn = p.querySelector('.pd-in');
+    if (!k) { p.classList.remove('open'); return; }
+    inn.innerHTML = dayPanel(k); p.classList.add('open'); bindDay(p);
+    inn.classList.remove('swap'); void inn.offsetWidth; inn.classList.add('swap');
+  }
+  function bindDay(root) {
+    root.querySelectorAll('[data-open]').forEach(function (b) { b.onclick = function () { openTap(b); }; });
+    root.querySelectorAll('[data-task]').forEach(function (b) { b.onclick = function () { taskSheet(b.getAttribute('data-task')); }; });
+    root.querySelectorAll('[data-add]').forEach(function (b) { b.onclick = function () { planPicker(b.getAttribute('data-add')); }; });
+    root.querySelectorAll('[data-move]').forEach(function (b) { b.onclick = function () { moveSheet(b.getAttribute('data-move'), b.getAttribute('data-pday')); }; });
+    root.querySelectorAll('[data-unplan]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-unplan'), d = b.getAttribute('data-pday'), li = b.closest('li');
+      plan[d] = (plan[d] || []).filter(function (x) { return x !== id; }); savePlan(); if (window.kHaptic) window.kHaptic(10);
+      li.style.height = li.offsetHeight + 'px'; void li.offsetHeight; li.classList.add('gone'); li.style.height = '0px'; setTimeout(planRefresh, 300); }; });
+  }
+  /* перенести блюдо на другой день */
+  function moveSheet(id, from) {
+    var td = today(), r = byId(id), days = '';
+    for (var i = 0; i < 21; i++) { var k = addDays(td, i); if (k === from) continue; var n = (plan[k] || []).filter(byId).length;
+      days += '<button type="button" class="mv-d" data-to="' + k + '"><span>' + DOW[dParse(k).getDay()] + '</span><b>' + dParse(k).getDate() + '</b><small>' + (n ? n + ' бл.' : '') + '</small></button>'; }
+    sheet('<div class="pk-head"><b>Перенести</b><button type="button" class="ghost-btn" data-pk="x">Отмена</button></div><p class="small pk-sub">«' + esc(r.title) + '» — на какой день?</p><div class="mv-grid">' + days + '</div>',
+      function (e, m, shut) { var b = e.target.closest('[data-to]'); if (!b) return; var to = b.getAttribute('data-to');
+        plan[from] = (plan[from] || []).filter(function (x) { return x !== id; }); plan[to] = (plan[to] || []).concat(plan[to] && plan[to].indexOf(id) >= 0 ? [] : [id]);
+        savePlan(); calSel = to; if (window.kHaptic) window.kHaptic(10); shut(); });
+  }
+  /* тап по числу в ленте — раскрыть календарь на этом дне; тот же день ещё раз — закрыть */
+  function closeCal() {
+    calOpen = false; calSel = null;
+    var c = ov.querySelector('#plCal'), btn = ov.querySelector('[data-a=calToggle]'); if (c) c.classList.remove('open'); if (btn) btn.setAttribute('aria-expanded', 'false');
+    ov.querySelectorAll('.pl-day.on, .pm-d.sel').forEach(function (x) { x.classList.remove('on', 'sel'); });
+    setTimeout(function () { showDay(null); }, 350);
+  }
   function openCal(k) {
+    if (calOpen && calSel === k) { closeCal(); return; }
     calSel = k; calMonth = k.slice(0, 7) === today().slice(0, 7) ? null : k.slice(0, 7);
     var box = ov.querySelector('.pl-month'), c = ov.querySelector('#plCal'), btn = ov.querySelector('[data-a=calToggle]');
     if (box) { box.innerHTML = monthHTML(); bindMonth(); }
@@ -738,9 +826,10 @@
     if (window.kHaptic) window.kHaptic(6);
     if (!calOpen) { calOpen = true; if (c) c.classList.add('open'); if (btn) btn.setAttribute('aria-expanded', 'true'); }
     var sel = ov.querySelector('.pm-d.sel'); if (sel) { sel.classList.remove('pulse'); void sel.offsetWidth; sel.classList.add('pulse'); }
+    showDay(k);
   }
   function bindMonth() {
-    ov.querySelectorAll('[data-cal]').forEach(function (b) { if (b._b) return; b._b = 1; b.addEventListener('click', function () { planPicker(b.getAttribute('data-cal')); }); });
+    ov.querySelectorAll('[data-cal]').forEach(function (b) { if (b._b) return; b._b = 1; b.addEventListener('click', function () { openCal(b.getAttribute('data-cal')); }); });
     ov.querySelectorAll('.pl-month [data-cm]').forEach(function (b) { if (b._b) return; b._b = 1; b.addEventListener('click', function () { var td = today(), m0 = dParse((calMonth || td.slice(0, 7)) + '-01'), dlt = +b.getAttribute('data-cm'); m0.setMonth(m0.getMonth() + dlt); calMonth = dKey(m0).slice(0, 7); var box = ov.querySelector('.pl-month');
       box.innerHTML = monthHTML(); box.classList.remove('sl-l', 'sl-r'); void box.offsetWidth; box.classList.add(dlt < 0 ? 'sl-r' : 'sl-l'); bindMonth(); }); });
   }
@@ -753,13 +842,16 @@
     on('[data-jump]', function (b) { openCal(b.getAttribute('data-jump')); });
     on('[data-jumpold]', function (b) { var el = ov.querySelector('#ag-' + b.getAttribute('data-jump')); if (el) { ov.scrollTo({ top: el.offsetTop - 120, behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } else planPicker(b.getAttribute('data-jump')); });
     on('[data-add]', function (b) { planPicker(b.getAttribute('data-add')); });
-    on('[data-shop]', function (b) { shopList(b.getAttribute('data-shop')); });
+    function agGuard(b) { if (Date.now() < noClickUntil) return true; var o = b.closest('.ag-it.sw-open'); if (o) { o._reset(); return true; } return false; }
+    on('[data-shop]', function (b) { if (!agGuard(b)) shopList(b.getAttribute('data-shop')); });
     on('[data-tdone]', function (b) { var k = b.getAttribute('data-tdone'); setDone(k, !doneTasks[k]); });
-    on('[data-task]', function (b) { taskSheet(b.getAttribute('data-task')); });
+    on('[data-task]', function (b) { if (!agGuard(b)) taskSheet(b.getAttribute('data-task')); });
     on('[data-unplan]', function (b) { var id = b.getAttribute('data-unplan'), d = b.getAttribute('data-pday'), li = b.closest('.ag-it');
       plan[d] = (plan[d] || []).filter(function (x) { return x !== id; }); savePlan();
       if (li) { li.style.height = li.offsetHeight + 'px'; void li.offsetHeight; li.classList.add('gone'); setTimeout(function () { keepY(render); }, 280); } else keepY(render); });
-    on('[data-a=calToggle]', function (b) { calOpen = !calOpen; b.setAttribute('aria-expanded', String(calOpen)); var c = ov.querySelector('#plCal'); if (c) c.classList.toggle('open', calOpen); });
+    agSwipes();
+    on('[data-a=calToggle]', function (b) { if (calOpen) { closeCal(); return; } calOpen = true; b.setAttribute('aria-expanded', 'true'); var c = ov.querySelector('#plCal'); if (c) c.classList.add('open'); });
+    var pdx = ov.querySelector('#plDay'); if (pdx) bindDay(pdx);
     bindMonth();
     var strip = ov.querySelector('.pl-strip'); if (strip && !strip.dataset.c) { strip.dataset.c = 1; var t0 = strip.querySelector('.pl-day.today'); if (t0) strip.scrollLeft = t0.offsetLeft - 16; }
     on('[data-pf]', function (b) {
@@ -830,25 +922,38 @@
     if (window.kHaptic) window.kHaptic(10);
     if (li) { li.style.height = li.offsetHeight + 'px'; void li.offsetHeight; li.classList.add('gone'); li.style.height = '0px'; setTimeout(after, 380); } else after();
   }
+  function closeOthers(keep) { ov.querySelectorAll('.tg-li.sw-open').forEach(function (x) { if (x !== keep && x._reset) x._reset(); }); }
   function cssq(id) { return window.CSS && CSS.escape ? CSS.escape(id) : id; }
   function gestures() {
     ov.querySelectorAll('.tg-li').forEach(function (li) {
-      var row = li.querySelector('.tg-row'), id = li.getAttribute('data-id'), x0 = 0, y0 = 0, dx = 0, mode = '', lp = null;
-      function reset() { row.style.transition = ''; row.style.transform = ''; li.classList.remove('sw-l', 'sw-r', 'sw-go'); }
+      var row = li.querySelector('.tg-row'), id = li.getAttribute('data-id'), x0 = 0, y0 = 0, dx = 0, mode = '', lp = null, base = 0;
+      function reset() { base = 0; row.style.transition = ''; row.style.transform = ''; li.classList.remove('sw-l', 'sw-r', 'sw-go', 'sw-open'); }
+      li._reset = function () { row.style.transition = 'transform .3s cubic-bezier(.22,1,.36,1)'; row.style.transform = ''; setTimeout(reset, 300); };
+      li.querySelectorAll('[data-sw]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); if (!li.classList.contains('sw-open')) return;
+        if (window.kHaptic) window.kHaptic(10);
+        if (b.getAttribute('data-sw') === 'del') { row.style.transition = 'transform .25s ease-in'; row.style.transform = 'translateX(-110%)'; setTimeout(function () { removeRow(id); }, 200); }
+        else { li._reset(); setTimeout(function () { togglePin(id); keepY(render); }, 250); } }); });
       row.addEventListener('touchstart', function (e) {
         var t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; mode = '';
         if (x0 < 24) return; // край экрана — шторка
+        if (li.classList.contains('sw-open')) { mode = 'open'; return; }
+        closeOthers(null);
         li.classList.add('holding');
         lp = setTimeout(function () { lp = null; mode = 'menu'; noClickUntil = Date.now() + 700; li.classList.remove('holding'); if (navigator.vibrate) window.kHaptic(14); menu(id, li); }, 450);
       }, { passive: true });
       row.addEventListener('touchmove', function (e) {
         var t = e.touches[0], mx = t.clientX - x0, my = t.clientY - y0;
         if (lp && (Math.abs(mx) > 8 || Math.abs(my) > 8)) { clearTimeout(lp); lp = null; li.classList.remove('holding'); }
+        if (mode === 'open' && Math.abs(mx) > 8) mode = 'swipe';
+        if (mode === 'open') return;
         if (!mode && Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my) * 1.4) mode = 'swipe';
         if (!mode && Math.abs(my) > 10) mode = 'scroll';
         if (mode !== 'swipe') return;
-        dx = mx; row.style.transition = 'none'; row.style.transform = 'translateX(' + (dx > 0 ? Math.min(dx, 160) : Math.max(dx, -160)) + 'px)';
-        li.classList.toggle('sw-r', dx > 0); li.classList.toggle('sw-l', dx < 0); li.classList.toggle('sw-go', Math.abs(dx) > TH);
+        dx = mx + base; var W = row.offsetWidth, lim = W * 0.92;
+        var vis = Math.abs(dx) > 96 ? (dx > 0 ? 1 : -1) * (96 + (Math.abs(dx) - 96) * 0.85) : dx; // после кнопки — туже
+        row.style.transition = 'none'; row.style.transform = 'translateX(' + Math.max(-lim, Math.min(lim, vis)) + 'px)';
+        li.classList.toggle('sw-r', dx > 0); li.classList.toggle('sw-l', dx < 0);
+        var far = Math.abs(dx) > W * 0.62; if (far !== li.classList.contains('sw-go')) { li.classList.toggle('sw-go', far); if (far && navigator.vibrate) window.kHaptic(12); }
       }, { passive: true });
       row.addEventListener('touchend', function () {
         if (lp) { clearTimeout(lp); lp = null; }
@@ -856,10 +961,11 @@
         if (mode === 'menu' && !navigator.vibrate && window.kHaptic) window.kHaptic(); // айфон щёлкает только на отпускании
         if (mode !== 'swipe') return;
         noClickUntil = Date.now() + 400;
-        row.style.transition = 'transform .25s cubic-bezier(.22,1,.36,1)';
-        if (dx > TH) { row.style.transform = ''; setTimeout(function () { togglePin(id); keepY(render); }, 180); }
-        else if (dx < -TH) { row.style.transform = 'translateX(-110%)'; setTimeout(function () { removeRow(id); }, 200); }
-        else { row.style.transform = ''; setTimeout(reset, 260); }
+        var W = row.offsetWidth; row.style.transition = 'transform .3s cubic-bezier(.22,1,.36,1)';
+        if (dx < -W * 0.62) { if (window.kHaptic) window.kHaptic(); row.style.transform = 'translateX(-110%)'; setTimeout(function () { removeRow(id); }, 220); }
+        else if (dx > W * 0.62) { if (window.kHaptic) window.kHaptic(); row.style.transform = ''; setTimeout(function () { togglePin(id); keepY(render); }, 200); }
+        else if (Math.abs(dx) > 56) { base = dx < 0 ? -96 : 96; row.style.transform = 'translateX(' + base + 'px)'; li.classList.add('sw-open'); closeOthers(li); }
+        else { base = 0; row.style.transform = ''; setTimeout(reset, 300); }
       });
       row.addEventListener('touchcancel', function () { if (lp) clearTimeout(lp); lp = null; li.classList.remove('holding'); reset(); });
       row.addEventListener('contextmenu', function (e) { e.preventDefault(); menu(id, li); });
@@ -983,6 +1089,14 @@
         if (!ov.hidden && !typing()) keepY(render);
       }, function () {});
       setTimeout(syncTasks, 1500);
+      db.collection('meta').doc('gone').get().then(function (x) { // удалённое не воскресает: ни после обновлений, ни на другом телефоне
+        var v = x && x.exists && x.data(); if (!v) { saveHidden(); return; }
+        (v.ids || []).forEach(function (id) { if (gone.indexOf(id) < 0) gone.push(id); });
+        Object.keys(v.hidden || {}).forEach(function (id) { if (!hidden[id] && gone.indexOf(id) < 0) hidden[id] = v.hidden[id]; });
+        purge(gone.filter(function (id) { return /^(ai|my)-/.test(id); }));
+        R = R.filter(function (r) { return gone.indexOf(r.id) < 0; });
+        if (!ov.hidden && !typing()) keepY(render);
+      }).catch(function () {});
       db.collection('meta').doc('plan').get().then(function (x) {
         var v = x && x.exists && x.data(); if (v && v.days) { Object.keys(v.days).forEach(function (k) { if (!plan[k]) plan[k] = v.days[k]; }); if (v.cfg && !planCfg) planCfg = v.cfg; lset('kuking:plan', JSON.stringify(plan)); lset('kuking:planCfg', JSON.stringify(planCfg)); if (!ov.hidden) keepY(render); }
       }).catch(function () {});
@@ -1045,14 +1159,26 @@
   if (window.KukingSocial && window.KukingSocial.onClose) window.KukingSocial.onClose(function () { syncTabs(); });
   new MutationObserver(function () { syncTabs(); document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden); }).observe(ov, { attributes: true, attributeFilter: ['hidden'] });
 
-  /* свайп от левого края — назад */
+  /* свайп вправо — назад, экран идёт за пальцем (в рецепте — откуда угодно, в формах — от края) */
   (function () {
-    var sx = null, sy = 0;
-    ov.addEventListener('touchstart', function (e) { var t = e.touches[0]; sx = t.clientX < 24 && SUB[view] ? t.clientX : null; sy = t.clientY; }, { passive: true });
-    ov.addEventListener('touchmove', function (e) {
-      if (sx == null) return; var t = e.touches[0];
-      if (t.clientX - sx > 60 && Math.abs(t.clientY - sy) < 40) { sx = null; var b = ov.querySelector('[data-a=back]'); if (b) b.click(); }
+    var sx = null, sy = 0, dx = 0, t0 = 0, on = false, scr = null;
+    ov.addEventListener('touchstart', function (e) {
+      var t = e.touches[0]; on = false; dx = 0;
+      sx = SUB[view] && (t.clientX < 40 || (view === 'detail' && !e.target.closest('input, textarea, .tg-sheet, [data-noswipe]'))) ? t.clientX : null; sy = t.clientY; t0 = Date.now();
     }, { passive: true });
+    ov.addEventListener('touchmove', function (e) {
+      if (sx == null) return; var t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy;
+      if (!on) { if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { sx = null; return; } if (mx > 12 && mx > Math.abs(my) * 1.5) { on = true; scr = ov.querySelector('.tg-screen'); } else return; }
+      dx = Math.max(0, mx); if (scr) { scr.style.transition = 'none'; scr.style.transform = 'translateX(' + dx + 'px)'; scr.style.boxShadow = '-18px 0 40px var(--shadow)'; }
+    }, { passive: true });
+    ov.addEventListener('touchend', function () {
+      if (sx == null || !on) { sx = null; return; } sx = null;
+      var W = ov.clientWidth, fast = dx > 60 && Date.now() - t0 < 260;
+      if (dx > W * 0.3 || fast) { if (scr) { scr.style.transition = 'transform .2s ease-out'; scr.style.transform = 'translateX(100%)'; } if (window.kHaptic) window.kHaptic(6);
+        setTimeout(function () { var b = ov.querySelector('[data-a=back]'); if (b) b.click(); }, 180); }
+      else if (scr) { scr.style.transition = 'transform .3s cubic-bezier(.22,1,.36,1)'; scr.style.transform = ''; setTimeout(function () { if (scr) scr.style.boxShadow = ''; }, 300); }
+      on = false;
+    });
   })();
 
   ov.addEventListener('scroll', function () { ov.classList.toggle('scrolled', ov.scrollTop > 12); }, { passive: true });

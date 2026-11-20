@@ -72,3 +72,29 @@
   }
   window.KFun = { ticker: ticker, finale: finale, lines: LINES };
 })();
+
+/* Тело и цель: хранится только в этом телефоне. Норма по Миффлину — Сан Жеору, белок по весу, жир 0,9 г/кг, углеводы — остаток. */
+(function () {
+  var K = 'kuking:body';
+  function get() { try { return JSON.parse(localStorage.getItem(K) || 'null') || {}; } catch (e) { return {}; } }
+  function set(b) { try { localStorage.setItem(K, JSON.stringify(b)); } catch (e) {} }
+  var ACT = { low: 1.2, light: 1.375, mid: 1.55, high: 1.725 };
+  var GOAL = { cut: { k: 0.85, p: 2.0, name: 'сушка' }, keep: { k: 1, p: 1.6, name: 'держать форму' }, bulk: { k: 1.1, p: 1.8, name: 'набор массы' } };
+  function age() {
+    var S = window.KukingSocial, me = S && S.me && S.me(), i = me && S.info ? S.info(me.id) : null, bd = i && i.bday;
+    if (!bd) return 30;
+    var d = new Date(bd), n = new Date(), a = n.getFullYear() - d.getFullYear();
+    if (n < new Date(n.getFullYear(), d.getMonth(), d.getDate())) a--;
+    return a > 12 && a < 100 ? a : 30;
+  }
+  /* share — доля дня на этот приём: главный приём ≈ 40% */
+  function targets(share) {
+    var b = get(); if (!b.w || !b.h || !b.sex) return null;
+    share = share || 0.4;
+    var bmr = 10 * b.w + 6.25 * b.h - 5 * age() + (b.sex === 'm' ? 5 : -161);
+    var g = GOAL[b.goal] || GOAL.keep, day = Math.round(bmr * (ACT[b.act] || 1.375) * g.k);
+    var p = Math.round(b.w * g.p), f = Math.round(b.w * 0.9), c = Math.max(0, Math.round((day - p * 4 - f * 9) / 4));
+    return { day: { kcal: day, p: p, f: f, c: c }, meal: { kcal: Math.round(day * share), p: Math.round(p * share), f: Math.round(f * share), c: Math.round(c * share) }, goal: g.name };
+  }
+  window.KBody = { get: get, set: set, targets: targets };
+})();

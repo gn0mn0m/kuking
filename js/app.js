@@ -302,8 +302,24 @@
   function setGuests(g) {
     g = clamp(g, 1, 12);
     if (g === state.guests) return;
+    var was = modeOf(state.guests);
     state.guests = g; store.set('guests', g);
     renderHeader(); rerender();
+    if (was !== 'friends' && modeOf(g) === 'friends') askCrew();
+  }
+  /* друзья: сначала спрашиваем, кто у плиты */
+  function askCrew() {
+    if (document.querySelector('.crew-ov')) return;
+    var o = h('div', 'crew-ov'); o.setAttribute('role', 'dialog'); o.setAttribute('aria-label', 'Кто у плиты');
+    o.innerHTML = '<div class="crew-box"><p class="eyebrow">Готовим на ' + state.guests + '</p><h2 class="crew-t">Кто у плиты?</h2>' +
+      '<button type="button" class="crew-pick" data-c="duo"><b>Шеф + су-шеф</b><span>Шаги делятся на двоих, никто не стоит без дела</span></button>' +
+      '<button type="button" class="crew-pick" data-c="solo"><b>Готовлю один</b><span>Все шаги подряд в одну колонку</span></button></div>';
+    document.body.appendChild(o); requestAnimationFrame(function () { o.classList.add('on'); });
+    o.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-c]'); if (!b && e.target !== o) return;
+      if (b) setCrew(b.getAttribute('data-c') === 'solo', true);
+      o.classList.remove('on'); setTimeout(function () { o.remove(); }, 300);
+    });
   }
   $('#gMinus').addEventListener('click', function () { setGuests(state.guests - 1); });
   $('#gPlus').addEventListener('click', function () { setGuests(state.guests + 1); });
@@ -395,6 +411,12 @@
     edits = {}; store.set('edits', edits); syncTitle(); rerender();
   });
 
+  /* сравнение с личной нормой из анкеты */
+  function normLine(per) {
+    var t = window.KBody && window.KBody.targets(0.4); if (!t) return '';
+    var d = Math.round((per.kcal - t.meal.kcal) / t.meal.kcal * 100), ok = Math.abs(d) <= 10;
+    return '<p class="norm' + (ok ? ' ok' : '') + '">Твоя порция по норме: ' + t.meal.kcal + ' ккал · Б ' + t.meal.p + ' г — ' + (ok ? 'попадает' : d > 0 ? 'тут на ' + d + '% больше, бери порцию поменьше' : 'тут на ' + (-d) + '% меньше, добавь гарнира') + '</p>';
+  }
   function buildCover(s, el) {
     var per = M.dishes.reduce(function (a, d) { return { kcal: a.kcal + d.kcal, p: a.p + d.p, f: a.f + d.f, c: a.c + d.c }; }, { kcal: 0, p: 0, f: 0, c: 0 });
     var m = modeOf(state.guests);
@@ -404,7 +426,7 @@
       '<p class="eyebrow">' + E('tagline', M.tagline) + '</p>' +
       '<h1 class="display">' + E('title', M.title) + '</h1>' +
       '<p class="lede">' + E('cover.lede', s.lede) + '</p>' + hint +
-      (m === 'friends' && hasLanes() ? '<section class="card crew"><h3 class="label">Кто у плиты</h3><div class="seg crew-seg" role="radiogroup">' +
+      (m === 'friends' ? '<section class="card crew"><h3 class="label">Кто у плиты</h3><div class="seg crew-seg" role="radiogroup">' +
         '<button type="button" role="radio" data-crew="duo" aria-checked="' + !state.solo + '">Шеф + су-шеф</button><button type="button" role="radio" data-crew="solo" aria-checked="' + state.solo + '">Готовлю один</button></div>' +
         '<p class="small crew-h">' + (state.solo ? 'Все шаги в одну колонку, подряд — ничего не потеряется.' : 'Шаги делятся на двоих: шеф — соусы и блендер, су-шеф — нож и плита.') + '</p></section>' : '') +
       '<div class="cover-grid">' +
@@ -417,14 +439,15 @@
       '<section class="card kbju"><h3 class="label">На одного, примерно</h3>' +
       '<div class="kcal"><span class="kcal-n">≈ ' + per.kcal + '</span><span class="kcal-u">ккал</span></div>' +
       '<div class="macros"><span class="mac mac-p">Б ' + per.p + ' г</span><span class="mac mac-f">Ж ' + per.f + ' г</span><span class="mac mac-c">У ' + per.c + ' г</span></div>' +
+      normLine(per) +
       '<p class="small">На всех ' + state.guests + ': ≈ ' + (per.kcal * state.guests).toLocaleString('ru-RU') + ' ккал. Коктейли (~180 ккал за стакан) не считаем — это святое.</p>' +
       '<table class="kt"><tbody>' + M.dishes.map(function (d, i) { return '<tr><td>' + esc(val('dish.' + i + '.name')) + '</td><td>' + d.kcal + '</td></tr>'; }).join('') + '</tbody></table>' +
       '</section></div>' +
       '<p class="start-hint">Жми «Далее» или длинно свайпай влево →</p>';
     el.querySelectorAll('[data-crew]').forEach(function (b) { b.addEventListener('click', function () { setCrew(b.getAttribute('data-crew') === 'solo'); }); });
   }
-  function setCrew(solo) {
-    if (state.solo === solo) return;
+  function setCrew(solo, force) {
+    if (state.solo === solo && !force) return;
     state.solo = solo; store.set('crew', solo ? 'solo' : 'duo'); if (window.kHaptic) window.kHaptic(8); syncSous(); rerender();
   }
 
@@ -432,10 +455,10 @@
     var items = M.ingredients.filter(function (i) { return !i.hidden; });
     var k = 's' + state.idx;
     el.innerHTML = '<p class="eyebrow">Шаг 1 · до похода в магазин</p><h2 class="step-title">' + E(k + '.title', s.title) + ' <span class="for">на ' + state.guests + '</span></h2>' +
-      '<div class="shop-top"><div class="counter" id="shopCount"></div><button type="button" class="ghost-btn" id="shopReset">Сбросить отметки</button></div>' +
-      '<div class="send-row"><span class="send-l">Скинуть чего нет:</span>' +
-      '<a class="send-btn send-tg" id="sendTg" href="#" target="_blank" rel="noopener">В Telegram</a>' +
-      '<button type="button" class="send-btn send-ghost" id="sendCopy">Скопировать</button></div>' +
+      '<div class="shop-top"><div class="counter" id="shopCount"></div><div class="send-row" role="group" aria-label="Скинуть, чего нет">' +
+      '<a class="send-btn send-tg" id="sendTg" href="#" target="_blank" rel="noopener" aria-label="Отправить, чего нет, в Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l12-9"/></svg>Telegram</a>' +
+      '<button type="button" class="send-btn send-ghost" id="sendCopy" aria-label="Скопировать, чего нет"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Копия</button>' +
+      '<button type="button" class="send-btn send-ghost send-ic" id="shopReset" aria-label="Сбросить отметки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/></svg></button></div></div>' +
       '<p class="note">' + E(k + '.note', s.note) + '</p>';
     var grid = h('div', 'shop-grid tiles'), ci = 0;
     M.groups.forEach(function (g, gi) {
@@ -690,12 +713,23 @@
     state.lanes[role] = on; store.set('lanes', state.lanes); rerender();
   }
 
+  /* шефу — соусы, блендер, специи, подача; су-шефу — нож и плита; поровну */
+  function splitBoth(acts) {
+    var out = { chef: [], sous: [] }, CHEF = /соус|блендер|заправ|специ|приправ|маринад|эмульс|взбей|подач|тарелк|укрась|попробуй|вкус/i;
+    acts.forEach(function (a) { if (a.divider) return; (CHEF.test(a.t) ? out.chef : out.sous).push(a); });
+    while (out.sous.length - out.chef.length > 1) out.chef.push(out.sous.pop());
+    while (out.chef.length - out.sous.length > 1) out.sous.unshift(out.chef.shift());
+    return out;
+  }
   function buildStep(s, el) {
     var friends = modeOf(state.guests) === 'friends', k = 's' + state.idx;
     el.innerHTML = '<div class="step-meta"><span class="pill pill-time">' + esc(s.time) + '</span><span class="pill">' + esc(s.dur) + '</span></div>' +
       '<h2 class="step-title">' + E(k + '.title', s.title) + '</h2>';
     var lanes = h('div', 'lanes');
-    if (s.both) {
+    if (s.both && friends && !state.solo && !hasLanes()) { // рецепт без разделения, а у плиты двое — делим сами
+      var parts = splitBoth(visibleActs(keyed(s.both, k + '.both')));
+      ['chef', 'sous'].forEach(function (r) { lanes.appendChild(laneEl(r, parts[r], false)); });
+    } else if (s.both) {
       lanes.classList.add('one');
       lanes.appendChild(laneEl(friends ? 'both' : 'you', visibleActs(keyed(s.both, k + '.both')), false)); // соло-режимы: «Ты»
     } else if (!friends || state.solo) {
@@ -733,7 +767,7 @@
 
   /* финал под то, как готовили: для себя, романтика, друзья вдвоём или повар один — и никогда не повторяется */
   var finCache = {};
-  function finKind() { var m = modeOf(state.guests); return m === 'friends' ? (hasLanes() && !state.solo ? 'duo' : 'crew') : m; }
+  function finKind() { var m = modeOf(state.guests); return m === 'friends' ? (!state.solo ? 'duo' : 'crew') : m; }
   function buildFinal(s, el) {
     var fk = M.id + ':' + finKind(), f = finCache[fk] || (finCache[fk] = window.KFun ? window.KFun.finale(finKind()) : { top: 'Шеф отработал', title: 'Приятного аппетита', sub: '' });
     el.innerHTML = '<div class="final">' +
@@ -772,7 +806,7 @@
   function hasLanes() { return (M.slides || []).some(function (x) { return x.type === 'step' && x.lanes; }); }
   function syncSous() {
     if (!sousBtn) return;
-    var show = modeOf(state.guests) === 'friends' && hasLanes();
+    var show = modeOf(state.guests) === 'friends';
     sousBtn.hidden = !show;
     sousBtn.setAttribute('aria-pressed', String(!state.solo));
     sousBtn.querySelector('span').textContent = state.solo ? 'Готовлю один' : 'С су-шефом';
@@ -809,7 +843,7 @@
     var need = Math.max(120, stage.clientWidth * 0.3);
     var sel = window.getSelection && String(window.getSelection());
     if (sel || dt > 800 || Math.abs(dx) < need || Math.abs(dx) < Math.abs(dy) * 2.2) return;
-    if (dx < 0) go(state.idx + 1, 1); else go(state.idx - 1, -1);
+    if (dx < 0) go(state.idx + 1, 1); else if (state.idx === 0) { var lb = $('#libBtn'); if (lb) lb.click(); } else go(state.idx - 1, -1);
   });
   stage.addEventListener('pointercancel', function () { sw = null; });
 
@@ -858,6 +892,7 @@
   });
 
   syncTitle(); syncSous();
+  setTimeout(function () { if (modeOf(state.guests) === 'friends' && state.idx === 0 && $('#library').hidden) askCrew(); }, 450);
   renderHeader();
   go(state.idx, 0);
 })();

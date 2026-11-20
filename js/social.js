@@ -244,6 +244,7 @@
       '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
       '<label class="set-f"><span>Аллергии</span><input id="socAllergy" type="text" maxlength="200" value="' + esc(fv('allergy', i.allergy || '')) + '" placeholder="Орехи, лактоза, морепродукты…"></label>' +
       '<label class="set-f soc-skill"><span>Уровень готовки: <b id="socSkillV">' + esc(fv('skill', i.skill || mySkill())) + '</b> из 10 <em id="socSkillT">' + skillText(fv('skill', i.skill || mySkill())) + '</em></span><input id="socSkill" type="range" min="1" max="10" step="1" value="' + esc(fv('skill', i.skill || mySkill())) + '" aria-describedby="socSkillT"></label>' +
+      (first ? '' : bodyHTML()) +
       '<div class="set-row"><button type="submit" class="nav-btn primary soc-save" id="socSave"><span>' + (first ? 'Погнали' : 'Сохранить') + '</span></button></div>' +
       '<div class="soc-msgw' + (nickMsg ? ' open' : '') + '" id="socMsgW"><div><p class="set-msg' + (/…$/.test(nickMsg) ? ' busy' : '') + '" id="socNickMsg" aria-live="polite">' + esc(nickMsg) + '</p></div></div></form>';
   }
@@ -254,6 +255,22 @@
       '<button type="button" class="ghost-btn" data-a="' + (back ? 'close' : 'nickx') + '">' + (back ? 'Готово' : 'Закрыть') + '</button></header>';
     if (!loaded) return h + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-card"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
     return h + nickForm(false);
+  }
+  /* тело и цель — только в телефоне, для точного КБЖУ */
+  function bodyHTML() {
+    var b = window.KBody ? window.KBody.get() : {};
+    function seg(n, opts) { return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-body="' + n + '" data-v="' + o[0] + '" aria-checked="' + (b[n] === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
+    return '<fieldset class="soc-body"><legend>Тело и цель</legend><p class="small soc-body-h">Видишь только ты — хранится в телефоне. По этим цифрам нейросеть считает КБЖУ твоей порции.</p>' +
+      '<span class="ps-l">Пол</span>' + seg('sex', [['m', 'Мужской'], ['f', 'Женский']]) +
+      '<div class="soc-body-row"><label class="set-f"><span>Рост, см</span><input data-bodyn="h" type="number" inputmode="numeric" min="120" max="230" value="' + (b.h || '') + '" placeholder="180"></label>' +
+      '<label class="set-f"><span>Вес, кг</span><input data-bodyn="w" type="number" inputmode="decimal" min="35" max="250" step="0.1" value="' + (b.w || '') + '" placeholder="80"></label></div>' +
+      '<span class="ps-l">Активность</span>' + seg('act', [['low', 'Сижу'], ['light', '1–3 трен.'], ['mid', '3–5 трен.'], ['high', 'Каждый день']]) +
+      '<span class="ps-l">Цель</span>' + seg('goal', [['cut', 'Сушка'], ['keep', 'Держать'], ['bulk', 'Масса']]) +
+      '<p class="soc-norm" id="socNorm" aria-live="polite">' + normText() + '</p></fieldset>';
+  }
+  function normText() {
+    var t = window.KBody && window.KBody.targets(0.4);
+    return t ? 'В день ≈ <b>' + t.day.kcal + ' ккал</b> · Б ' + t.day.p + ' · Ж ' + t.day.f + ' · У ' + t.day.c + ' г<br><span>Порция в рецепте (40% дня) ≈ ' + t.meal.kcal + ' ккал · Б ' + t.meal.p + ' г</span>' : 'Заполни пол, рост и вес — посчитаю норму.';
   }
   function setNickMsg(t, kind) {
     nickMsg = t || '';
@@ -483,6 +500,13 @@
           m.textContent = 'Фото готово — жми «Сохранить»'; m.className = 'soc-nick-hint ok'; if (window.kHaptic) window.kHaptic(10);
         }).catch(function (e) { if (!e) return; m.textContent = 'Не открылось: ' + (e.message || ''); m.className = 'soc-nick-hint bad'; });
       });
+      ov.querySelectorAll('[data-body]').forEach(function (bb) { bb.addEventListener('click', function () {
+        var b = window.KBody.get(); b[bb.getAttribute('data-body')] = bb.getAttribute('data-v'); window.KBody.set(b);
+        bb.parentNode.querySelectorAll('[data-body]').forEach(function (x) { x.setAttribute('aria-checked', String(x === bb)); });
+        ov.querySelector('#socNorm').innerHTML = normText(); if (window.kHaptic) window.kHaptic(6); }); });
+      ov.querySelectorAll('[data-bodyn]').forEach(function (inp) { inp.addEventListener('input', function () {
+        var b = window.KBody.get(), v = parseFloat(String(inp.value).replace(',', '.')); b[inp.getAttribute('data-bodyn')] = v > 0 ? v : undefined; window.KBody.set(b);
+        ov.querySelector('#socNorm').innerHTML = normText(); }); });
       var sk = ov.querySelector('#socSkill'); if (sk) sk.addEventListener('input', function () { ov.querySelector('#socSkillV').textContent = sk.value; ov.querySelector('#socSkillT').textContent = skillText(sk.value); });
       var map = { socNickIn: 'nick', socName: 'name', socBday: 'bday', socLikes: 'likes', socAvoid: 'avoid', socAllergy: 'allergy', socSkill: 'skill', socAvIn: '' };
       nf.addEventListener('input', function (e) { var k = map[e.target.id]; if (!k) return; fd = fd || {}; fd[k] = e.target.value; saveFd(); if (k === 'nick') checkNick(e.target.value.trim()); });

@@ -225,7 +225,7 @@
   ].join('\n');
   function people() {
     var e = window.KukingSocial && window.KukingSocial.eaters ? window.KukingSocial.eaters() : [];
-    return e.length ? e.map(function (x) { return '- ' + x.who + (x.likes ? ' — любит: ' + x.likes : '') + (x.avoid ? ' — НЕ ЕСТ: ' + x.avoid : ''); }).join('\n') : '- анкет нет';
+    return e.length ? e.map(function (x) { return '- ' + x.who + (x.allergy ? ' — АЛЛЕРГИЯ (ни грамма, ни следа, даже в соусах и маринадах): ' + x.allergy : '') + (x.likes ? ' — любит: ' + x.likes : '') + (x.avoid ? ' — НЕ ЕСТ: ' + x.avoid : ''); }).join('\n') : '- анкет нет';
   }
   function sampleFor(mode) {
     var id = mode === 'friends' ? 'smash-night' : 'sichuan-beef';
@@ -243,7 +243,7 @@
       '# ГЛАВНОЕ',
       '1. Одно блюдо на одну тарелку: белок + гарнир и соус на той же тарелке. Без закусок и второй подачи.',
       '2. Отзывы хаты — высший приоритет, выше любых правил: что хвалили — повторяй приёмом, что ругали — исключи.',
-      '3. Что человек НЕ ЕСТ — нет ни в одном шаге, соусе, гарнире и подаче.',
+      '3. АЛЛЕРГИИ — железный запрет: аллергена нет ни в одном ингредиенте, соусе, маринаде, масле для жарки и подаче; где риск скрытый (соевый соус — пшеница, песто — орехи) — замени. Что человек НЕ ЕСТ — тоже нет нигде.',
       '4. Гарнир и основное готовы в ОДНУ минуту: ничего не ждёт и не остывает. Воду заранее доведи до кипения и держи на минимуме под крышкой.',
       '5. Сначала вся нарезка, потом готовка. Каждая нарезка — форма и размер в мм/см («поперёк волокон полосками 3 мм»).',
       '6. Параллельные дела пиши на том слайде, где они реально наступают («таймер риса звякнул — снимай с огня»), чтобы не листать назад.',
@@ -400,19 +400,17 @@
       win.hidden = true; gen.hidden = false;
       k.textContent = 'Свежак на тему';
       var msg = gen.querySelector('.fr-msg'), sub = gen.querySelector('.fr-sub');
-      msg.textContent = 'Шеф думает… обычно 1–3 минуты';
-      sub.textContent = 'Учитывает все ваши оценки и комментарии';
+      var stopTick = window.KFun ? window.KFun.ticker(msg, 'gen') : function () {};
+      sub.textContent = 'Обычно 1–3 минуты. Учитываю анкеты, аллергии и ваши оценки';
       setBtns('<button type="button" class="nav-btn" data-a="stop">Стоп</button>');
       ctl = new AbortController();
-      var lines = ['Режет лук…', 'Пробует соус на соль…', 'Считает граммы на братву…', 'Делит работу шефу и су-шефу…', 'Подбирает посуду…', 'Шлифует феню…'];
-      var li = 0;
       Promise.resolve(window.claude && window.claude.use ? window.claude.use('sample') : null).then(function (sample) {
         if (!sample) throw { code: 'not_granted' };
         var existing = window.RECIPES.map(function (r) { return '«' + r.title + '»'; });
         function attempt(note) {
           return sample.json(buildPrompt(pick, ctx.reviews(), existing, note), {
             modelTier: 'complex', cache: false, signal: ctl.signal, temperature: 0.6,
-            onText: function (u) { msg.textContent = (note ? 'Шеф переписывает… ' : '') + lines[Math.min(lines.length - 1, (u.text.length / 3500) | 0)]; sub.textContent = 'Написано ' + Math.round(u.text.length / 1000) + ' тыс. знаков'; }
+            onText: function (u) { sub.textContent = (note ? 'Переписываю начисто · ' : '') + 'Написано ' + Math.round(u.text.length / 1000) + ' тыс. знаков'; }
           }).then(function (json) { return fix(json, pick[0], pick[3]); });
         }
         /* не прошло проверку — одна попытка с подсказкой, что не так */
@@ -421,6 +419,7 @@
           return attempt(e && e.message ? e.message : 'кривой JSON');
         });
       }).then(function (r) {
+        stopTick();
         var used = THEMES.indexOf(pick); if (used >= 0) useIdea(used);
         cache[r.id] = r; saveCache();
         window.RECIPES.push(r);
@@ -432,7 +431,7 @@
         setBtns('<button type="button" class="nav-btn" data-a="close">На полку</button><button type="button" class="nav-btn primary" data-a="go">Готовим это</button>');
         if (window.Confetti && !reduce) try { window.Confetti.fire({ anchor: res }); } catch (e) {}
       }).catch(function (e) {
-        busy = false;
+        busy = false; stopTick();
         var code = e && e.code;
         if (code === 'cancelled') { shut(); return; }
         gen.hidden = true; k.textContent = 'Облом';
@@ -458,7 +457,58 @@
   function forget(id) { delete cache[id]; saveCache(); }
 
   /* своя идея: «хочу шаурму с ананасом» → рецепт */
-  function custom(ctx, idea, mode) { spin(ctx, null, [String(idea).slice(0, 120), '', '', MODE_RU[mode] ? mode : 'self']); }
+  /* ---------- холл: перед рецептом шеф уточняет 3–4 момента с готовыми вариантами ---------- */
+  function hallPrompt(idea, mode) {
+    return {
+      system: ['Ты — шеф-повар уровня Мишлен, говоришь по-русски голосом свояка 25 лет, коротко и по делу. Человек хочет блюдо. Прежде чем писать рецепт, задай 3–4 уточнения, которые РЕАЛЬНО меняют рецепт: белок или его часть, острота, гарнир, техника (гриль/сковорода/духовка), время на готовку, под какой напиток, настроение подачи.',
+        'Правила: не спрашивай то, что уже ясно из запроса или анкет; учти аллергии и что люди не едят — не предлагай варианты с ними; уровень повара влияет на сложность вариантов.',
+        'У каждого вопроса 2–4 варианта ответа, каждый до 28 знаков, конкретно (не «другое»).',
+        'Ответ — ТОЛЬКО JSON без текста вокруг: {"say":"реакция на идею, до 110 знаков","questions":[{"q":"вопрос до 60 знаков","options":["…","…"]}]}'].join('\n'),
+      user: ['Запрос: ' + idea, 'Режим: ' + (MODE_RU[mode] || mode), 'Уровень повара: ' + skillRule(), 'Кто ест:', people()].join('\n')
+    };
+  }
+  function custom(ctx, idea, mode) {
+    mode = MODE_RU[mode] ? mode : 'self'; idea = String(idea).slice(0, 160);
+    var m = document.createElement('div'); m.className = 'rl-ov hall-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Обсудим блюдо');
+    m.innerHTML = '<div class="hall"><button type="button" class="rl-x" aria-label="Закрыть">×</button><p class="rl-k">Обсудим блюдо</p>' +
+      '<p class="hall-you">' + esc(idea) + '</p><div class="hall-body"><div class="fr-pot" aria-hidden="true"><i></i><i></i><i></i></div><p class="fr-msg hall-wait"></p></div>' +
+      '<div class="rl-btns"><button type="button" class="nav-btn" data-h="skip">Пропустить</button><button type="button" class="nav-btn primary" data-h="go" disabled>Погнали</button></div></div>';
+    document.body.appendChild(m);
+    var body = m.querySelector('.hall-body'), goB = m.querySelector('[data-h=go]'), ctl = new AbortController(), qs = [], ans = {};
+    var stopTick = window.KFun ? window.KFun.ticker(m.querySelector('.hall-wait'), 'hall', 1800) : function () {};
+    function shut() { stopTick(); ctl.abort(); m.classList.add('out'); setTimeout(function () { m.remove(); }, 260); }
+    function details() { return qs.map(function (q, i) { return ans[i] ? q.q.replace(/\?$/, '') + ' — ' + ans[i] : ''; }).filter(Boolean).join('; '); }
+    function run() { var d = details(); shut(); setTimeout(function () { spin(ctx, null, [idea, d ? 'Уточнения: ' + d : '', '', mode]); }, 200); }
+    function draw(v) {
+      stopTick();
+      qs = (v && Array.isArray(v.questions) ? v.questions : []).filter(function (q) { return q && q.q && Array.isArray(q.options) && q.options.length; }).slice(0, 4);
+      if (!qs.length) { run(); return; }
+      body.innerHTML = (v.say ? '<p class="hall-say">' + esc(String(v.say).slice(0, 140)) + '</p>' : '') + qs.map(function (q, i) {
+        return '<fieldset class="hall-q" style="--i:' + i + '"><legend>' + esc(String(q.q).slice(0, 80)) + '</legend><div class="hall-opts">' +
+          q.options.slice(0, 4).map(function (o) { return '<button type="button" class="hall-o" data-q="' + i + '" aria-pressed="false">' + esc(String(o).slice(0, 40)) + '</button>'; }).join('') +
+          '</div><input class="hall-own" data-q="' + i + '" type="text" maxlength="60" placeholder="Или своё…"></fieldset>';
+      }).join('');
+      goB.disabled = false;
+    }
+    m.addEventListener('click', function (e) {
+      if (e.target === m || e.target.closest('.rl-x')) return shut();
+      var o = e.target.closest('.hall-o');
+      if (o) { var qi = o.getAttribute('data-q'), on = o.getAttribute('aria-pressed') !== 'true';
+        m.querySelectorAll('.hall-o[data-q="' + qi + '"]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+        o.setAttribute('aria-pressed', String(on)); ans[qi] = on ? o.textContent : ''; m.querySelector('.hall-own[data-q="' + qi + '"]').value = ''; if (window.kHaptic) window.kHaptic(6); return; }
+      var h = e.target.closest('[data-h]'); if (!h) return;
+      if (h.getAttribute('data-h') === 'skip') { qs = []; run(); } else run();
+    });
+    m.addEventListener('input', function (e) { var i = e.target.closest('.hall-own'); if (!i) return; var qi = i.getAttribute('data-q'); ans[qi] = i.value.trim();
+      m.querySelectorAll('.hall-o[data-q="' + qi + '"]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); }); });
+    Promise.resolve(window.claude && window.claude.use ? window.claude.use('sample') : null).then(function (sample) {
+      if (!sample) throw { code: 'not_granted' };
+      return sample.json(hallPrompt(idea, mode), { modelTier: 'default', cache: false, signal: ctl.signal, temperature: 0.7 });
+    }).then(draw).catch(function (e) {
+      if (e && e.code === 'cancelled') return;
+      stopTick(); body.innerHTML = '<p class="hall-say">Вопросы не задались (' + esc(aiMsg(e)) + '). Можно собрать рецепт и так.</p>'; goB.disabled = false;
+    });
+  }
   /* ручной рецепт из редактора: та же проверка, что у нейросети */
   function manual(ctx, loose, prevId) {
     var r = fix(loose, loose.title, loose.mode);

@@ -28,7 +28,7 @@
     have: store.get('have', {}),
     picked: store.get('picked', {}),
     lanes: store.get('lanes', { chef: true, sous: true }),
-    solo: store.get('solo', false)
+    solo: store.get('crew', 'duo') === 'solo'
   };
 
   /* ---------- пересчёт количеств ---------- */
@@ -328,7 +328,7 @@
     var last = w.pop();
     return esc(w.join(' ')) + '<br><span class="accent">' + esc(last) + '</span>';
   }
-  function linesHtml(t) { return String(t).split(' ').map(esc).join(w2(t) ? '<br>' : ' '); }
+  function linesHtml(t) { if (/\n/.test(t)) return String(t).split('\n').map(esc).join('<br>'); return String(t).split(' ').map(esc).join(w2(t) ? '<br>' : ' '); }
   function w2(t) { return String(t).trim().split(/\s+/).length === 2; }
   function fmt(key, v) {
     if (key === 'title') return titleHtml(v);
@@ -404,6 +404,9 @@
       '<p class="eyebrow">' + E('tagline', M.tagline) + '</p>' +
       '<h1 class="display">' + E('title', M.title) + '</h1>' +
       '<p class="lede">' + E('cover.lede', s.lede) + '</p>' + hint +
+      (m === 'friends' && hasLanes() ? '<section class="card crew"><h3 class="label">Кто у плиты</h3><div class="seg crew-seg" role="radiogroup">' +
+        '<button type="button" role="radio" data-crew="duo" aria-checked="' + !state.solo + '">Шеф + су-шеф</button><button type="button" role="radio" data-crew="solo" aria-checked="' + state.solo + '">Готовлю один</button></div>' +
+        '<p class="small crew-h">' + (state.solo ? 'Все шаги в одну колонку, подряд — ничего не потеряется.' : 'Шаги делятся на двоих: шеф — соусы и блендер, су-шеф — нож и плита.') + '</p></section>' : '') +
       '<div class="cover-grid">' +
       '<section class="card"><h3 class="label">Меню</h3><ol class="menu-list">' +
       M.dishes.map(function (d, i) { return '<li><span class="dish">' + E('dish.' + i + '.name', d.name) + '</span><span class="dish-desc">' + E('dish.' + i + '.desc', d.desc) + '</span></li>'; }).join('') +
@@ -418,6 +421,11 @@
       '<table class="kt"><tbody>' + M.dishes.map(function (d, i) { return '<tr><td>' + esc(val('dish.' + i + '.name')) + '</td><td>' + d.kcal + '</td></tr>'; }).join('') + '</tbody></table>' +
       '</section></div>' +
       '<p class="start-hint">Жми «Далее» или длинно свайпай влево →</p>';
+    el.querySelectorAll('[data-crew]').forEach(function (b) { b.addEventListener('click', function () { setCrew(b.getAttribute('data-crew') === 'solo'); }); });
+  }
+  function setCrew(solo) {
+    if (state.solo === solo) return;
+    state.solo = solo; store.set('crew', solo ? 'solo' : 'duo'); if (window.kHaptic) window.kHaptic(8); syncSous(); rerender();
   }
 
   function buildShop(s, el) {
@@ -654,8 +662,8 @@
       if (a.divider) { ol.appendChild(h('li', 'act-div', esc(a.divider))); return; }
       var li = h('li', 'act');
       li.innerHTML = '<div class="act-text">' + E(a._k, a.t) + '</div>' + (a.tool ? '<span class="tool-chip">' + ico('pin') + E(a._k + '.tool', a.tool) + '</span>' : '') +
-        (a.cut && window.Cuts && SKILL <= 8 ? window.Cuts.html(a.cut) : '') +
-        (a.how && SKILL <= 7 ? '<details class="act-how"' + (SKILL <= 4 ? ' open' : '') + '><summary>Как это сделать</summary><p>' + E(a._k + '.how', a.how) + '</p></details>' : '') +
+        (a.cut && window.Cuts && SKILL <= 6 ? window.Cuts.html(a.cut) : '') +
+        (a.how && SKILL <= 5 ? '<details class="act-how"' + (SKILL <= 3 ? ' open' : '') + '><summary>Как это сделать</summary><p>' + E(a._k + '.how', a.how) + '</p></details>' : '') +
         (a.clean ? '<p class="act-clean"><b>Уборка</b> ' + E(a._k + '.clean', a.clean) + '</p>' : '');
       if (a.timer) {
         var box = h('div', 'act-timer');
@@ -723,11 +731,15 @@
     el.appendChild(g);
   }
 
+  /* финал под то, как готовили: для себя, романтика, друзья вдвоём или повар один — и никогда не повторяется */
+  var finCache = {};
+  function finKind() { var m = modeOf(state.guests); return m === 'friends' ? (hasLanes() && !state.solo ? 'duo' : 'crew') : m; }
   function buildFinal(s, el) {
+    var fk = M.id + ':' + finKind(), f = finCache[fk] || (finCache[fk] = window.KFun ? window.KFun.finale(finKind()) : { top: 'Шеф отработал', title: 'Приятного аппетита', sub: '' });
     el.innerHTML = '<div class="final">' +
-      '<p class="eyebrow">' + E('final.top', s.top || 'Шеф отдыхает · су-шеф красавчик') + '</p>' +
-      '<h2 class="final-title">' + E('final.title', s.title || 'Приятного аппетита') + '</h2>' +
-      '<p class="final-sub">' + E('final.sub', s.sub || 'Поднимите бокалы за тех, кто резал. Посуду моют те, кто не готовил — так по понятиям.') + '</p>' +
+      '<p class="eyebrow">' + esc(f.top) + '</p>' +
+      '<h2 class="final-title">' + linesHtml(f.title) + '</h2>' +
+      '<p class="final-sub">' + esc(f.sub) + '</p>' +
       '<div class="final-btns"><button type="button" class="nav-btn primary" id="again">Ещё салют</button><button type="button" class="nav-btn" id="toStart">К меню</button></div></div>';
     el.querySelector('#again').addEventListener('click', function () { window.Confetti.fire({ anchor: el.querySelector('.final-title') }); });
     el.querySelector('#toStart').addEventListener('click', function () { go(0); });
@@ -765,7 +777,7 @@
     sousBtn.setAttribute('aria-pressed', String(!state.solo));
     sousBtn.querySelector('span').textContent = state.solo ? 'Готовлю один' : 'С су-шефом';
   }
-  if (sousBtn) sousBtn.addEventListener('click', function () { state.solo = !state.solo; store.set('solo', state.solo); syncSous(); rerender(); });
+  if (sousBtn) sousBtn.addEventListener('click', function () { setCrew(!state.solo); });
   function rerender() {
     syncSous();
     if (!current) return;

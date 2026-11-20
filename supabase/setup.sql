@@ -159,6 +159,7 @@ create table if not exists public.profile_info (
 );
 alter table public.profile_info add column if not exists skill smallint check (skill between 1 and 10);
 alter table public.profile_info add column if not exists avatar text;
+alter table public.profile_info add column if not exists allergy text;
 alter table public.profile_info drop constraint if exists profile_info_avatar_check;
 alter table public.profile_info add constraint profile_info_avatar_check check (char_length(avatar) <= 90000);
 alter table public.profile_info enable row level security;

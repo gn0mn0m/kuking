@@ -50,8 +50,8 @@
   /* кто ест: имя, любимое и что не жрёт — для нейросети */
   API.eaters = function () {
     var ids = [uid()].concat(friendIds()); if (admin && ids.indexOf(admin.id) < 0) ids.push(admin.id);
-    return ids.map(function (id) { var i = info[id] || {}, p = people[id] || {}; if (!i.likes && !i.avoid) return null;
-      return { who: (i.name || p.nick || '') + (id === uid() ? ' (это я)' : ''), likes: i.likes || undefined, avoid: i.avoid || undefined }; }).filter(Boolean);
+    return ids.map(function (id) { var i = info[id] || {}, p = people[id] || {}; if (!i.likes && !i.avoid && !i.allergy) return null;
+      return { who: (i.name || p.nick || '') + (id === uid() ? ' (это я)' : ''), likes: i.likes || undefined, avoid: i.avoid || undefined, allergy: i.allergy || undefined }; }).filter(Boolean);
   };
 
   function friendIds() { var m = uid(); return links.filter(function (l) { return l.status === 'accepted'; }).map(function (l) { return l.a === m ? l.b : l.a; }); }
@@ -242,6 +242,7 @@
       '<label class="set-f"><span>День рождения</span><input id="socBday" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="дд.мм.гггг" value="' + esc(String(fv('bday', isoToRu(i.bday))).replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$3.$2.$1')) + '"></label>' +
       '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(fv('likes', i.likes || '')) + '" placeholder="Грузинская, острое, бургеры…"></label>' +
       '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
+      '<label class="set-f"><span>Аллергии</span><input id="socAllergy" type="text" maxlength="200" value="' + esc(fv('allergy', i.allergy || '')) + '" placeholder="Орехи, лактоза, морепродукты…"></label>' +
       '<label class="set-f soc-skill"><span>Уровень готовки: <b id="socSkillV">' + esc(fv('skill', i.skill || mySkill())) + '</b> из 10 <em id="socSkillT">' + skillText(fv('skill', i.skill || mySkill())) + '</em></span><input id="socSkill" type="range" min="1" max="10" step="1" value="' + esc(fv('skill', i.skill || mySkill())) + '" aria-describedby="socSkillT"></label>' +
       '<div class="set-row"><button type="submit" class="nav-btn primary soc-save" id="socSave"><span>' + (first ? 'Погнали' : 'Сохранить') + '</span></button></div>' +
       '<div class="soc-msgw' + (nickMsg ? ' open' : '') + '" id="socMsgW"><div><p class="set-msg' + (/…$/.test(nickMsg) ? ' busy' : '') + '" id="socNickMsg" aria-live="polite">' + esc(nickMsg) + '</p></div></div></form>';
@@ -352,10 +353,10 @@
     var ids = Object.keys(rv).filter(function (k) { return rv[k].score; }).sort(function (a, b) { return String(rv[b].at || '').localeCompare(String(rv[a].at || '')); });
     var pi = info[id] || {};
     var h = head(p.nick, true) + '<div class="soc-prof">' + avatar(p, true) + '<div>' + nickHTML(p) + (pi.name ? '<p class="soc-name">' + esc(pi.name) + '</p>' : '') + '<p class="small">' + esc(stats(id) || 'Оценок пока нет') + '</p></div></div>';
-    if (pi.bday || pi.likes || pi.avoid) h += '<dl class="soc-facts">' +
+    if (pi.bday || pi.likes || pi.avoid || pi.allergy) h += '<dl class="soc-facts">' +
       (pi.bday ? '<div' + (bdayToday(pi.bday) ? ' class="today"' : '') + '><dt>Днюха</dt><dd>' + (bdayToday(pi.bday) ? 'Сегодня' : esc(bdayText(pi.bday))) + '</dd></div>' : '') +
       (pi.likes ? '<div><dt>Любит</dt><dd>' + esc(pi.likes) + '</dd></div>' : '') +
-      (pi.avoid ? '<div><dt>Не жрёт</dt><dd>' + esc(pi.avoid) + '</dd></div>' : '') + '</dl>';
+      (pi.avoid ? '<div><dt>Не жрёт</dt><dd>' + esc(pi.avoid) + '</dd></div>' : '') + (pi.allergy ? '<div><dt>Аллергия</dt><dd>' + esc(pi.allergy) + '</dd></div>' : '') + '</dl>';
     if (!ids.length) h += '<p class="small soc-pad">Ещё ничего не оценил. Пни его — пусть пожрёт и отпишется.</p>';
     h += '<div class="soc-revs">' + ids.map(function (rid) {
       var d = rv[rid], my = mine[rid] && mine[rid].score, have = hasRecipe(rid);
@@ -483,7 +484,7 @@
         }).catch(function (e) { if (!e) return; m.textContent = 'Не открылось: ' + (e.message || ''); m.className = 'soc-nick-hint bad'; });
       });
       var sk = ov.querySelector('#socSkill'); if (sk) sk.addEventListener('input', function () { ov.querySelector('#socSkillV').textContent = sk.value; ov.querySelector('#socSkillT').textContent = skillText(sk.value); });
-      var map = { socNickIn: 'nick', socName: 'name', socBday: 'bday', socLikes: 'likes', socAvoid: 'avoid', socSkill: 'skill', socAvIn: '' };
+      var map = { socNickIn: 'nick', socName: 'name', socBday: 'bday', socLikes: 'likes', socAvoid: 'avoid', socAllergy: 'allergy', socSkill: 'skill', socAvIn: '' };
       nf.addEventListener('input', function (e) { var k = map[e.target.id]; if (!k) return; fd = fd || {}; fd[k] = e.target.value; saveFd(); if (k === 'nick') checkNick(e.target.value.trim()); });
       nf.addEventListener('change', function (e) { var k = map[e.target.id]; if (k) { fd = fd || {}; fd[k] = e.target.value; saveFd(); } });
       var ni = ov.querySelector('#socNickIn'); if (ni && ni.value && (!me || ni.value !== me.nick)) checkNick(ni.value.trim());
@@ -494,7 +495,7 @@
       var nick = v('#socNickIn'), first = !me;
       var bdIso = ruToIso(v('#socBday'));
       if (bdIso === false) { setNickMsg('Днюха: число.месяц.год, например 05.03.1999', 'bad'); return; }
-      var data = { id: uid(), avatar: fd && fd.avatar != null ? (fd.avatar || null) : (info[uid()] || {}).avatar || null, name: v('#socName') || null, bday: bdIso, likes: v('#socLikes') || null, avoid: v('#socAvoid') || null, skill: +v('#socSkill') || 5, updated_at: new Date().toISOString() };
+      var data = { id: uid(), avatar: fd && fd.avatar != null ? (fd.avatar || null) : (info[uid()] || {}).avatar || null, name: v('#socName') || null, bday: bdIso, likes: v('#socLikes') || null, allergy: v('#socAllergy') || null, avoid: v('#socAvoid') || null, skill: +v('#socSkill') || 5, updated_at: new Date().toISOString() };
       try { localStorage.setItem('kuking:skill', String(data.skill)); } catch (e) {}
       if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { setNickMsg('Ник: 3–20 символов, буквы, цифры, _', 'bad'); return; }
       if (nickState === 'taken') { setNickMsg('Ник занят — придумай другой', 'bad'); return; }
@@ -514,7 +515,7 @@
       step.then(function () { return saveInfo(data); })
         .then(function () { fd = null; saveFd(); return refresh(); })
         .then(function () {
-          busy = false; if (needSql) toast('Сохранил. Уровень и фото заработают в базе после свежего SQL');
+          busy = false; if (needSql) toast('Сохранил. Аллергии и фото заработают после свежего SQL');
           var sv2 = ov.querySelector('#socSave'); if (sv2) { sv2.classList.remove('busy'); sv2.classList.add('ok'); sv2.querySelector('span').textContent = 'Сохранено'; }
           if (window.kHaptic) window.kHaptic(12); emit();
           setTimeout(function () {

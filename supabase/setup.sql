@@ -220,7 +220,7 @@ create table if not exists kuking_private.settings (k text primary key, v text n
 insert into kuking_private.settings (k, v) values ('cron_secret', replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''))
   on conflict (k) do nothing;
 
--- каждый день в 9:00 по Москве (6:00 UTC) — поздравления с днюхой
+-- каждый день в 9:00 по Москве (6:00 UTC) — поздравления с днём рождения
 do $cron$
 begin
   create extension if not exists pg_cron with schema pg_catalog;

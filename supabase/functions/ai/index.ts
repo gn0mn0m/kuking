@@ -1,6 +1,6 @@
-// Жарко: нейросеть для всех без ключей. Supabase → Edge Functions → функция ai.
+// Жарко: нейросеть для всех пользователей без личных ключей. Supabase → Edge Functions → функция ai.
 // Ключ GigaChat лежит в секрете GIGACHAT_KEY (Authorization key из личного кабинета Сбера).
-// Телефон шлёт сообщения с токеном входа, функция отвечает потоком в формате OpenAI (SSE).
+// Приложение отправляет сообщения с токеном входа, функция отвечает потоком в формате OpenAI (SSE).
 // Сертификат НУЦ Минцифры (Russian Trusted Root CA) зашит ниже; отпечаток SHA-256
 // D2:6D:2D:02:31:B7:C3:9F:92:CC:73:85:12:BA:54:10:35:19:E4:40:5D:68:B5:BD:70:3E:97:88:CA:8E:CF:31
 // сверен с developers.sber.ru/docs/en/smarthome/c2c/ca.
@@ -62,7 +62,7 @@ async function getToken() {
     body: 'scope=' + (Deno.env.get('GIGACHAT_SCOPE') || 'GIGACHAT_API_PERS'),
   });
   const t = await r.text();
-  if (!r.ok) throw Object.assign(new Error('GigaChat не пустил: ' + t.slice(0, 200)), { status: r.status === 401 ? 401 : 502, code: 'bad_key' });
+  if (!r.ok) throw Object.assign(new Error('GigaChat отклонил ключ: ' + t.slice(0, 200)), { status: r.status === 401 ? 401 : 502, code: 'bad_key' });
   const j = JSON.parse(t);
   token = j.access_token; tokenExp = j.expires_at || Date.now() + 25 * 60000;
   return token;
@@ -80,10 +80,10 @@ async function chat(body, model) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
-    // кто зовёт: только вошедшие в «Жарко»
+    // доступ только для вошедших в «Жарко»
     const auth = req.headers.get('authorization') || '';
     const u = await fetch(Deno.env.get('SUPABASE_URL') + '/auth/v1/user', { headers: { authorization: auth, apikey: req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY') || '' } });
-    if (!u.ok) return json({ error: { message: 'Войди в аккаунт' } }, 401);
+    if (!u.ok) return json({ error: { message: 'Войдите в аккаунт' } }, 401);
 
     const body = await req.json().catch(() => ({}));
     if (!Array.isArray(body.messages) || !body.messages.length) return json({ error: { message: 'Пустой запрос' } }, 400);
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
       if (res.status === 401) { token = null; res = await chat(body, m); }
       if (res.ok) break;
       lastErr = await res.text();
-      if (res.status !== 404 && res.status !== 402 && !/model|quota|limit|balance/i.test(lastErr)) break; // модели нет или пакет кончился — пробуем следующую
+      if (res.status !== 404 && res.status !== 402 && !/model|quota|limit|balance/i.test(lastErr)) break; // модели нет или закончился пакет — пробуем следующую
     }
     if (!res || !res.ok) return json({ error: { message: 'GigaChat: ' + lastErr.slice(0, 300) } }, res && res.status === 429 ? 429 : 502);
     return new Response(res.body, { headers: { ...cors, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' } });

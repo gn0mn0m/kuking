@@ -1,8 +1,8 @@
-// Жарко: пуши на днюху. Supabase → Edge Functions → функция birthday-push.
+// Жарко: уведомления. Supabase → Edge Functions → функция birthday-pushing.
 // action "init" — отдать публичный ключ пушей (создаёт ключи при первом вызове);
-// action "run"  — раз в день по расписанию: поздравить именинника (только его самого);
+// action "run"  — раз в день по расписанию: поздравить с днём рождения (только самого именинника);
 // action "tasks" — каждые 10 минут: напоминания плана, которым пора;
-// action "test" — пробный пуш себе (нужен вход).
+// action "test" — пробное уведомление себе (нужен вход).
 import webpush from 'npm:web-push@3.6.7';
 import postgres from 'npm:postgres@3.4.4';
 
@@ -25,7 +25,7 @@ async function keys() {
     await sql`insert into kuking_private.settings (k, v) values ('vapid_public', ${k.publicKey}), ('vapid_private', ${k.privateKey}) on conflict (k) do nothing`;
     pub = await setting('vapid_public'); priv = await setting('vapid_private');
   }
-  webpush.setVapidDetails('mailto:kuking@example.com', pub!, priv!);
+  webpush.setVapidDetails('mailto:zharko@example.com', pub!, priv!);
   return pub!;
 }
 async function send(userIds: string[], msg: { title: string; body: string; url?: string; tag?: string }) {
@@ -54,15 +54,15 @@ Deno.serve(async (req) => {
     if (action === 'test') {
       const auth = req.headers.get('authorization') || '';
       const u = await fetch(Deno.env.get('SUPABASE_URL') + '/auth/v1/user', { headers: { authorization: auth, apikey: req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY') || '' } });
-      if (!u.ok) return json({ error: 'not signed in' }, 401);
+      if (!u.ok) return json({ error: 'Войдите в аккаунт' }, 401);
       const me = await u.json();
       await keys();
-      const n = await send([me.id], { title: '🔥 Жарко на связи', body: 'Уведомления работают.' });
+      const n = await send([me.id], { title: '🔥 Жарко на связи', body: 'Уведомления подключены и работают.' });
       return json({ sent: n });
     }
 
     if (action === 'tasks') { // каждые 10 минут: напоминания из «Плана», которым пора
-      if (req.headers.get('x-cron') !== (await setting('cron_secret'))) return json({ error: 'nope' }, 403);
+      if (req.headers.get('x-cron') !== (await setting('cron_secret'))) return json({ error: 'Доступ запрещён' }, 403);
       await keys();
       const due = await sql`update public.plan_tasks set sent = true
         where not sent and at <= now() and at > now() - interval '3 hours'
@@ -73,11 +73,11 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'run') {
-      if (req.headers.get('x-cron') !== (await setting('cron_secret'))) return json({ error: 'nope' }, 403);
+      if (req.headers.get('x-cron') !== (await setting('cron_secret'))) return json({ error: 'Доступ запрещён' }, 403);
       await keys();
       const t = moscowToday();
       const leap = (t.y % 4 === 0 && t.y % 100 !== 0) || t.y % 400 === 0;
-      const feb28 = !leap && t.m === 2 && t.d === 28; // 29 февраля празднуем 28-го
+      const feb28 = !leap && t.m === 2 && t.d === 28; // родившихся 29 февраля поздравляем 28-го
       const born = await sql`
         select i.id, coalesce(nullif(i.name, ''), p.nick) as name, p.is_admin
         from public.profile_info i join public.profiles p on p.id = i.id
@@ -85,11 +85,11 @@ Deno.serve(async (req) => {
           and (extract(day from i.bday) = ${t.d} or (${feb28} and extract(day from i.bday) = 29))`;
       let total = 0;
       for (const b of born) {
-        total += await send([b.id], { title: `🎂 С днюхой, ${b.name}!`, body: 'Вся компания поздравляет! Сегодня ты не у плиты — пусть друзья кормят тебя.' });
+        total += await send([b.id], { title: `🎂 С днём рождения, ${b.name}!`, body: 'Поздравляем! Сегодня пусть у плиты постоят друзья, а ты отдыхай.' });
       }
       return json({ birthdays: born.length, sent: total });
     }
-    return json({ error: 'unknown action' }, 400);
+    return json({ error: 'Неизвестное действие' }, 400);
   } catch (e) {
     return json({ error: String(e) }, 500);
   }

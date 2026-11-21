@@ -1,5 +1,5 @@
 /* Service worker «Кукинга»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-6a11aa8397';
+var CACHE = 'kuking-89adc4bc9a';
 var ASSETS = [
 "./",
 "icons/favicon-16.png",

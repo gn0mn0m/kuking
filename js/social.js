@@ -37,6 +37,13 @@
 
   /* ---------- состояние ---------- */
   var me = null, admin = null, people = {}, info = {}, links = [], replies = [], reviewsBy = {}, loaded = false, subs = [];
+  /* копия хаты в телефоне: без сети (или когда облако тупит) аккаунт, кенты и оценки видны сразу */
+  var CKEY = 'kuking:socCache';
+  (function () { try {
+    var c = JSON.parse(localStorage.getItem(CKEY) || 'null'), u = S.user();
+    if (c && u && c.uid === u.id) { me = c.me; admin = c.admin; people = c.people || {}; info = c.info || {}; links = c.links || []; replies = c.replies || []; reviewsBy = c.reviewsBy || {}; loaded = true; }
+  } catch (e) {} })();
+  function saveCache() { try { localStorage.setItem(CKEY, JSON.stringify({ uid: uid(), me: me, admin: admin, people: people, info: info, links: links, replies: replies, reviewsBy: reviewsBy, at: Date.now() })); } catch (e) { try { localStorage.removeItem(CKEY); } catch (x) {} } }
   function uid() { return S.user() && S.user().id; }
   function emit() { subs.forEach(function (f) { try { f(); } catch (e) {} }); }
   API.onChange = function (f) { subs.push(f); };
@@ -98,6 +105,7 @@
       loaded = true;
       if (me && me.is_admin) S.claimLegacy();
       var chef = !!(me && me.is_admin), was = false; try { was = localStorage.getItem('kuking:chef') === '1'; } catch (e) {}
+      saveCache();
       if (chef !== was) { try { if (chef) localStorage.setItem('kuking:chef', '1'); else localStorage.removeItem('kuking:chef'); } catch (e) {} location.reload(); return; }
       emit(); if (!ov.hidden && !busyForm()) render();
     }).catch(function () {});

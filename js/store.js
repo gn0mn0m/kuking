@@ -18,6 +18,14 @@
   function emitAuth() { authSubs.slice().forEach(function (f) { try { f(api.user()); } catch (e) {} }); }
 
   function err(code, message) { var e = new Error(message || code); e.code = code; return e; }
+  /* облако за Cloudflare в РФ может висеть минутами — режем по таймауту и живём на локальных данных */
+  var net = { ok: true, subs: [] };
+  function setNet(ok) { if (net.ok === ok) return; net.ok = ok; net.subs.forEach(function (f) { try { f(ok); } catch (e) {} }); if (ok) flush(); }
+  function tfetch(url, opt, ms) {
+    var c = window.AbortController ? new AbortController() : null, t = c ? setTimeout(function () { c.abort(); }, ms || 12000) : 0;
+    if (c) opt.signal = c.signal;
+    return fetch(url, opt).then(function (r) { clearTimeout(t); setNet(true); return r; }, function (e) { clearTimeout(t); setNet(false); throw err('network', e && e.name === 'AbortError' ? 'облако не ответило' : 'нет связи'); });
+  }
   function jsonOrThrow(r) {
     return r.text().then(function (t) {
       var j = null; try { j = t ? JSON.parse(t) : null; } catch (e) {}
@@ -29,7 +37,7 @@
     });
   }
   function authFetch(path, body) {
-    return fetch(URL_ + '/auth/v1/' + path, { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(jsonOrThrow);
+    return tfetch(URL_ + '/auth/v1/' + path, { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, 20000).then(jsonOrThrow);
   }
   function setSession(j) {
     if (!j || !j.access_token) return null;
@@ -50,7 +58,7 @@
     return token().then(function (t) {
       var h = { apikey: KEY, Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' };
       if (prefer) h.Prefer = prefer;
-      return fetch(URL_ + '/rest/v1/' + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined }).then(jsonOrThrow);
+      return tfetch(URL_ + '/rest/v1/' + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined }, method === 'GET' ? 12000 : 20000).then(jsonOrThrow);
     });
   }
   function rest(method, query, body, prefer) { return req(method, 'docs' + (query ? '?' + query : ''), body, prefer); }
@@ -88,13 +96,45 @@
       },
       set: function (data) {
         var row = { collection: name, id: id, user_id: api.user().id, data: data, updated_at: new Date().toISOString() };
-        return rest('POST', 'on_conflict=collection,id,user_id', [row], 'resolution=merge-duplicates,return=minimal').then(function () { pull(name); });
+        return send({ op: 'set', row: row }).then(function () { pull(name); });
       },
       delete: function () {
-        return rest('DELETE', 'collection=eq.' + q(name) + '&id=eq.' + q(id) + '&user_id=eq.' + q(api.user().id)).then(function () { pull(name); });
+        return send({ op: 'del', collection: name, id: id, user_id: api.user().id }).then(function () { pull(name); });
       }
     };
   }
+  /* исходящие: нет связи — запись ждёт в телефоне и уходит сама, когда облако ответит */
+  var OKEY = 'kuking:outbox';
+  function outbox() { try { return JSON.parse(localStorage.getItem(OKEY) || '[]'); } catch (e) { return []; } }
+  function saveOut(a) { try { if (a.length) localStorage.setItem(OKEY, JSON.stringify(a.slice(-300))); else localStorage.removeItem(OKEY); } catch (e) {} }
+  function keyOf(x) { return x.op === 'set' ? x.row.collection + '/' + x.row.id : x.collection + '/' + x.id; }
+  function exec(x) {
+    return x.op === 'set' ? rest('POST', 'on_conflict=collection,id,user_id', [x.row], 'resolution=merge-duplicates,return=minimal')
+      : rest('DELETE', 'collection=eq.' + q(x.collection) + '&id=eq.' + q(x.id) + '&user_id=eq.' + q(x.user_id));
+  }
+  function queue(x) { var a = outbox().filter(function (y) { return keyOf(y) !== keyOf(x); }); a.push(x); saveOut(a); }
+  function send(x) {
+    return exec(x).catch(function (e) { if (e && (e.code === 'network' || /^http_5/.test(e.code || ''))) { queue(x); return null; } throw e; });
+  }
+  var flushing = false;
+  function flush() {
+    if (flushing || !session) return; var a = outbox(); if (!a.length) return; flushing = true;
+    var left = a.slice();
+    (function next() {
+      if (!left.length) { flushing = false; saveOut([]); pullAll(); return; }
+      var x = left[0];
+      if (x.op === 'set' && x.row.user_id !== (session && session.user.id)) { left.shift(); return next(); }
+      exec(x).then(function () { left.shift(); saveOut(left); next(); }, function (e) {
+        if (e && e.code === 'network') { flushing = false; saveOut(left); return; } // связи нет — попробуем позже
+        left.shift(); saveOut(left); next(); // сломанная запись — не держим очередь
+      });
+    })();
+  }
+  setInterval(function () { if (!document.hidden) flush(); }, 45000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) flush(); });
+  window.addEventListener('online', function () { flush(); });
+  setTimeout(flush, 3000);
+
   var dbApi = {
     collection: function (name) {
       return {
@@ -144,6 +184,9 @@
     token: token,
     rpc: function (name, args) { return req('POST', 'rpc/' + name, args || {}); },
     claimLegacy: claimLegacy,
+    online: function () { return net.ok; },
+    onNet: function (f) { net.subs.push(f); },
+    pending: function () { return outbox().length; },
     refresh: pullAll
   };
   window.KukingStore = api;

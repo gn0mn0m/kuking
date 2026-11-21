@@ -30,7 +30,8 @@
 <div class="sb-strip" aria-hidden="true"></div>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Marck+Script&family=Yeseva+One&display=swap">
+<!-- шрифты не держат загрузку: тупит Google — приложение открывается на системных и подменяет, когда скачаются -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Marck+Script&family=Yeseva+One&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Кухня ночью: бордовая комната, оранжевый свет лампы, бутылочно-зелёные акценты. Крупный кегль — читается с другого конца столешницы. */
 :root {
@@ -1687,6 +1688,11 @@ body:has(.set-ov.page:not([hidden])) .tg-tabs.on { transform: none; opacity: 1; 
 .ag-tin input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; margin: 0; font-size: 16px; -webkit-appearance: none; appearance: none; }
 .ag-time.ag-tin { width: 52px; }
 .sh-prog { margin: 0 0 8px; font-weight: 600; color: var(--green); }
+/* 3.16 — без связи с облаком */
+.net-pill { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 8px); z-index: 90; transform: translate(-50%, -140%); display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--line); box-shadow: 0 10px 30px -12px var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: .8rem; color: var(--muted); white-space: nowrap; transition: transform .35s var(--ease-drawer, cubic-bezier(.22,1,.36,1)); pointer-events: none; }
+.net-pill.on { transform: translate(-50%, 0); }
+.net-pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); flex: none; }
+@media (prefers-reduced-motion: reduce) { .net-pill { transition: opacity .2s; } }
 </style>
 
 <div id="app">

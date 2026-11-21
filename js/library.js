@@ -1364,6 +1364,14 @@
     setTimeout(function () { location.reload(); }, 260);
   });
   window.KPull = pullRefresh;
+  /* облако не отвечает — тихая плашка сверху; всё равно всё сохраняется в телефоне и уйдёт само */
+  (function () {
+    var S = window.KukingStore; if (!S || !S.onNet) return;
+    var pill = document.createElement('div'); pill.className = 'net-pill'; pill.setAttribute('role', 'status'); pill.innerHTML = '<i></i><span>Облако не отвечает — сохраняю в телефоне</span>'; document.body.appendChild(pill);
+    var t = null;
+    S.onNet(function (ok) { clearTimeout(t); if (ok) { pill.querySelector('span').textContent = 'Связь есть — всё синхронизировал'; t = setTimeout(function () { pill.classList.remove('on'); }, 1800); }
+      else { pill.querySelector('span').textContent = 'Облако не отвечает — сохраняю в телефоне'; pill.classList.add('on'); t = setTimeout(function () { pill.classList.remove('on'); }, 4000); } });
+  })();
   window.__kSaveTab = function () { try { sessionStorage.setItem('kuking:tab', TAB); } catch (e) {} };
 
   /* свайп вправо — назад, экран идёт за пальцем (в рецепте — откуда угодно, в формах — от края) */

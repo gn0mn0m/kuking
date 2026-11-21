@@ -519,7 +519,7 @@
         var ta = h('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0';
         document.body.appendChild(ta); ta.select();
         var done = false; try { done = document.execCommand('copy'); } catch (e) {}
-        ta.remove(); toast(done ? ok : 'Не дали скопировать. Выдели список руками, братан');
+        ta.remove(); toast(done ? ok : 'Не удалось скопировать. Выделите список вручную');
       }
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast(ok); }, legacy);
@@ -540,7 +540,7 @@
     el.querySelector('#sendCopy').addEventListener('click', function () {
       var t = listText();
       if (!t) { toast(EMPTY); return; }
-      copy(t, 'Список в буфере, как малява за пазухой');
+      copy(t, 'Список скопирован');
     });
     el.querySelector('#shopAll').addEventListener('click', function () {
       items.forEach(function (x) { state.have[x.id] = true; }); store.set('have', state.have);

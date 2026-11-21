@@ -1,5 +1,5 @@
 /* Service worker «Жарко»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-8b96608b7e';
+var CACHE = 'kuking-7ae17dde3b';
 var ASSETS = [
 "./",
 "icons/favicon-16.png",
@@ -64,7 +64,7 @@ self.addEventListener('fetch', function (e) {
   }));
 });
 
-/* пуши: днюхи кентов и прочие малявы */
+/* пуши: дни рождения друзей и напоминания */
 self.addEventListener('push', function (e) {
   var d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data && e.data.text() }; }
   e.waitUntil(self.registration.showNotification(d.title || 'Жарко', {

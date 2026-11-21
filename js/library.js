@@ -417,7 +417,7 @@
   function planHTML() {
     if (!planIntro) return bigHead('План') +
       '<div class="pl-intro"><div class="pl-art" aria-hidden="true">' + [0, 1, 2, 3, 4, 5, 6].map(function (i) { return '<i style="--i:' + i + '"' + (i === 2 || i === 4 ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
-      '<h3>Неделя без вопроса «что пожрать»</h3><p class="small">Раскидай блюда по дням — «Жарко» сам напомнит, когда закупиться, достать мясо и встать к плите.</p>' +
+      '<h3>Неделя без вопроса «что приготовить»</h3><p class="small">Раскидай блюда по дням — «Жарко» сам напомнит, когда закупиться, достать мясо и встать к плите.</p>' +
       '<button type="button" class="nav-btn primary pl-start" data-a="planStart">Начать</button>' +
       '<ol class="pl-steps"><li><b>Скажи, как закупаешься</b><span>раз в неделю, в день готовки или доставкой</span></li><li><b>Добавь блюда в дни</b><span>из своей книги, в пару тапов</span></li><li><b>Лови напоминания</b><span>закупка, морозилка, маринад, готовка</span></li></ol>' +
       '</div>';
@@ -727,7 +727,7 @@
   function emptyHTML() {
     var S = window.KukingStore, signed = S && S.user && S.user();
     return '<div class="tg-empty"><div class="tg-empty-pic" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M14 34h36c0 10-8 18-18 18s-18-8-18-18z"/><path d="M12 32h40"/><path d="M26 26c-3-4 3-6 0-11M32 25c-3-4 3-6 0-11M38 26c-3-4 3-6 0-11"/></svg></div><h3>Книга пустая — и это норм</h3>' +
-      '<p class="small">Тут будут твои рецепты: придумай с нейросетью, напиши сам или забери у кентов.</p>' +
+      '<p class="small">Тут будут твои рецепты: придумай с нейросетью, напиши сам или возьми у друзей.</p>' +
       '<button type="button" class="nav-btn primary" data-a="create">Создать первый рецепт</button>' +
       (S && S.enabled && !signed ? '<button type="button" class="ghost-btn" data-a="login">Войти в аккаунт</button>' : '') + '</div>';
   }

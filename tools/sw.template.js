@@ -29,7 +29,7 @@ self.addEventListener('fetch', function (e) {
   }));
 });
 
-/* пуши: днюхи кентов и прочие малявы */
+/* пуши: дни рождения друзей и напоминания */
 self.addEventListener('push', function (e) {
   var d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data && e.data.text() }; }
   e.waitUntil(self.registration.showNotification(d.title || 'Жарко', {

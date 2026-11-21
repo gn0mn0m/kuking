@@ -37,7 +37,7 @@
 
   /* ---------- состояние ---------- */
   var me = null, admin = null, people = {}, info = {}, links = [], replies = [], reviewsBy = {}, loaded = false, subs = [];
-  /* копия хаты в телефоне: без сети (или когда облако тупит) аккаунт, кенты и оценки видны сразу */
+  /* копия данных в телефоне: без сети аккаунт, друзья и оценки видны сразу */
   var CKEY = 'kuking:socCache';
   (function () { try {
     var c = JSON.parse(localStorage.getItem(CKEY) || 'null'), u = S.user();
@@ -150,7 +150,7 @@
   }
 
   function listHTML() {
-    if (!S.user()) return head() + '<div class="soc-empty"><p>Чтобы дружить, надо войти. Без входа ты как сиделец без погонялова.</p><button type="button" class="nav-btn primary" data-a="login">Войти</button></div>';
+    if (!S.user()) return head() + '<div class="soc-empty"><p>Чтобы добавлять друзей, войдите в аккаунт.</p><button type="button" class="nav-btn primary" data-a="login">Войти</button></div>';
     if (!loaded) return head() + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-btn"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
     if (!me) return head() + nickForm(true);
     if (view === 'push') return head() + pushCard(true);
@@ -161,7 +161,7 @@
     return friendIds().map(function (id) { return people[id] || { id: id, nick: '…' }; }).filter(function (p) { return !admin || p.id !== admin.id; })
       .sort(function (a, b) { var x = lastAt(b.id), y = lastAt(a.id); return x !== y ? (x > y ? 1 : -1) : a.nick.localeCompare(b.nick, 'ru'); });
   }
-  /* Чаты: только кенты и строка поиска по ним — без заявок и приглашений, это в Профиль → Друзья */
+  /* Чаты: только друзья и строка поиска по ним — без заявок и приглашений, это в Профиль → Друзья */
   var chatQ = '';
   function chatsBody() {
     var m = uid(), fr = byActivity();
@@ -190,7 +190,7 @@
     if (out.length) h += '<h3 class="soc-sec">Ждут ответа</h3><ul class="soc-list tgl">' + out.map(function (l) { return row(people[l.b] || { id: l.b, nick: '…' }, false); }).join('') + '</ul>';
     var fr = byActivity().sort(function (a, b) { return a.nick.localeCompare(b.nick, 'ru'); });
     var rows = (admin && admin.id !== m ? row(admin, false, true) : '') + fr.map(function (p) { return row(p, false); }).join('');
-    h += '<h3 class="soc-sec">В хате · ' + (fr.length + (admin && admin.id !== m ? 1 : 0)) + '</h3>' + (rows ? '<ul class="soc-list tgl">' + rows + '</ul>' : '<p class="small soc-pad">Пока никого. Зови кентов по ссылке.</p>');
+    h += '<h3 class="soc-sec">Друзья · ' + (fr.length + (admin && admin.id !== m ? 1 : 0)) + '</h3>' + (rows ? '<ul class="soc-list tgl">' + rows + '</ul>' : '<p class="small soc-pad">Пока никого. Пригласите друзей по ссылке.</p>');
     return h;
   }
   function lastAt(id) { var rv = reviewsBy[id] || {}, t = ''; Object.keys(rv).forEach(function (k) { if (rv[k].score && String(rv[k].at || '') > t) t = String(rv[k].at); }); return t; }
@@ -281,10 +281,10 @@
   function nickForm(first) {
     var i = info[uid()] || {}, sc = first ? null : anqSect;
     function g(k) { var show = sc ? sc === k : k !== 'body'; return '<div class="anq-g"' + (show ? '' : ' hidden') + '>'; }
-    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — кенты увидят, нейросеть учтёт. Первый в хате становится админом.</p>' : '') +
+    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — друзья увидят, нейросеть учтёт. Первый пользователь становится администратором.</p>' : '') +
       g('me') + '<div class="soc-avpick"><span class="soc-avprev" id="socAvPrev">' + (fv('avatar', i.avatar) ? '<img src="' + esc(fv('avatar', i.avatar)) + '" alt="">' : '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>') + '</span>' +
       '<label class="ghost-btn soc-avbtn">' + (fv('avatar', i.avatar) ? 'Сменить фото' : 'Добавить фото') + '<input id="socAvIn" type="file" accept="image/*" hidden></label>' + (fv('avatar', i.avatar) ? '<button type="button" class="lib-link soc-avdel" data-a="avdel">Убрать</button>' : '') + '<small id="socAvMsg" class="soc-nick-hint"></small></div>' +
-      '<label class="set-f"><span>Ник — по нему найдут кенты</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(fv('nick', me ? me.nick : '')) + '"><small id="socNickHint" class="soc-nick-hint" aria-live="polite"></small></label>' +
+      '<label class="set-f"><span>Ник — по нему вас найдут друзья</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(fv('nick', me ? me.nick : '')) + '"><small id="socNickHint" class="soc-nick-hint" aria-live="polite"></small></label>' +
       '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(fv('name', i.name || '')) + '" placeholder="Как к тебе обращаться"></label>' +
       '<label class="set-f"><span>День рождения</span><input id="socBday" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="дд.мм.гггг" value="' + esc(String(fv('bday', isoToRu(i.bday))).replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$3.$2.$1')) + '"></label>' +
       '</div>' + g('cook') + (sc === 'cook' ? '<p class="small anq-h">По этому нейросеть решает, сколько разжёвывать в шагах, сколько времени закладывать и что тебе вообще предлагать.</p>' : '') +
@@ -528,9 +528,9 @@
     if (a === 'pdone') { msg = ''; view = 'list'; render(); return; }
     if (a === 'add') {
       var rev = links.filter(function (l) { return l.a === id && l.b === m && l.status === 'pending'; })[0];
-      return run(rev ? S.req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' }) : S.req('POST', 'friends', { a: m, b: id, status: 'pending' }), rev ? 'Теперь вы кенты' : 'Заявка ушла');
+      return run(rev ? S.req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' }) : S.req('POST', 'friends', { a: m, b: id, status: 'pending' }), rev ? 'Теперь вы друзья' : 'Заявка ушла');
     }
-    if (a === 'accept') return run(S.req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' }), 'Теперь вы кенты');
+    if (a === 'accept') return run(S.req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' }), 'Теперь вы друзья');
     if (a === 'decline') return run(S.req('DELETE', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m)), '');
     if (a === 'cancel') return run(S.req('DELETE', 'friends?a=eq.' + q(m) + '&b=eq.' + q(id)), '');
     if (a === 'unfriend') return armed(b, 'Точно убрать?', function () {
@@ -628,7 +628,7 @@
 
   function invite() {
     var url = location.origin + location.pathname + '?invite=' + uid();
-    var text = 'Го в «Жарко» — будем вместе жрать и ставить оценки. Я там ' + me.nick;
+    var text = 'Присоединяйся к «Жарко» — будем вместе готовить и ставить оценки. Мой ник: ' + me.nick;
     if (navigator.share) { navigator.share({ title: 'Жарко', text: text, url: url }).catch(function () {}); return; }
     (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast('Ссылка скопирована — кидай в чат'); })
       .catch(function () { msg = url; render(); });
@@ -647,7 +647,7 @@
     if (!inv || !S.user() || !me || inv === uid()) { try { if (inv === uid()) localStorage.removeItem(IKEY); } catch (e) {} return; }
     return S.rpc('accept_invite', { inviter: inv }).then(function (ok) {
       try { localStorage.removeItem(IKEY); } catch (e) {}
-      if (ok) return loadProfiles([inv]).then(refresh).then(function () { toast('Вы с ' + ((people[inv] || {}).nick || 'другом') + ' теперь кенты'); });
+      if (ok) return loadProfiles([inv]).then(refresh).then(function () { toast('Вы с ' + ((people[inv] || {}).nick || 'другом') + ' теперь друзья'); });
     }).catch(function () {});
   }
 

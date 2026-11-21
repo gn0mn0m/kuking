@@ -1661,6 +1661,25 @@ input, select, textarea { font-size: max(16px, 1em); }
 .set-ov.page .tg-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 body:has(.set-ov.page:not([hidden])) .tg-tabs.on { transform: none; opacity: 1; visibility: visible; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) { .set-ov.page { transition: opacity .2s; transform: none; opacity: 0; } .set-ov.page.on { opacity: 1; } .lv-box { transition: none; } }
+/* 3.14 — «для кого готовим», советы под рацион */
+.gs { position: relative; width: min(440px, 100%); display: grid; gap: 14px; padding: 20px 18px 16px; border-radius: 24px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 30px 60px -20px rgba(0,0,0,.6); animation: hall-in .35s cubic-bezier(.34,1.2,.64,1) both; }
+.gs .rl-k { margin: 0; }
+.gs-h { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 1.7rem; color: var(--orange); }
+.gs-mode button { min-height: 42px; }
+.gs-mode button[aria-checked="true"] { background: var(--orange); color: var(--orange-ink); }
+.gs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 600; }
+.gs-step { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--fg) 7%, transparent); border-radius: 12px; padding: 3px; }
+.gs-step button { width: 40px; height: 38px; border: 0; border-radius: 9px; background: none; color: var(--fg); font: 600 1.3rem/1 var(--f-body); }
+.gs-step button:disabled { opacity: .3; }
+.gs-step button:not(:disabled):active { background: var(--surface); }
+.gs-step b { min-width: 30px; text-align: center; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.gs-me { margin: 0; }
+.gs .rl-btns { margin: 2px 0 0; }
+.gs .rl-btns .nav-btn { flex: 1; }
+.gs-ov.out { opacity: 0; transition: opacity .2s; }
+.diet { margin: 12px 0 0; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--green) 13%, var(--surface)); }
+.diet h4 { margin: 0 0 6px; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--green); }
+.diet ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; line-height: 1.45; }
 </style>
 
 <div id="app">

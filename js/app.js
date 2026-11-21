@@ -413,10 +413,12 @@
   });
 
   /* сравнение с личной нормой из анкеты */
+  /* рецепт уже под твою норму: показываем цифры порции и советы, что докинуть в рацион */
   function normLine(per) {
-    var t = window.KBody && window.KBody.targets(0.4); if (!t) return '';
-    var d = Math.round((per.kcal - t.meal.kcal) / t.meal.kcal * 100), ok = Math.abs(d) <= 10;
-    return '<p class="norm' + (ok ? ' ok' : '') + '">Твоя порция по норме: ' + t.meal.kcal + ' ккал · Б ' + t.meal.p + ' г — ' + (ok ? 'попадает' : d > 0 ? 'тут на ' + d + '% больше, бери порцию поменьше' : 'тут на ' + (-d) + '% меньше, добавь гарнира') + '</p>';
+    var t = window.KBody && window.KBody.targets(), tips = (M.diet || []).filter(Boolean);
+    if (!t && !tips.length) return '';
+    return '<div class="diet">' + (t ? '<h4>Под твою цель · ' + t.goal + '</h4><p class="small" style="margin:0 0 ' + (tips.length ? '8px' : '0') + '">Твоя норма на этот приём ≈ ' + t.meal.kcal + ' ккал · Б ' + t.meal.p + ' г · Ж ' + t.meal.f + ' г · У ' + t.meal.c + ' г</p>' : '<h4>Под рацион</h4>') +
+      (tips.length ? '<ul>' + tips.map(function (x) { return '<li>' + String(x).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
   }
   function buildCover(s, el) {
     var per = M.dishes.reduce(function (a, d) { return { kcal: a.kcal + d.kcal, p: a.p + d.p, f: a.f + d.f, c: a.c + d.c }; }, { kcal: 0, p: 0, f: 0, c: 0 });

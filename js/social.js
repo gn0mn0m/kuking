@@ -279,8 +279,9 @@
       '<label class="set-f"><span>Ник — по нему найдут кенты</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(fv('nick', me ? me.nick : '')) + '"><small id="socNickHint" class="soc-nick-hint" aria-live="polite"></small></label>' +
       '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(fv('name', i.name || '')) + '" placeholder="Как к тебе обращаться"></label>' +
       '<label class="set-f"><span>День рождения</span><input id="socBday" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="дд.мм.гггг" value="' + esc(String(fv('bday', isoToRu(i.bday))).replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$3.$2.$1')) + '"></label>' +
-      '</div>' + g('cook') + (sc === 'cook' ? '<p class="small anq-h">По этому нейросеть решает, сколько разжёвывать в шагах и что тебе вообще предлагать.</p>' : '') +
+      '</div>' + g('cook') + (sc === 'cook' ? '<p class="small anq-h">По этому нейросеть решает, сколько разжёвывать в шагах, сколько времени закладывать и что тебе вообще предлагать.</p>' : '') +
       '<label class="set-f soc-skill"><span>Уровень готовки: <b id="socSkillV">' + esc(fv('skill', i.skill || mySkill())) + '</b> из 10 <em id="socSkillT">' + skillText(fv('skill', i.skill || mySkill())) + '</em></span><input id="socSkill" type="range" min="1" max="10" step="1" value="' + esc(fv('skill', i.skill || mySkill())) + '" aria-describedby="socSkillT"></label>' +
+      (first ? '' : habitsHTML()) +
       '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(fv('likes', i.likes || '')) + '" placeholder="Грузинская, острое, бургеры…"></label>' +
       '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
       '<label class="set-f"><span>Аллергии</span><input id="socAllergy" type="text" maxlength="200" value="' + esc(fv('allergy', i.allergy || '')) + '" placeholder="Орехи, лактоза, морепродукты…"></label>' +
@@ -297,6 +298,12 @@
     return h + nickForm(false);
   }
   /* тело и цель — только в телефоне, для точного КБЖУ */
+  function bseg(n, opts) { var b = window.KBody ? window.KBody.get() : {}; return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-body="' + n + '" data-v="' + o[0] + '" aria-checked="' + (String(b[n]) === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
+  /* как часто и сколько готовит — по этому нейросеть решает про заготовки впрок и сложность */
+  function habitsHTML() {
+    return '<span class="ps-l">Готовлю</span>' + bseg('freq', [['r1', '1–2 р/нед'], ['r3', '3–4'], ['r5', '5–6'], ['r7', 'Каждый день']]) +
+      '<span class="ps-l">Время на одну готовку</span>' + bseg('ctime', [['t30', '30 мин'], ['t60', '1 ч'], ['t120', '2 ч'], ['t180', '3 ч']]);
+  }
   function bodyHTML() {
     var b = window.KBody ? window.KBody.get() : {};
     function seg(n, opts) { return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-body="' + n + '" data-v="' + o[0] + '" aria-checked="' + (b[n] === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
@@ -306,11 +313,12 @@
       '<label class="set-f"><span>Вес, кг</span><input data-bodyn="w" type="number" inputmode="decimal" min="35" max="250" step="0.1" value="' + (b.w || '') + '" placeholder="80"></label></div>' +
       '<span class="ps-l">Тренировки в неделю</span>' + seg('act', [['low', 'Сижу'], ['light', '1–3'], ['mid', '3–5'], ['high', 'Каждый день']]) +
       '<span class="ps-l">Цель</span>' + seg('goal', [['cut', 'Сушка'], ['keep', 'Держать'], ['bulk', 'Масса']]) +
+      '<span class="ps-l">Приёмов пищи в день</span>' + bseg('meals', [['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']]) +
       '<p class="soc-norm" id="socNorm" aria-live="polite">' + normText() + '</p></fieldset>';
   }
   function normText() {
-    var t = window.KBody && window.KBody.targets(0.4);
-    return t ? 'В день ≈ <b>' + t.day.kcal + ' ккал</b> · Б ' + t.day.p + ' · Ж ' + t.day.f + ' · У ' + t.day.c + ' г<br><span>Порция в рецепте (40% дня) ≈ ' + t.meal.kcal + ' ккал · Б ' + t.meal.p + ' г</span>' : 'Заполни пол, рост и вес — посчитаю норму.';
+    var t = window.KBody && window.KBody.targets();
+    return t ? 'В день ≈ <b>' + t.day.kcal + ' ккал</b> · Б ' + t.day.p + ' · Ж ' + t.day.f + ' · У ' + t.day.c + ' г<br><span>Порция в рецепте (' + Math.round(window.KBody.share() * 100) + '% дня) ≈ ' + t.meal.kcal + ' ккал · Б ' + t.meal.p + ' г</span>' : 'Заполни пол, рост и вес — посчитаю норму.';
   }
   function setNickMsg(t, kind) {
     nickMsg = t || '';
@@ -559,7 +567,7 @@
       ov.querySelectorAll('[data-body]').forEach(function (bb) { bb.addEventListener('click', function () {
         var b = window.KBody.get(); b[bb.getAttribute('data-body')] = bb.getAttribute('data-v'); window.KBody.set(b);
         bb.parentNode.querySelectorAll('[data-body]').forEach(function (x) { x.setAttribute('aria-checked', String(x === bb)); });
-        ov.querySelector('#socNorm').innerHTML = normText(); if (window.kHaptic) window.kHaptic(6); }); });
+        var nm = ov.querySelector('#socNorm'); if (nm) nm.innerHTML = normText(); if (window.kHaptic) window.kHaptic(6); }); });
       ov.querySelectorAll('[data-bodyn]').forEach(function (inp) { inp.addEventListener('input', function () {
         var b = window.KBody.get(), v = parseFloat(String(inp.value).replace(',', '.')); b[inp.getAttribute('data-bodyn')] = v > 0 ? v : undefined; window.KBody.set(b);
         ov.querySelector('#socNorm').innerHTML = normText(); }); });

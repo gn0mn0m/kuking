@@ -49,7 +49,7 @@
       'Ответ — ТОЛЬКО JSON-массив из 10 объектов, начни с [ и закончи ]. Без markdown и пояснений.',
       'Объект: {"title": "2–4 слова по-русски, с характером", "pitch": "до 60 знаков: что на тарелке", "mode": "self|romance|friends", "protein": "одним словом", "drink": "под что пить или пусто", "why": "до 80 знаков: почему зайдёт именно им"}'
     ].join('\n');
-    var user = '# СИГНАЛЫ КОМПАНИИ (JSON)\n' + JSON.stringify(sig) + '\n\n# ОЦЕНКИ И КОММЕНТЫ ВСЕЙ ХАТЫ (читай каждый)\n' + teamFb() + '\n\n# АЛЛЕРГИИ — никогда не предлагай\n' + people() + '\n\nПодбери 10 блюд.';
+    var user = '# ПОВАР — ЕГО ЦЕЛЬ И ПРИВЫЧКИ (подбирай под это)\n' + kbjuNote('self') + '\n\n# СИГНАЛЫ КОМПАНИИ (JSON)\n' + JSON.stringify(sig) + '\n\n# ОЦЕНКИ И КОММЕНТЫ ВСЕЙ ХАТЫ (читай каждый)\n' + teamFb() + '\n\n# АЛЛЕРГИИ — никогда не предлагай\n' + people() + '\n\nПодбери 10 блюд.';
     return { system: system, user: user };
   }
 
@@ -107,8 +107,9 @@
       mode: MODE_RU[mode] ? mode : 'friends', ai: true, theme: theme, added: new Date().toISOString().slice(0, 10),
       tags: arr(r.tags).filter(function (t) { return typeof t === 'string'; }).slice(0, 8),
       title: str(r.title, theme), tagline: str(r.tagline), icon: (typeof r.icon === 'string' && r.icon.length <= 8 && !/[a-z<]/i.test(r.icon)) ? r.icon : undefined,
-      baseGuests: Math.max(1, Math.min(12, (r.baseGuests | 0) || (mode === 'self' ? 2 : mode === 'romance' ? 3 : 5))),
+      baseGuests: GEN && GEN.guests ? GEN.guests : Math.max(1, Math.min(12, (r.baseGuests | 0) || (mode === 'self' ? 2 : mode === 'romance' ? 3 : 5))),
       totalTime: str(r.totalTime, '≈ 3 ч'),
+      diet: arr(r.diet).filter(function (t) { return typeof t === 'string' && t.trim(); }).map(function (t) { return t.trim().slice(0, 140); }).slice(0, 3),
       groups: arr(r.groups).map(String).filter(Boolean),
       ingredients: [], dishes: [], phases: [], tools: [], slides: []
     };
@@ -226,6 +227,7 @@
     '  groups — названия групп продуктов: ["Мясо", "Овощи", "Соус", …]',
     '  ingredients — [{id, g, name, amount, unit, round, buy?}]: id латиницей (beef, rice); g — индекс в groups; amount — число на baseGuests; unit — г, кг, мл, л, шт, ч.л., ст.л.; round — правило округления; buy:true — если надо докупить. Для «по вкусу» вместо amount/unit дай unitText',
     '  dishes — [{name, kcal, p, f, c}] на ОДНУ порцию',
+  '  diet — 0–3 коротких совета под цель повара (до 120 знаков каждый): что добавить к ЭТОЙ тарелке или в другие приёмы дня, чтобы закрыть дневную норму. Конкретно, с граммами: «+150 г творога 5% на завтрак — добьёшь белок до нормы». Если блюдо и так попадает — пустой массив. НЕ пиши «бери порцию поменьше» — порция уже под него.',
     '  ahead — ТОЛЬКО если что-то надо сделать заранее, до начала готовки (маринад на ночь, тесто, разморозка, замочить бобовые): [{what, hours, text}] — what до 30 знаков («Замариновать курицу»), hours — за сколько часов до готовки, text — что именно сделать с количествами {id}. Если всё делается по ходу — поля нет.',
     '  phases — [{t:"0:00", name}] таймлайн',
     '  tools — [{zone, items:[{id, icon, name, use}]}] посуда и поверхности',
@@ -244,11 +246,15 @@
     return e.length ? e.map(function (x) { return '- ' + x.who + (x.allergy ? ' — АЛЛЕРГИЯ (ни грамма, ни следа, даже в соусах и маринадах): ' + x.allergy : '') + (x.likes ? ' — любит: ' + x.likes : '') + (x.avoid ? ' — НЕ ЕСТ: ' + x.avoid : ''); }).join('\n') : '- анкет нет';
   }
   function kbjuNote(mode) {
-    var t = window.KBody && window.KBody.targets(0.4);
-    if (!t) return '- Данных о теле нет: порция ~60 г белка и ~100 г углеводов, калории по-честному.';
-    return '- Порция повара: ' + t.meal.kcal + ' ккал, белок ' + t.meal.p + ' г, жиры ' + t.meal.f + ' г, углеводы ' + t.meal.c + ' г (40% дневной нормы, цель — ' + t.goal + '). Подгони граммы белка, гарнира и жира под эти цифры ±7%.' +
-      (mode === 'self' ? '' : '\n- Остальным — стандартная сытная порция: ~60 г белка и ~100 г углеводов.') +
-      '\n- dishes[].kcal/p/f/c — честный расчёт по граммам сырых продуктов на одну порцию, не на глаз.';
+    var t = window.KBody && window.KBody.targets(), hb = window.KBody && window.KBody.habits ? window.KBody.habits() : [];
+    var h = hb.length ? '\n- Привычки повара: ' + hb.join('; ') + '.' : '';
+    if (!t) return '- Данных о теле нет: порция ~60 г белка и ~100 г углеводов, калории по-честному.' + h;
+    return '- Рецепт делается СПЕЦИАЛЬНО под повара. Его порция: ' + t.meal.kcal + ' ккал, белок ' + t.meal.p + ' г, жиры ' + t.meal.f + ' г, углеводы ' + t.meal.c + ' г (' + Math.round(window.KBody.share() * 100) + '% дневной нормы ' + t.day.kcal + ' ккал, цель — ' + t.goal + ').' +
+      '\n- Подгони граммы белка, гарнира, соуса и масла сразу под эти цифры ±7% — никаких «если ты на сушке, возьми поменьше»: рецепт уже его. Под цель выбирай и технику (сушка — меньше масла, нежирные куски, больше овощей и белка; масса — плотный гарнир, жирнее соус).' +
+      (mode === 'self' ? '' : '\n- Остальным за столом — стандартная сытная порция: ~60 г белка и ~100 г углеводов; порцию повара в «Сборке» отметь отдельно, если она отличается.') + h +
+      '\n- Если готовит редко (1–2 раза в неделю) — в режиме «для себя» предложи сделать порцию впрок и как хранить; если времени на готовку мало — уложи активную часть в это время.' +
+      '\n- dishes[].kcal/p/f/c — честный расчёт по граммам сырых продуктов на одну порцию, не на глаз.' +
+      '\n- В diet — что докинуть в рацион за день, чтобы закрыть норму (белок, клетчатка, овощи), если этого блюда не хватает.';
   }
   function sampleFor(mode) {
     var id = mode === 'friends' ? 'smash-night' : 'sichuan-beef';
@@ -261,7 +267,7 @@
   }
   var ctxRef = null;
   function buildPrompt(theme, reviews, existing, retryNote) {
-    var mode = MODE_RU[theme[3]] ? theme[3] : 'friends', sk = skill();
+    var mode = GEN && GEN.mode ? GEN.mode : MODE_RU[theme[3]] ? theme[3] : 'friends', sk = skill();
     var fb = Object.keys(reviews || {}).map(function (id) {
       var v = reviews[id]; return '- «' + (v.title || id) + '» — ' + v.score + '/10' + (v.comment ? ': ' + v.comment : '');
     });
@@ -347,6 +353,7 @@
       /^Уточнения:/.test(theme[1] || '') ? '\n# ОБЯЗАТЕЛЬНО — ответы человека на уточнения (каждый выполнить буквально; блюдо обязано им соответствовать, даже если классика другая)\n' + theme[1].replace(/^Уточнения:\s*/, '').split('; ').map(function (x) { return '- ' + x; }).join('\n') + '\nПример: «томатное» + «азиатское» — это азиатское блюдо с томатной основой (например, томаты с имбирём, соевым и чили), а НЕ болоньезе или другая европейская классика.' : '',
       'Режим: ' + mode + ' (' + MODE_RU[mode] + ').',
       COMPANY[mode],
+      GEN && GEN.guests ? '- baseGuests СТРОГО ' + GEN.guests + ' — человек так выбрал, количества считай ровно на ' + GEN.guests + ' порц.' : '',
       '',
       '# ПОВАР',
       'Уровень готовки ' + sk + ' из 10. Что это значит: ' + skillRule(),
@@ -403,9 +410,10 @@
   }
 
   /* ---------- рулетка тем + генерация ---------- */
-  function spin(ctx, fixedI, custom) {
+  function spin(ctx, fixedI, custom, ready) {
     ctxRef = ctx;
-    if (!custom && fixedI == null && stale(ctx)) return prep(ctx, function () { spin(ctx); });
+    if (!custom && !ready) return setup(fixedI != null && THEMES[fixedI] ? THEMES[fixedI][3] : null, function () { spin(ctx, fixedI, null, true); });
+    if (!custom && fixedI == null && stale(ctx)) return prep(ctx, function () { spin(ctx, null, null, true); });
     if (!custom && !THEMES.length) {
       var e = document.createElement('div'); e.className = 'rl-ov';
       e.innerHTML = '<div class="rl-box" role="dialog" aria-modal="true" aria-label="Рулетка свежака"><button type="button" class="rl-x">✕ Выйти</button><p class="rl-res">В барабане пусто</p><p class="small">Темы ещё не заданы.</p></div>';
@@ -418,7 +426,8 @@
     }
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var direct = fixedI != null || !!custom;
-    var pickI = fixedI != null ? fixedI : (Math.random() * Math.max(1, THEMES.length)) | 0, pick = custom || THEMES[pickI];
+    var pool = THEMES.map(function (t, i) { return GEN && t[3] === GEN.mode ? i : -1; }).filter(function (i) { return i >= 0; });
+    var pickI = fixedI != null ? fixedI : pool.length ? pool[(Math.random() * pool.length) | 0] : (Math.random() * Math.max(1, THEMES.length)) | 0, pick = custom || THEMES[pickI];
     var N = 34, target = N - 4, seq = [];
     for (var i = 0; i < N; i++) seq.push(THEMES.length ? THEMES[(pickI + 7 + i * 5) % THEMES.length] : pick);
     seq[target] = pick;
@@ -460,7 +469,7 @@
     btns.addEventListener('click', function (e) {
       var a = e.target.closest('[data-a]'); if (!a) return;
       a = a.getAttribute('data-a');
-      if (a === 'again') { shut(); spin(ctx); }
+      if (a === 'again') { shut(); spin(ctx, null, null, true); }
       else if (a === 'gen') generate();
       else if (a === 'stop') { if (ctl) ctl.abort(); }
       else if (a === 'close') shut();
@@ -486,7 +495,7 @@
             modelTier: 'complex', cache: false, signal: ctl.signal, temperature: 0.6,
             onText: function (u) { sub.textContent = (note ? 'Переписываю начисто · ' : '') + 'Написано ' + Math.round(u.text.length / 1000) + ' тыс. знаков'; }
           }).then(function (json) {
-            var r = fix(json, pick[0], pick[3]), pr = window.KRecipe ? window.KRecipe.problems(r) : [];
+            var r = fix(json, pick[0], GEN && GEN.mode || pick[3]), pr = window.KRecipe ? window.KRecipe.problems(r) : [];
             if (pr.length && !note) { var er = new Error('рецепт не прошёл сверку: ' + pr.join('; ')); throw er; } // одна переписка с конкретными косяками
             return window.KRecipe ? window.KRecipe.fix(r) : r;
           });
@@ -536,17 +545,45 @@
 
   /* своя идея: «хочу шаурму с ананасом» → рецепт */
   /* ---------- холл: перед рецептом шеф уточняет 3–4 момента с готовыми вариантами ---------- */
+  /* перед генерацией — для кого и на сколько. Запоминаем последний выбор */
+  var LAST = load('kuking:gen', null), GEN = null;
+  var RANGE = { self: [1, 2], romance: [3, 4], friends: [5, 12] }, DEF = { self: 1, romance: 3, friends: 5 };
+  function setup(defMode, done) {
+    var g = { mode: MODE_RU[defMode] ? defMode : LAST && LAST.mode || 'self' };
+    g.guests = LAST && LAST.mode === g.mode && LAST.guests ? LAST.guests : DEF[g.mode];
+    var t = window.KBody && window.KBody.targets();
+    var m = document.createElement('div'); m.className = 'rl-ov gs-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'Для кого готовим');
+    function draw() {
+      var r = RANGE[g.mode];
+      m.innerHTML = '<div class="gs"><button type="button" class="rl-x" aria-label="Закрыть">×</button><p class="rl-k">Перед тем как крутить</p><h3 class="gs-h">Для кого готовим?</h3>' +
+        '<div class="seg gs-mode" role="radiogroup">' + ['self', 'romance', 'friends'].map(function (k) { return '<button type="button" role="radio" data-gm="' + k + '" aria-checked="' + (g.mode === k) + '">' + { self: 'Для себя', romance: 'Романтика', friends: 'Друзья' }[k] + '</button>'; }).join('') + '</div>' +
+        '<div class="gs-row"><span>Сколько персон</span><div class="gs-step"><button type="button" data-gs="-1" aria-label="Меньше"' + (g.guests <= r[0] ? ' disabled' : '') + '>−</button><b>' + g.guests + '</b><button type="button" data-gs="1" aria-label="Больше"' + (g.guests >= r[1] ? ' disabled' : '') + '>+</button></div></div>' +
+        '<p class="small gs-me">' + (t ? 'Твоя порция подгонится под цель «' + esc(t.goal) + '»: ≈ ' + t.meal.kcal + ' ккал · Б ' + t.meal.p + ' г' : 'Заполни «Питание» в профиле — порция подгонится под твою цель') + '</p>' +
+        '<div class="rl-btns"><button type="button" class="nav-btn primary" data-gs="go">Погнали</button></div></div>';
+    }
+    draw(); document.body.appendChild(m); requestAnimationFrame(function () { m.classList.add('on'); });
+    function shut() { m.classList.add('out'); setTimeout(function () { m.remove(); }, 220); }
+    m.addEventListener('click', function (e) {
+      if (e.target === m || e.target.closest('.rl-x')) return shut();
+      var b = e.target.closest('[data-gm],[data-gs]'); if (!b) return;
+      if (b.hasAttribute('data-gm')) { g.mode = b.getAttribute('data-gm'); g.guests = DEF[g.mode]; }
+      else if (b.getAttribute('data-gs') === 'go') { GEN = LAST = g; try { localStorage.setItem('kuking:gen', JSON.stringify(g)); } catch (x) {} shut(); setTimeout(function () { done(g); }, 160); return; }
+      else { var r = RANGE[g.mode]; g.guests = Math.max(r[0], Math.min(r[1], g.guests + +b.getAttribute('data-gs'))); }
+      if (window.kHaptic) window.kHaptic(6); draw();
+    });
+  }
   function hallPrompt(idea, mode) {
     return {
       system: ['Ты — шеф-повар уровня Мишлен, говоришь по-русски голосом свояка 25 лет, коротко и по делу. Человек хочет блюдо. Прежде чем писать рецепт, задай 3–4 уточнения, которые РЕАЛЬНО меняют рецепт: белок или его часть, острота, гарнир, техника (гриль/сковорода/духовка), время на готовку, под какой напиток, настроение подачи.',
         'Правила: не спрашивай то, что уже ясно из запроса или анкет; учти аллергии и что люди не едят — не предлагай варианты с ними; уровень повара влияет на сложность вариантов.',
         'У каждого вопроса 2–4 варианта ответа, каждый до 28 знаков, конкретно (не «другое»).',
         'Ответ — ТОЛЬКО JSON без текста вокруг: {"say":"реакция на идею, до 110 знаков","questions":[{"q":"вопрос до 60 знаков","options":["…","…"]}]}'].join('\n'),
-      user: ['Запрос: ' + idea, 'Режим: ' + (MODE_RU[mode] || mode), 'Уровень повара: ' + skillRule(), 'Кто ест:', people()].join('\n')
+      user: ['Запрос: ' + idea, 'Режим: ' + (MODE_RU[mode] || mode) + (GEN && GEN.guests ? ', порций: ' + GEN.guests : ''), 'Уровень повара: ' + skillRule(), 'Цель и рацион повара:', kbjuNote(mode), 'Кто ест:', people()].join('\n')
     };
   }
-  function custom(ctx, idea, mode) {
+  function custom(ctx, idea, mode, ready) {
     mode = MODE_RU[mode] ? mode : 'self'; idea = String(idea).slice(0, 160);
+    if (!ready) return setup(mode, function (g) { custom(ctx, idea, g.mode, true); });
     var m = document.createElement('div'); m.className = 'rl-ov hall-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Обсудим блюдо');
     m.innerHTML = '<div class="hall"><button type="button" class="rl-x" aria-label="Закрыть">×</button><p class="rl-k">Обсудим блюдо</p>' +
       '<p class="hall-you">' + esc(idea) + '</p><div class="hall-body"><div class="fr-pot" aria-hidden="true"><i></i><i></i><i></i></div><p class="fr-msg hall-wait"></p></div>' +
@@ -588,7 +625,8 @@
     });
   }
   /* ручной рецепт из редактора: та же проверка, что у нейросети */
-  function manual(ctx, loose, prevId) {
+  function manual(ctx, loose, prevId) { var keep = GEN; GEN = null; try { return manual0(ctx, loose, prevId); } finally { GEN = keep; } }
+  function manual0(ctx, loose, prevId) {
     var r = fix(loose, loose.title, loose.mode);
     r.id = prevId || 'my-' + Date.now().toString(36); r.ai = false; r.manual = loose; delete r.theme;
     cache[r.id] = r; saveCache();

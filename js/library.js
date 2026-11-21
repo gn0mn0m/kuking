@@ -118,6 +118,7 @@
 
   function render() {
     autoPurge();
+    if (view === 'detail' && (!byId(detailId) || isHid(detailId))) { view = SUB[TAB] ? 'list' : TAB || 'list'; } // рецепт удалён — не застреваем на пустой карточке без таб-бара
     var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : view === 'plan' ? planHTML() : view === 'profile' ? profileHTML() : listHTML();
     document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden);
     var old = ov.firstElementChild;
@@ -542,10 +543,13 @@
   /* что сегодня — карточка над списком рецептов */
   function todayCard() {
     if (!planIntro) return '';
-    var td = today(), list = tasksAll().filter(function (x) { return x.day >= td && x.kind !== 'empty' && !doneTasks[x.key]; }), day = list.length ? list[0].day : null;
+    /* прошедшее сегодня не показываем: готовка — через 1,5 ч после старта, остальное — через 30 мин. Тогда висит следующее по плану */
+    var td = today(), nd = new Date(), now = nd.getHours() * 60 + nd.getMinutes();
+    function past(x) { if (x.day !== td || !x.time) return false; var m = /^(\d{1,2}):(\d{2})/.exec(x.time); return m && now > +m[1] * 60 + +m[2] + (x.kind === 'cook' ? 90 : 30); }
+    var list = tasksAll().filter(function (x) { return x.day >= td && x.kind !== 'empty' && !doneTasks[x.key] && !past(x); }), day = list.length ? list[0].day : null;
     var all = list.filter(function (x) { return x.day === day; });
     if (!all.length) return '';
-    var lab = day === td ? 'Сегодня по плану' : day === addDays(td, 1) ? 'Завтра по плану' : dayName(day) + ', ' + dayDate(day);
+    var lab = day === td ? (tasksAll().some(function (x) { return x.day === td && past(x); }) ? 'Дальше сегодня' : 'Сегодня по плану') : day === addDays(td, 1) ? 'Завтра по плану' : dayName(day) + ', ' + dayDate(day);
     var still = tdSeen; tdSeen = true;
     return '<button type="button" class="td-card' + (still ? ' still' : '') + '" data-a="toPlan"><span class="td-k">' + esc(lab) + '</span>' + all.slice(0, 4).map(function (x) {
       return '<span class="td-row"><span class="td-time">' + esc(x.time || '') + '</span>' + tIco(x.kind) + '<b class="td-t">' + esc(x.title) + '</b></span>';
@@ -673,9 +677,9 @@
     h += '<button type="button" class="pf-card" data-pf="' + (u ? 'anketa' : 'login') + '"><span class="pf-av' + (me && me.is_admin ? ' chef' : '') + '" aria-hidden="true">' + (inf.avatar ? '<img src="' + esc(inf.avatar) + '" alt="">' : esc(String(name).charAt(0).toUpperCase())) + (me && me.is_admin ? CROWN : '') + '</span>' +
       '<span class="pf-who"><b>' + esc(name) + '</b>' + (me ? '<span class="pf-nick">@' + esc(me.nick) + (me.is_admin ? ' <span class="soc-chef adm">' + CROWN + 'админ</span>' : ' <span class="soc-chef">шеф</span>') + '</span>' : '<span class="pf-nick">' + (u ? 'заполни анкету' : 'войди, чтобы дружить и хранить рецепты') + '</span>') + '</span>' + chev() + '</button>';
     if (u) {
-      var tg = window.KBody && window.KBody.targets && window.KBody.targets(0.4), bg = window.KBody ? window.KBody.get() : {};
+      var tg = window.KBody && window.KBody.targets && window.KBody.targets(), bg = window.KBody ? window.KBody.get() : {};
       var goal = { cut: 'сушка', keep: 'держу форму', bulk: 'масса' }[bg.goal] || '';
-      h += '<div class="pf-group">' + pfRow('cook', 'cook', 'Готовка', sk ? 'уровень ' + sk + '/10' : 'настрой') +
+      h += '<div class="pf-group">' + pfRow('cook', 'cook', 'Готовка', sk ? ['ур. ' + sk + '/10', { r1: '1–2 р/нед', r3: '3–4 р/нед', r5: '5–6 р/нед', r7: 'каждый день' }[bg.freq]].filter(Boolean).join(' · ') : 'настрой') +
         pfRow('food', 'food', 'Питание', tg ? [goal, tg.day.kcal + ' ккал'].filter(Boolean).join(' · ') : 'не заполнено') + '</div>';
       if (Soc.enabled) h += '<div class="pf-group">' + pfRow('friends', 'friends', 'Друзья', n ? '<em class="pf-badge">' + n + '</em>' : '') + '</div>';
     } else h += '<div class="pf-group">' + pfRow('login', 'login', 'Войти или зарегистрироваться') + '</div>';
@@ -845,7 +849,7 @@
   /* ---------- корзина ---------- */
   function purge(ids) {
     ids.forEach(function (id) {
-      kill(id);
+      kill(id); dropActive(id);
       if (/^(ai|my)-/.test(id)) { if (window.Fresh) window.Fresh.forget(id); if (db) db.collection('fresh').doc(id).delete().catch(function () {}); }
     });
     saveHidden();
@@ -1032,10 +1036,12 @@
   }
   /* ---------- жесты по строке: вправо — закрепить, влево — удалить, удержание — меню ---------- */
   var noClickUntil = 0, TH = 84;
+  function dropActive(id) { if (active && active.id === id) { active = null; lset(KEY, ''); return true; } return false; }
   function removeRow(id) {
     hidden[id] = Date.now(); saveHidden();
+    var wasActive = active, dropped = dropActive(id);
     var li = ov.querySelector('.tg-li[data-id="' + cssq(id) + '"]');
-    function after() { keepY(render); toastUndo('«' + titleOf(id) + '» убран', function () { delete hidden[id]; saveHidden(); keepY(render); var b = ov.querySelector('.tg-li[data-id="' + cssq(id) + '"]'); if (b) b.classList.add('back'); }); }
+    function after() { keepY(render); toastUndo('«' + titleOf(id) + '» убран', function () { delete hidden[id]; saveHidden(); if (dropped) { active = wasActive; lset(KEY, id); } keepY(render); var b = ov.querySelector('.tg-li[data-id="' + cssq(id) + '"]'); if (b) b.classList.add('back'); }); }
     if (window.kHaptic) window.kHaptic(10);
     if (li) { li.style.height = li.offsetHeight + 'px'; void li.offsetHeight; li.classList.add('gone'); li.style.height = '0px'; setTimeout(after, 380); } else after();
   }
@@ -1127,7 +1133,7 @@
     t.innerHTML = '<span>' + esc(text) + '</span><button type="button">Вернуть</button>';
     document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add('on'); });
     function hide() { clearTimeout(gone); t.style.transform = ''; t.classList.remove('on'); setTimeout(function () { t.remove(); }, 320); }
-    var gone = setTimeout(hide, 3000);
+    var gone = setTimeout(hide, 1800);
     dragDown(t, hide, { x: true, th: 30 });
     t.querySelector('button').addEventListener('click', function () { hide(); if (window.kHaptic) window.kHaptic(8); undo(); });
   }
@@ -1337,7 +1343,7 @@
   /* из готовки — назад в карточку рецепта, экран выезжает слева, как «назад» */
   var bBtn = document.getElementById('backBtn');
   if (bBtn) bBtn.addEventListener('click', function () {
-    if (!active) { open(); return; }
+    if (!active || isHid(active.id) || !byId(active.id)) { active = null; open(); return; }
     TAB = 'list'; view = 'detail'; detailId = active.id; dir = 'back'; stagger = false; render(); ov.hidden = false; ov.scrollTop = 0;
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden && view !== 'list') go('list', undefined, true); });

@@ -128,6 +128,13 @@
     },
 
     { type: 'serve', short: 'Подача', title: 'Подача: сычуаньская говядина', art: 'pasta',
+      plate: { vessel: 'bowl', layers: [
+        { what: 'Лапша гнездом в центре, высоко', shape: 'mound', item: 'noodle', color: '#e9d29a', r: 0.62, n: 50 },
+        { what: 'Говядина в глазури сверху', shape: 'sector', item: 'strip', color: '#6e3420', from: 290, to: 110, r: 0.6 },
+        { what: 'Болгарский перец и морковь', shape: 'sector', item: 'cube', color: '#d64531', from: 120, to: 230, r: 0.6 },
+        { what: 'Зелёный лук колечками', shape: 'scatter', item: 'ring', color: '#7fb54a', r: 0.62, n: 14 },
+        { what: 'Щепоть острого перца', shape: 'scatter', item: 'dot', color: '#c0392b', r: 0.55, n: 24 }
+      ] },
       dishes: ['Белая глубокая миска'],
       points: [
         'Лапшу щипцами закрути гнездом в центр миски — высоко, не плашмя.',

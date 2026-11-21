@@ -105,6 +105,14 @@
     },
 
     { type: 'serve', short: 'Подача', title: 'Подача: бефстроганов', art: 'main',
+      plate: { vessel: 'plate', layers: [
+        { what: 'Пюре ложкой слева, ямка-волна', shape: 'dollop', item: 'smooth', color: '#efe3c4', at: 265, d: 0.36, r: 0.4 },
+        { what: 'Бефстроганов с грибами справа', shape: 'sector', item: 'strip', color: '#8a4a2b', from: 15, to: 165, r0: 0.12 },
+        { what: 'Шампиньоны ломтиками в соусе', shape: 'sector', item: 'slice', color: '#c9a77c', from: 30, to: 150, r0: 0.25, n: 7 },
+        { what: 'Сметанный соус затекает в ямку пюре', shape: 'drizzle', item: 'sauce', color: '#d8b48a', from: 200, to: 330, r: 0.7, n: 2 },
+        { what: 'Укроп щедро сверху', shape: 'scatter', item: 'leaf', color: '#5f9e3f', n: 18 },
+        { what: 'Свежемолотый перец', shape: 'scatter', item: 'dot', color: '#2b2b2b', n: 28 }
+      ] },
       dishes: ['Средняя тарелка с кракелюром'],
       points: [
         'Пюре ложкой с краю, сделай ложкой ямку-волну.',

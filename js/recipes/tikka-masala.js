@@ -116,6 +116,13 @@
     },
 
     { type: 'serve', short: 'Подача', title: 'Подача: тикка масала', art: 'main',
+      plate: { vessel: 'plate', layers: [
+        { what: 'Рис куполом слева — из чашки', shape: 'sector', item: 'grain', color: '#f4ecd8', from: 195, to: 345 },
+        { what: 'Курица в соусе масала справа', shape: 'sector', item: 'chunk', color: '#c9662e', from: 15, to: 180 },
+        { what: 'Соус слегка заходит на рис', shape: 'drizzle', item: 'sauce', color: '#d9822b', from: 170, to: 215, n: 2 },
+        { what: 'Капля сливок спиралью по курице', shape: 'drizzle', item: 'sauce', color: '#f6efe2', from: 50, to: 140, n: 2 },
+        { what: 'Кинза сверху', shape: 'scatter', item: 'leaf', color: '#4d9a3a', from: 10, to: 190, n: 16 }
+      ] },
       dishes: ['Средняя тарелка с кракелюром'],
       points: [
         'Рис плотной горкой слева — утрамбуй в чашку и переверни, будет ровный купол.',

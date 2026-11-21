@@ -171,6 +171,16 @@
     },
 
     { type: 'serve', short: 'Подача', title: 'Подача: тако-бар', art: 'aperitivo',
+      plate: { vessel: 'board', layers: [
+        { what: 'Мясо барбакоа горой в центре, сок сверху', shape: 'mound', item: 'strip', color: '#7b3a22', r: 0.38, n: 30 },
+        { what: 'Дымный йогуртовый соус', shape: 'dollop', item: 'smooth', color: '#dcb895', at: 20, d: 0.72, r: 0.14 },
+        { what: 'Сладкий маринованный лук', shape: 'sector', item: 'ring', color: '#b9487c', from: 50, to: 95, r0: 0.55, n: 10 },
+        { what: 'Гуакамоле', shape: 'dollop', item: 'smooth', color: '#7fa64a', at: 128, d: 0.72, r: 0.15 },
+        { what: 'Пико де гайо', shape: 'sector', item: 'cube', color: '#d9452b', from: 160, to: 205, r0: 0.55, n: 16 },
+        { what: 'Рис с лаймом и кинзой', shape: 'sector', item: 'grain', color: '#f3ead6', from: 215, to: 262, r0: 0.55 },
+        { what: 'Тёртый чеддер', shape: 'sector', item: 'dot', color: '#f2b134', from: 272, to: 308, r0: 0.55, n: 30 },
+        { what: 'Дольки лайма', shape: 'fan', item: 'slice', color: '#8cc152', at: 335, n: 3 }
+      ] },
       dishes: ['Большая плоская тарелка', 'Белая глубокая миска', 'Средняя стеклянная миска', 'Большая стеклянная миска'],
       points: [
         'Мясо горой на большой тарелке в центре стола, сок сверху ложкой.',

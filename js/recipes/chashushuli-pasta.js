@@ -122,6 +122,13 @@
     },
 
     { type: 'serve', short: 'Подача', title: 'Подача: чашушули-паста', art: 'pasta',
+      plate: { vessel: 'plate', layers: [
+        { what: 'Паста горкой в центр, закручена повыше', shape: 'mound', item: 'ring', color: '#e8c77a', r: 0.55, n: 46 },
+        { what: 'Фарш в томатном соусе — на вершину', shape: 'mound', item: 'chunk', color: '#9b3d22', r: 0.32, n: 20 },
+        { what: 'Соус со дна сковороды сверху', shape: 'drizzle', item: 'sauce', color: '#c0392b', r: 0.42, n: 3 },
+        { what: 'Кинза с сырым чесноком', shape: 'scatter', item: 'leaf', color: '#4d9a3a', r: 0.45, n: 18 },
+        { what: 'Чеснок мелко', shape: 'scatter', item: 'dot', color: '#f3ecd6', r: 0.4, n: 18 }
+      ] },
       dishes: ['Средние тарелки с кракелюром'],
       points: [
         'Горкой в центр тарелки, щипцами закрути повыше — объём решает.',

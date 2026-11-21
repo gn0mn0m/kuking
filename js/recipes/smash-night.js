@@ -150,6 +150,12 @@
     },
 
     { type: 'serve', short: 'Подача 1', title: 'Подача: крылья Баффало', art: 'wings',
+      plate: { vessel: 'bowl', layers: [
+        { what: 'Крылья горкой, блестят от соуса', shape: 'mound', item: 'chunk', color: '#c1401f', r: 0.7, n: 34 },
+        { what: 'Соус Баффало сверху', shape: 'drizzle', item: 'sauce', color: '#e0662a', r: 0.62, n: 4 },
+        { what: 'Копчёный айоли — в белой миске рядом', shape: 'dollop', item: 'smooth', color: '#f0dfb8', at: 55, d: 0.72, r: 0.17 },
+        { what: 'Паприка', shape: 'scatter', item: 'dot', color: '#a8321e', n: 20 }
+      ] },
       dishes: ['Большая стеклянная миска', 'Белая глубокая миска'],
       points: [
         'Крылья горкой в стеклянной миске, блестят от соуса — сухое крыло позорит хату.',
@@ -194,6 +200,13 @@
     },
 
     { type: 'serve', short: 'Подача 2', title: 'Подача: дабл смэш', art: 'burger',
+      plate: { vessel: 'plate', layers: [
+        { what: 'Чеддер свисает с котлет', shape: 'dollop', item: 'smooth', color: '#f2b134', at: 260, d: 0.28, r: 0.42 },
+        { what: 'Бургер чуть левее центра — булка бриошь', shape: 'dollop', item: 'smooth', color: '#c98a45', at: 260, d: 0.28, r: 0.36 },
+        { what: 'Поджаристый лук торчит по краям', shape: 'scatter', item: 'ring', color: '#a8642a', from: 200, to: 320, n: 8 },
+        { what: 'Фри горкой справа, косо', shape: 'sector', item: 'strip', color: '#f0c35a', from: 35, to: 150, r0: 0.2 },
+        { what: 'Соль на фри', shape: 'scatter', item: 'dot', color: '#ffffff', from: 35, to: 150, n: 18 }
+      ] },
       dishes: ['Средние тарелки с кракелюром', 'Средняя стеклянная миска'],
       points: [
         'Бургер чуть левее центра. Сыр свисает с котлет — это не косяк, это главный понт.',

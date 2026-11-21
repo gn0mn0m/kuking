@@ -2,6 +2,7 @@
 (window.RECIPES = window.RECIPES || []).push({
   id: 'taco-night',
   mode: 'friends',
+  meta: { category: 'main', cuisine: 'Мексиканская', main: 'Говядина', difficulty: 3, activeMin: 60 },
   tags: ['любые коктейли', 'говядина', 'Мексика', 'духовка', 'блендер', 'неделя 18–22 ноября'],
   added: '2026-11-17',
   title: 'Мексиканская ночь',

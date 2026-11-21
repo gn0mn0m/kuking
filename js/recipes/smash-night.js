@@ -2,6 +2,7 @@
 (window.RECIPES = window.RECIPES || []).push({
   id: 'smash-night',
   mode: 'friends',
+  meta: { category: 'main', cuisine: 'Американская', main: 'Говядина', difficulty: 4, activeMin: 100 },
   tags: ['любые коктейли', 'говядина', 'птица', 'фритюр', 'духовка', 'блендер'],
   added: '2026-11-07',
   title: 'Смэш-сходка',

@@ -774,6 +774,10 @@
       '<p class="tg-meta">' + [esc(String(r.totalTime || '').replace('≈ ', '')), MODE_NAME[r.mode] ? MODE_NAME[r.mode].toLowerCase() : '', r.baseGuests ? r.baseGuests + ' порц.' : '', r.ai ? 'от нейросети' : r.manual ? 'твой рецепт' : ''].filter(Boolean).join(' · ') + '</p>' +
       (tot.n ? '<div class="tg-kbju"><span><b>' + tot.k + '</b> ккал</span><span>Б <b>' + tot.p + '</b></span><span>Ж <b>' + tot.f + '</b></span><span>У <b>' + tot.c + '</b></span></div>' : '') +
       (r.tagline ? '<p class="tg-lede">' + esc(r.tagline) + '</p>' : '') + '</div>';
+    if (window.KMeta) {
+      h += '<section class="tg-sec">' + KMeta.html(r) + '</section>';
+      if (r.ai && !KMeta.get(r).tagged) KMeta.aiTag(r).then(function (m) { if (m && !ov.hidden && !typing()) keepY(render); });
+    }
     if ((r.dishes || []).length > 1) h += '<section class="tg-sec"><h3 class="tg-sec-h">На тарелке</h3><ul class="tg-dishes">' + r.dishes.map(function (d) {
       return '<li><b>' + esc(d.name) + '</b>' + (d.kcal ? '<small>' + d.kcal + ' ккал · Б ' + d.p + ' · Ж ' + d.f + ' · У ' + d.c + '</small>' : '') + '</li>';
     }).join('') + '</ul></section>';

@@ -2,6 +2,7 @@
 (window.RECIPES = window.RECIPES || []).push({
   id: 'sichuan-beef',
   mode: 'self',
+  meta: { category: 'main', cuisine: 'Китайская', main: 'Говядина', difficulty: 2, activeMin: 30 },
   tags: ['говядина', 'Китай', 'лапша', 'вок', 'неделя 18–22 ноября'],
   added: '2026-11-17',
   title: 'Сычуаньская говядина',

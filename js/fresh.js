@@ -110,6 +110,7 @@
       title: str(r.title, theme), tagline: str(r.tagline), icon: (typeof r.icon === 'string' && r.icon.length <= 8 && !/[a-z<]/i.test(r.icon)) ? r.icon : undefined,
       baseGuests: GEN && GEN.guests ? GEN.guests : Math.max(1, Math.min(12, (r.baseGuests | 0) || (mode === 'self' ? 2 : mode === 'romance' ? 3 : 5))),
       totalTime: str(r.totalTime, '≈ 3 ч'),
+      meta: window.KMeta ? KMeta.norm(r.meta) || undefined : undefined,
       diet: arr(r.diet).filter(function (t) { return typeof t === 'string' && t.trim(); }).map(function (t) { return t.trim().slice(0, 140); }).slice(0, 3),
       groups: arr(r.groups).map(String).filter(Boolean),
       ingredients: [], dishes: [], phases: [], tools: [], slides: []
@@ -225,6 +226,7 @@
     '  baseGuests — число порций, на которое посчитаны количества',
     '  totalTime — общее время, строка вида «≈ 1 ч 10 мин»',
     '  tags — 3–6 коротких тегов',
+    '  meta — паспорт для каталога: {category, cuisine, main, difficulty, activeMin}. category — main|soup|breakfast|dessert|snack|drink|sauce; cuisine — одно из: ' + (window.KMeta ? KMeta.CUISINES.join(', ') : '') + '; main — главный продукт, одно из: ' + (window.KMeta ? KMeta.MAINS.join(', ') : '') + '; difficulty — 1 (новичок справится) … 5 (ресторанная техника); activeMin — минут реально у плиты и доски, без ожиданий',
     '  groups — названия групп продуктов: ["Мясо", "Овощи", "Соус", …]',
     '  ingredients — [{id, g, name, amount, unit, round, buy?}]: id латиницей (beef, rice); g — индекс в groups; amount — число на baseGuests; unit — г, кг, мл, л, шт, ч.л., ст.л.; round — правило округления; buy:true — если надо докупить. Для «по вкусу» вместо amount/unit дай unitText',
     '  dishes — [{name, kcal, p, f, c}] на ОДНУ порцию',

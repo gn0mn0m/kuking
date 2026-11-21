@@ -2,6 +2,7 @@
 (window.RECIPES = window.RECIPES || []).push({
   id: 'tikka-masala',
   mode: 'self',
+  meta: { category: 'main', cuisine: 'Индийская', main: 'Курица', difficulty: 3, activeMin: 35 },
   tags: ['курица', 'Индия', 'рис', 'блендер', 'неделя 18–22 ноября'],
   added: '2026-11-17',
   title: 'Тикка масала',

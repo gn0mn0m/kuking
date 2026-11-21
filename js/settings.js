@@ -19,7 +19,7 @@
     var me = window.KukingSocial && window.KukingSocial.me && window.KukingSocial.me();
     if (u) return '<p class="set-who">Ты вошёл как <b>' + esc(u.email) + '</b>' + (me ? ', ник <b>' + esc(me.nick) + '</b>' + (me.is_admin ? ' — ты админ' : '') : '') + '. Твои оценки видят друзья.</p>' +
       '<div class="set-row"><button type="button" class="ghost-btn" data-a="out">Выйти из аккаунта</button></div>';
-    return '<p class="small">Войди, чтобы оценки и комменты были общими для всех друзей и нейросеть училась на вкусах компании.</p>' +
+    return '<p class="small">Войдите, чтобы оценки и комментарии были общими для всех друзей и нейросеть училась на вкусах компании.</p>' +
       '<form class="set-form" id="authForm" autocomplete="on">' +
       '<label class="set-f"><span>Почта</span><input id="authEmail" type="email" autocomplete="email" required inputmode="email" value="' + esc(authDraft) + '"></label>' +
       '<label class="set-f"><span>Пароль (от 6 знаков)</span><input id="authPass" type="password" autocomplete="current-password" minlength="6" required></label>' +
@@ -58,6 +58,7 @@
   var TITLES = { account: 'Аккаунт', look: 'Оформление', ai: 'Нейросеть', install: 'Установка на iPhone', about: 'О приложении' };
   /* что нового — коротко, по-человечески */
   var NEWS = [
+    ['4.3', 'У каждого рецепта паспорт: категория, кухня, главный продукт, сложность в колпаках, активное время, техника и значки диет.'],
     ['4.2', 'Тексты стали вежливее: без тюремного жаргона и мата, шутки остались.'],
     ['4.1', 'Новое имя — «Жарко»: логотип, иконка и заставка с огоньком.'],
     ['4.0', 'Новый вид «Журнал»: тёплая светлая и тёмная темы, шрифты с засечками. Кнопка «Обратная связь».'],

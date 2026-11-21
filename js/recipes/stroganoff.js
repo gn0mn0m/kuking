@@ -2,6 +2,7 @@
 (window.RECIPES = window.RECIPES || []).push({
   id: 'stroganoff',
   mode: 'self',
+  meta: { category: 'main', cuisine: 'Русская', main: 'Говядина', difficulty: 2, activeMin: 40 },
   tags: ['говядина', 'классика', 'картофель', 'грибы', 'неделя 18–22 ноября'],
   added: '2026-11-17',
   title: 'Бефстроганов с пюре',

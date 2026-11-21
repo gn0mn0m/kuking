@@ -2,6 +2,7 @@
 (window.RECIPES = window.RECIPES || []).push({
   id: 'shawarma-bowl',
   mode: 'self',
+  meta: { category: 'main', cuisine: 'Ближневосточная', main: 'Курица', difficulty: 2, activeMin: 30 },
   icon: '🍛',
   tags: ['курица', 'Ближний Восток', 'рис', 'духовка', 'неделя 18–22 ноября'],
   added: '2026-11-17',

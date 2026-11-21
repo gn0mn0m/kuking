@@ -2,6 +2,7 @@
 (window.RECIPES = window.RECIPES || []).push({
   id: 'chashushuli-pasta',
   mode: 'self',
+  meta: { category: 'main', cuisine: 'Грузинская', main: 'Говядина', difficulty: 2, activeMin: 35 },
   tags: ['говядина', 'паста', 'Грузия', 'одна сковорода'],
   added: '2026-11-11',
   title: 'Чашушули-паста',

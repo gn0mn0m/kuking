@@ -143,12 +143,12 @@
     cook: ['#ff9f0a', '<path d="M4 11h13a0 0 0 0 1 0 0 6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z"/><path d="M17 12h3"/><path d="M8 4c-1 1.5 1 2.5 0 4M12 4c-1 1.5 1 2.5 0 4"/>'],
     food: ['#30b356', '<path d="M12 7c-1.5-2-5-2-6 1-1.2 3.6 1.5 10 4 10 .8 0 1.2-.5 2-.5s1.2.5 2 .5c2.5 0 5.2-6.4 4-10-1-3-4.5-3-6-1z"/><path d="M12 7c0-2 1-3.5 3-4"/>'],
     anketa: ['#ff9f0a', '<path d="M6 4h9l3 3v13H6z"/><path d="M9 12h6M9 16h4"/>'],
-    friends: ['#30b356', '<circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M15.5 6a3 3 0 0 1 0 6M17.5 14.2c1.9.6 3 2.2 3.3 4.8"/>'],
+    friends: ['#00b5a8', '<circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M15.5 6a3 3 0 0 1 0 6M17.5 14.2c1.9.6 3 2.2 3.3 4.8"/>'],
     ai: ['#8e5cf7', '<path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z"/><path d="M18 15l.8 1.8 1.7.7-1.7.8L18 20l-.8-1.7-1.7-.8 1.7-.7z"/>'],
     look: ['#ff375f', '<path d="M12 4a8 8 0 1 0 0 16c1.2 0 1.8-.9 1.4-1.9-.5-1.2.3-2.1 1.5-2.1H17a3 3 0 0 0 3-3c0-5-3.6-9-8-9z"/><circle cx="8" cy="11" r="1.1" class="f"/><circle cx="11" cy="7.5" r="1.1" class="f"/><circle cx="15.5" cy="8.5" r="1.1" class="f"/>'],
     account: ['#8e8e93', '<circle cx="12" cy="9" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>'],
     install: ['#0a84ff', '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M12 8v6M9.5 11.5L12 14l2.5-2.5"/>'],
-    login: ['#0a84ff', '<path d="M10 17l5-5-5-5"/><path d="M15 12H4"/><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/>'],
+    login: ['#5e5ce6', '<path d="M10 17l5-5-5-5"/><path d="M15 12H4"/><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/>'],
     spark: ['#8e5cf7', '<path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z"/>'],
     dice: ['#ff9f0a', '<rect x="5" y="5" width="14" height="14" rx="3.5"/><circle cx="9.5" cy="9.5" r="1.2" class="f"/><circle cx="14.5" cy="14.5" r="1.2" class="f"/>'],
     pen: ['#30b356', '<path d="M5 19h4L19 9l-4-4L5 15z"/><path d="M13.5 6.5l4 4"/>']
@@ -781,11 +781,11 @@
   }
 
   /* редактор */
-  var draft = null;
+  var draft = null, edSnap = null;
   function blankDraft() { return { title: '', mode: 'self', totalTime: '', baseGuests: 2, ing: [{ n: '', a: '', u: 'г' }, { n: '', a: '', u: 'г' }, { n: '', a: '', u: 'г' }], tools: [''], steps: [{ t: '', m: '' }], serve: '' }; }
   var UNITS = ['г', 'кг', 'мл', 'л', 'шт', 'ч.л.', 'ст.л.', 'зубч.', 'пучок', 'щепотка', 'по вкусу'];
   function editHTML() {
-    var d = draft;
+    var d = draft; if (!edSnap) edSnap = JSON.stringify(d);
     var h = '<header class="tg-head tg-head-sub"><button type="button" class="tg-back" data-a="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><span class="tg-head-t">' + (d.id ? 'Правка' : 'Свой рецепт') + '</span></header>';
     h += '<form id="libEd" class="tg-ed" novalidate>';
     h += '<section class="tg-sec"><label class="set-f"><span>Название</span><input name="title" maxlength="60" value="' + esc(d.title) + '" placeholder="Паста как у бабушки" required></label>' +
@@ -838,7 +838,7 @@
     };
     try {
       var r = window.Fresh.manual(freshCtx, loose, d.id);
-      draft = null; detailId = r.id; go('detail', r.id);
+      draft = null; edSnap = null; detailId = r.id; go('detail', r.id);
     } catch (e) { ov.querySelector('#edMsg').textContent = 'Не собралось: ' + (e && e.message); }
   }
 
@@ -967,8 +967,8 @@
     var strip = ov.querySelector('.pl-strip'); if (strip && !strip.dataset.c) { strip.dataset.c = 1; var t0 = strip.querySelector('.pl-day.today'); if (t0) strip.scrollLeft = t0.offsetLeft - 16; }
     on('[data-pf]', function (b) {
       var a = b.getAttribute('data-pf'), St = window.KukingSettings, Soc = SOC();
-      if (a === 'login' || a === 'account') St && St.open('account');
-      if (a === 'ai' || a === 'look' || a === 'install') St && St.open(a);
+      if (a === 'login') St && St.open('account');
+      if (a === 'account' || a === 'ai' || a === 'look' || a === 'install') St && St.open(a, { page: true });
       if (a === 'friends') { if (Soc.openFriends) Soc.openFriends(); else Soc.open(); }
       if (a === 'anketa' && Soc.openAnketa) Soc.openAnketa('me');
       if (a === 'cook' && Soc.openAnketa) Soc.openAnketa('cook');
@@ -977,7 +977,11 @@
     on('.lib-fresh', function () { window.Fresh.spin(freshCtx); });
     on('[data-open]', openTap);
     gestures();
-    on('[data-a=back]', function () { if (view === 'edit' && draft && draft.id) go('detail', draft.id, true); else go('list', undefined, true); });
+    on('[data-a=back]', function () {
+      function leave() { if (view === 'edit' && draft && draft.id) go('detail', draft.id, true); else go('list', undefined, true); }
+      if (view === 'edit' && draft) { readDraft(); var cur = JSON.stringify(draft); if (edSnap && cur !== edSnap) { window.kAskLeave({ text: 'В рецепте есть несохранённые правки.', save: saveDraft, drop: function () { draft = null; edSnap = null; leave(); } }); return; } }
+      edSnap = null; leave();
+    });
     on('[data-a=create]', function () { go('create'); });
     on('[data-a=login]', function () { if (window.KukingSettings) window.KukingSettings.open('account'); });
     on('[data-a=setup]', function () { if (window.KukingSettings) window.KukingSettings.open('ai'); });
@@ -1265,8 +1269,10 @@
   bar.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]'); if (!b) return;
     var t = b.getAttribute('data-tab'), Soc = SOC();
+    var Stg0 = window.KukingSettings; if (t !== 'profile' && Stg0 && Stg0.isOpen && Stg0.isOpen() && Stg0.close(function () { b.click(); }) === false) return;
     if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) { var fi = ['list', 'plan', 'chats', 'profile'].indexOf(SUB[view] ? TAB : view); if (Soc.openTab) Soc.openTab(fi > 2 ? 'l' : 'r'); else Soc.open(); } else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
-    if (Soc.isOpen && Soc.isOpen()) Soc.close();
+    var Stg = window.KukingSettings; if (Stg && Stg.isOpen && Stg.isOpen() && Stg.close(function () { b.click(); }) === false) return;
+    if (Soc.isOpen && Soc.isOpen() && Soc.close(function () { b.click(); }) === false) return;
     if (t === view) { ov.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     var ORD = ['list', 'plan', 'chats', 'profile'], from = ORD.indexOf(SUB[view] ? TAB : view);
     TAB = t; dir = from < 0 || from === ORD.indexOf(t) ? 'tab' : from < ORD.indexOf(t) ? 'tab-r' : 'tab-l'; view = t; stagger = t === 'list' || t === 'plan'; render(); ov.scrollTop = 0;

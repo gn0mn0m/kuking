@@ -18,7 +18,7 @@
     var u = S.user();
     var me = window.KukingSocial && window.KukingSocial.me && window.KukingSocial.me();
     if (u) return '<p class="set-who">Ты вошёл как <b>' + esc(u.email) + '</b>' + (me ? ', ник <b>' + esc(me.nick) + '</b>' + (me.is_admin ? ' — ты админ' : '') : '') + '. Твои оценки видят друзья.</p>' +
-      '<div class="set-row">' + (window.KukingSocial && window.KukingSocial.enabled ? '<button type="button" class="nav-btn primary" data-a="friends">Друзья</button>' : '') + '<button type="button" class="ghost-btn" data-a="out">Выйти</button></div>';
+      '<div class="set-row"><button type="button" class="ghost-btn" data-a="out">Выйти из аккаунта</button></div>';
     return '<p class="small">Войди, чтобы оценки и комменты были общими для всей хаты и нейросеть училась на вкусах компании.</p>' +
       '<form class="set-form" id="authForm" autocomplete="on">' +
       '<label class="set-f"><span>Почта</span><input id="authEmail" type="email" autocomplete="email" required inputmode="email" value="' + esc(authDraft) + '"></label>' +
@@ -51,24 +51,29 @@
     if (standalone()) return '<p class="small">Приложение уже стоит на экране «Домой». Обновления подтягиваются сами при запуске с интернетом.</p>';
     return '<ol class="set-steps"><li>Открой эту страницу в <b>Safari</b>.</li><li>Нажми <b>Поделиться</b> — квадрат со стрелкой вверх.</li><li>Выбери <b>«На экран „Домой“»</b> → «Добавить».</li><li>Запускай «Кукинг» с иконки — на весь экран и без интернета.</li></ol>';
   }
+  /* каждая строка профиля открывает ровно свой раздел — без вкладок «Вид / Аккаунт / …» вперемешку */
+  var TITLES = { account: 'Аккаунт', look: 'Цвет приложения', ai: 'Нейросеть', install: 'Установка на iPhone' };
+  var page = false;
+  var CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
   function render() {
-    el.innerHTML = '<div class="set-panel"><span class="set-grab" aria-hidden="true"></span><div class="set-head"><h2 id="setTitle" class="set-title">Настройки</h2>' +
-      '<button type="button" class="ghost-btn" data-a="close">Готово</button></div>' +
-      '<div class="set-tabs" role="tablist">' + [['account', 'Аккаунт'], ['look', 'Вид'], ['ai', 'Нейросеть'], ['install', 'Установка']].map(function (t) {
-        return '<button type="button" role="tab" class="set-tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + '</button>';
-      }).join('') + '</div>' +
-      '<section class="set-body">' + (tab === 'account' ? accountHTML() : tab === 'look' ? lookHTML() : tab === 'ai' ? aiHTML() : installHTML()) + '</section>' +
-      '<p class="set-ver">Кукинг ' + esc(VERSION) + '</p></div>';
-    bind();
+    var body = tab === 'account' ? accountHTML() : tab === 'look' ? lookHTML() : tab === 'ai' ? aiHTML() : installHTML();
+    el.classList.toggle('page', page);
+    el.innerHTML = page
+      ? '<div class="set-panel"><header class="tg-head tg-head-sub"><button type="button" class="tg-back" data-a="close">' + CHEV + 'Профиль</button><span class="tg-head-t" id="setTitle">' + TITLES[tab] + '</span></header><section class="set-body">' + body + '</section></div>'
+      : '<div class="set-panel"><span class="set-grab" aria-hidden="true"></span><div class="set-head"><h2 id="setTitle" class="set-title">' + TITLES[tab] + '</h2>' +
+        '<button type="button" class="ghost-btn" data-a="close">Готово</button></div><section class="set-body">' + body + '</section></div>';
+    bind(); snap = aiState();
   }
+  /* правки нейросети, которые ещё не сохранены */
+  var snap = '';
+  function aiState() { var f = el.querySelector('#aiForm'); if (!f) return ''; return ['#aiProv', '#aiBase', '#aiKey', '#aiModel'].map(function (k) { var x = el.querySelector(k); return x ? x.value.trim() : ''; }).join('\u0001'); }
+  function dirty() { return !el.hidden && !!el.querySelector('#aiForm') && aiState() !== snap; }
   function bind() {
-    el.querySelectorAll('.set-tab').forEach(function (b) { b.addEventListener('click', function () { tab = b.getAttribute('data-tab'); render(); }); });
     el.querySelectorAll('[data-a]').forEach(function (b) {
       b.addEventListener('click', function () {
         var a = b.getAttribute('data-a');
-        if (a === 'close') close();
+        if (a === 'close') { if (el.classList.contains('page')) { el.style.transform = ''; } close(); }
         if (a === 'out') { S.signOut(); location.reload(); }
-        if (a === 'friends') { close(); window.KukingSocial.open(); }
         if (a === 'aiclear') { AI.clear(); msg.ai = 'Ключ удалён с телефона'; msg.aiOk = true; render(); }
       });
     });
@@ -124,25 +129,49 @@
         AI.set({ provider: prov.value, base: el.querySelector('#aiBase').value.trim(), key: el.querySelector('#aiKey').value.trim(), model: el.querySelector('#aiModel').value.trim() });
         if (!AI.ready()) { msg.ai = (AI.presets[prov.value] || {}).kind === 'server' ? 'Сначала войди в аккаунт' : 'Заполни ключ и модель' + (prov.value === 'custom' ? ' и адрес' : ''); msg.aiOk = false; render(); return; }
         msg.ai = 'Проверяю…'; msg.aiOk = false; render();
-        AI.test().then(function () { msg.ai = 'Нейросеть на связи. Можно крутить свежак.'; msg.aiOk = true; render(); })
+        AI.test().then(function () { msg.ai = 'Нейросеть на связи. Можно крутить свежак.'; msg.aiOk = true; render(); if (window.kHaptic) window.kHaptic(10); })
           .catch(function (er) { msg.ai = (window.KukingAIMsg ? window.KukingAIMsg(er) : 'Не вышло') + (er && er.message && er.code !== 'not_granted' ? ' — ' + er.message : ''); msg.aiOk = false; render(); });
       });
     }
   }
   var last = null;
-  function open(t) { last = document.activeElement; if (t) tab = t; render(); el.hidden = false; requestAnimationFrame(function () { el.classList.add('on'); }); var b = el.querySelector('.set-tab[aria-selected=true]'); if (b) b.focus(); }
-  function close() { el.classList.remove('on'); setTimeout(function () { el.hidden = true; }, 260); try { localStorage.setItem('kuking:welcomed', '1'); } catch (e) {} if (last && last.focus) last.focus(); }
-  el.addEventListener('click', function (e) { if (e.target === el) close(); });
+  function open(t, opt) {
+    clearTimeout(hideT); last = document.activeElement; if (t) tab = t; page = !!(opt && opt.page); msg.ai = ''; render(); el.hidden = false;
+    requestAnimationFrame(function () { el.classList.add('on'); }); el.scrollTop = 0;
+  }
+  var hideT = null;
+  function shut() { el.classList.remove('on'); clearTimeout(hideT); hideT = setTimeout(function () { el.hidden = true; el.classList.remove('page'); el.style.transform = ''; el.style.transition = ''; }, page ? 340 : 260); try { localStorage.setItem('kuking:welcomed', '1'); } catch (e) {} if (last && last.focus) last.focus(); }
+  /* выход: есть несохранённые правки — спросить. Вернёт false, если выход отложен */
+  function close(then) {
+    if (dirty()) {
+      window.kAskLeave({ text: 'Ты поменял настройки нейросети и не нажал «Сохранить».',
+        save: function () { var f = el.querySelector('#aiForm'); if (f) { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true })); } snap = aiState(); shut(); if (typeof then === 'function') then(); },
+        drop: function () { snap = aiState(); shut(); if (typeof then === 'function') then(); } });
+      return false;
+    }
+    shut(); return true;
+  }
+  el.addEventListener('click', function (e) { if (e.target === el && !page) close(); });
+  /* страница: смах вправо — назад, экран идёт за пальцем */
+  (function () {
+    var sx = null, sy = 0, dx = 0, t0 = 0, on = false;
+    el.addEventListener('touchstart', function (e) { if (!page || e.target.closest('input, select, textarea')) { sx = null; return; } var t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; on = false; t0 = Date.now(); }, { passive: true });
+    el.addEventListener('touchmove', function (e) { if (sx == null) return; var t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy;
+      if (!on) { if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { sx = null; return; } if (mx > 14 && mx > Math.abs(my) * 1.6) on = true; else return; }
+      dx = Math.max(0, mx); el.style.transition = 'none'; el.style.transform = 'translateX(' + dx + 'px)'; }, { passive: true });
+    el.addEventListener('touchend', function () { if (sx == null || !on) { sx = null; return; } sx = null; on = false; el.style.transition = '';
+      if (dx > el.clientWidth * 0.3 || (dx > 60 && Date.now() - t0 < 260)) { if (window.kHaptic) window.kHaptic(6); el.style.transform = ''; if (close() === false) el.style.transform = ''; } else el.style.transform = ''; });
+  })();
   /* смахнуть шторку вниз */
   (function () {
     var y0 = null, dy = 0, panel = null;
-    el.addEventListener('touchstart', function (e) { panel = el.querySelector('.set-panel'); if (!panel || panel.scrollTop > 0) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
+    el.addEventListener('touchstart', function (e) { if (page) { y0 = null; return; } panel = el.querySelector('.set-panel'); if (!panel || panel.scrollTop > 0) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
     el.addEventListener('touchmove', function (e) { if (y0 == null) return; dy = Math.max(0, e.touches[0].clientY - y0); if (dy > 4) { panel.style.transition = 'none'; panel.style.transform = 'translateY(' + dy + 'px)'; } }, { passive: true });
     el.addEventListener('touchend', function () { if (y0 == null || !panel) return; panel.style.transition = ''; if (dy > 110) { panel.style.transform = 'translateY(100%)'; close(); setTimeout(function () { panel.style.transform = ''; }, 320); } else panel.style.transform = ''; y0 = null; });
   })();
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !el.hidden) close(); });
 
-  window.KukingSettings = { open: open, close: close };
+  window.KukingSettings = { open: open, close: close, isOpen: function () { return !el.hidden && el.classList.contains('on'); } };
 
   /* первый запуск: предложить вход, один раз */
   var welcomed = false; try { welcomed = localStorage.getItem('kuking:welcomed') === '1'; } catch (e) {}

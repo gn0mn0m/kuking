@@ -128,6 +128,7 @@
     wrap = ov.querySelector('.soc-wrap');
     if (!ov.hidden && wasDeep !== deep) { void wrap.offsetWidth; wrap.classList.toggle('deep', deep); }
     bind();
+    if (view === 'nick' && anqSnap == null && ov.querySelector('#socNick')) anqSnap = anqState();
     ov.querySelectorAll('.soc-page').forEach(function (pg) { pg.addEventListener('scroll', function () { if (pg.classList.contains('cur')) ov.classList.toggle('scrolled', pg.scrollTop > 40); }, { passive: true }); });
     pages = ov.querySelectorAll('.soc-page'); pages[0].scrollTop = pos[0]; pages[1].scrollTop = wasDeep === deep ? pos[1] : 0;
     if (keep) { var el = ov.querySelector('#' + keep); if (el) { el.focus(); if (el.setSelectionRange && el.value) el.setSelectionRange(el.value.length, el.value.length); } }
@@ -501,7 +502,7 @@
 
     if (a === 'login') { close(); if (window.KukingSettings) window.KukingSettings.open('account'); return; }
     if (a === 'nick') { anketaFrom = 'friends'; view = 'nick'; nickMsg = ''; render(); return; }
-    if (a === 'nickx') { fd = null; saveFd(); nickMsg = ''; if (anketaFrom === 'profile') { close(); return; } view = 'list'; render(); return; }
+    if (a === 'nickx') { leaveAnketa(); return; }
     if (a === 'avdel') { fd = fd || {}; fd.avatar = ''; saveFd(); var pv = ov.querySelector('#socAvPrev'); pv.classList.add('swap'); setTimeout(function () { pv.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>'; pv.classList.remove('swap'); }, 180); b.remove(); var mm = ov.querySelector('#socAvMsg'); mm.textContent = 'Фото уберу после «Сохранить»'; mm.className = 'soc-nick-hint'; return; }
     if (a === 'profile') { viewing = id; view = 'profile'; render(); ov.querySelectorAll('.soc-page')[1].scrollTop = 0; return; }
     if (a === 'invite') return invite();
@@ -570,7 +571,7 @@
     }
     if (nf) nf.addEventListener('submit', function (e) {
       e.preventDefault(); if (busy) return;
-      if (me && anqSect === 'body' && anketaFrom === 'profile') { if (window.kHaptic) window.kHaptic(10); emit(); close(); return; } // тело хранится в телефоне сразу
+      if (me && anqSect === 'body' && anketaFrom === 'profile') { anqSnap = null; if (window.kHaptic) window.kHaptic(10); toast('Сохранено'); emit(); close(); return; } // тело хранится в телефоне сразу
       var v = function (id) { return ov.querySelector(id).value.trim(); };
       var nick = v('#socNickIn'), first = !me;
       var bdIso = ruToIso(v('#socBday'));
@@ -579,7 +580,7 @@
       try { localStorage.setItem('kuking:skill', String(data.skill)); } catch (e) {}
       if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { setNickMsg('Ник: 3–20 символов, буквы, цифры, _', 'bad'); return; }
       if (nickState === 'taken') { setNickMsg('Ник занят — придумай другой', 'bad'); return; }
-      busy = true; setNickMsg(''); var sv = ov.querySelector('#socSave'); if (sv) { sv.classList.add('busy'); sv.disabled = true; }
+      busy = true; anqSnap = null; setNickMsg(''); var sv = ov.querySelector('#socSave'); if (sv) { sv.classList.add('busy'); sv.disabled = true; }
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       var step = me ? (me.nick === nick ? Promise.resolve() : S.req('PATCH', 'profiles?id=eq.' + q(uid()), { nick: nick }))
         : S.req('POST', 'profiles', { id: uid(), nick: nick }).then(function () { return S.rpc('claim_admin'); });
@@ -646,17 +647,34 @@
   }
 
   var last = null;
+  var hideT = null;
   function open(personId) {
+    clearTimeout(hideT);
     last = document.activeElement;
     if (personId === '#anketa') { view = 'nick'; page2 = 'nick'; personId = null; } else { view = personId ? 'profile' : 'list'; viewing = personId || viewing; if (personId) page2 = 'profile'; }
     found = null; msg = ''; lastHTML = '';
     render(); ov.hidden = false; requestAnimationFrame(function () { ov.classList.add('on'); (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} }); });
     refresh(); clearInterval(timer); timer = setInterval(function () { if (!document.hidden) refresh(); }, 20000);
   }
-  function close() {
+  /* несохранённые правки анкеты: снимок полей при открытии, сравнение при выходе */
+  var anqSnap = null, bodySnap = null;
+  function anqState() {
+    var f = ov.querySelector('#socNick'); if (!f) return null;
+    return [].map.call(f.querySelectorAll('input:not([type=file])'), function (i) { return i.value.trim(); }).join('\u0001') + '|' + (fd && fd.avatar != null ? String(fd.avatar).length : '') + '|' + JSON.stringify(window.KBody ? window.KBody.get() : {});
+  }
+  function anqDirty() { return view === 'nick' && anqSnap != null && anqState() !== anqSnap; }
+  function anqDrop() { fd = null; saveFd(); nickMsg = ''; anqSnap = null; try { if (bodySnap && window.KBody) window.KBody.set(JSON.parse(bodySnap)); } catch (e) {} }
+  function anqSubmit() { var f = ov.querySelector('#socNick'); if (f) { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true })); } }
+  function askLeave(go) { window.kAskLeave({ save: anqSubmit, drop: function () { anqDrop(); go(); } }); }
+  function leaveAnketa() {
+    if (anqDirty()) { askLeave(leaveAnketa); return false; }
+    anqDrop(); if (anketaFrom === 'profile') { close(); return true; } view = 'list'; render(); return true;
+  }
+  function close(then) {
+    if (anqDirty()) { askLeave(function () { close(); if (typeof then === 'function') then(); }); return false; }
     ov.classList.remove('on'); clearInterval(timer);
     searchQ = ''; found = null; chatQ = '';
-    setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; openFrom = 'chats'; ov.style.transform = ''; ov.style.transition = ''; ov.classList.remove('as-tab', 'from-l', 'scrolled'); }, ov.classList.contains('as-tab') ? 220 : 360);
+    clearTimeout(hideT); hideT = setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; openFrom = 'chats'; ov.style.transform = ''; ov.style.transition = ''; ov.classList.remove('as-tab', 'from-l', 'scrolled'); }, ov.classList.contains('as-tab') ? 220 : 360);
     if (last && last.focus) last.focus();
     (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} });
   }
@@ -696,7 +714,7 @@
   setTimeout(function () { if (window.KPull) window.KPull(ov, function (done) { lastHTML = ''; refresh().then(done, done); }, function () { var c = ov.querySelector('.soc-page.cur'); return c ? c.scrollTop : 0; }); }, 0);
   API.isOpen = function () { return !ov.hidden && ov.classList.contains('on'); };
   API.onClose = function (f) { closeSubs.push(f); };
-  API.openAnketa = function (sect) { anketaFrom = 'profile'; anqSect = SECT[sect] ? sect : 'me'; nickMsg = ''; lastHTML = ''; ov.classList.remove('as-tab', 'from-l'); open('#anketa'); };
+  API.openAnketa = function (sect) { anketaFrom = 'profile'; anqSect = SECT[sect] ? sect : 'me'; nickMsg = ''; fd = null; saveFd(); anqSnap = null; try { bodySnap = JSON.stringify(window.KBody ? window.KBody.get() : {}); } catch (e) { bodySnap = null; } lastHTML = ''; ov.classList.remove('as-tab', 'from-l'); open('#anketa'); };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) { if (view === 'profile' || (view === 'nick' && anketaFrom === 'friends')) { view = 'list'; render(); } else close(); } });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
   API.enabled = true;

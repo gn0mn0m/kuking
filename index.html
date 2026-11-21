@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#140a0d">
 <script src="js/haptic.js"></script>
 <script src="js/fun.js"></script>
+<script src="js/ask.js"></script>
 <script src="js/plate.js"></script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1645,6 +1646,21 @@ input, select, textarea { font-size: max(16px, 1em); }
 .anq-h { margin: 0; }
 @media (hover: hover) { .soc-list.tgl button.soc-who:hover { background: color-mix(in srgb, var(--fg) 5%, var(--surface)); } }
 @media (prefers-reduced-motion: reduce) { .soc-ov.as-tab, .soc-ov.as-tab.from-l { transform: none; transition: opacity .2s; } }
+/* 3.13 — вопрос перед выходом, настройки как отдельные страницы, уникальные цвета */
+.lv-ov { position: fixed; inset: 0; z-index: 120; display: grid; place-items: end center; padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 12px); background: color-mix(in srgb, #000 45%, transparent); opacity: 0; transition: opacity .2s var(--ease-out); }
+.lv-ov.on { opacity: 1; }
+.lv-box { width: min(440px, 100%); background: var(--bg); border: 1px solid var(--line); border-radius: 22px; padding: 18px 16px 12px; box-shadow: 0 24px 60px -20px var(--shadow); transform: translateY(24px); transition: transform .28s var(--ease-drawer, cubic-bezier(.22,1,.36,1)); }
+.lv-ov.on .lv-box { transform: none; }
+.lv-box .small { margin: 0 0 4px; }
+.lv-drop { color: var(--alarm); }
+.set-ov.page { z-index: 56; display: block; background: radial-gradient(700px 380px at 90% -10%, color-mix(in srgb, var(--orange) 7%, transparent), transparent 65%), var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; opacity: 1; transform: translateX(100%); transition: transform .34s var(--ease-drawer, cubic-bezier(.22,1,.36,1)); overflow-y: auto; padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(var(--tabs-h, 84px) + 40px) max(16px, env(safe-area-inset-left, 0px)); }
+.set-ov.page.on { transform: none; }
+.set-ov.page .set-panel { width: auto; max-height: none; overflow: visible; background: none; border: 0; border-radius: 0; padding: 0; box-shadow: none; transform: none; margin: 0 auto; max-width: 640px; }
+.set-ov.page .set-body { background: var(--surface); border-radius: 18px; padding: 16px; margin-top: 4px; }
+.set-ov.page .tg-head { margin-bottom: 14px; }
+.set-ov.page .tg-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+body:has(.set-ov.page:not([hidden])) .tg-tabs.on { transform: none; opacity: 1; visibility: visible; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .set-ov.page { transition: opacity .2s; transform: none; opacity: 0; } .set-ov.page.on { opacity: 1; } .lv-box { transition: none; } }
 </style>
 
 <div id="app">

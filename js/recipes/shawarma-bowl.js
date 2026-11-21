@@ -2,6 +2,7 @@
 (window.RECIPES = window.RECIPES || []).push({
   id: 'shawarma-bowl',
   mode: 'self',
+  icon: '🍛',
   tags: ['курица', 'Ближний Восток', 'рис', 'духовка', 'неделя 18–22 ноября'],
   added: '2026-11-17',
   title: 'Шаурма-боул',

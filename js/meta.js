@@ -147,7 +147,11 @@
       (m.activeMin ? '<div class="mt-cell"><span class="mt-k">Активно</span><b class="mt-big">≈ ' + m.activeMin + ' мин</b><span class="mt-v">у плиты и доски</span></div>' : '') +
       '</div>';
     if (m.diets.length) h += '<div class="mt-row">' + m.diets.map(function (d) { return '<span class="mt-diet d-' + d + '">' + DIETS[d] + '</span>'; }).join('') + '</div>';
-    if (m.equipment.length) h += '<p class="mt-eq"><span class="mt-k">Техника</span> ' + esc(m.equipment.join(' · ')) + '</p>';
+    if (m.equipment.length) {
+      var miss = window.KPrefs ? m.equipment.filter(function (e) { return !KPrefs.has(e); }) : [];
+      h += '<p class="mt-eq"><span class="mt-k">Техника</span> ' + m.equipment.map(function (e) { return miss.indexOf(e) >= 0 ? '<s class="mt-no">' + esc(e) + '</s>' : esc(e); }).join(' · ') + '</p>';
+      if (miss.length) h += '<p class="small mt-miss">У тебя нет: ' + esc(miss.join(', ').toLowerCase()) + '. Скоро тут будет кнопка «Переделать под мою технику».</p>';
+    }
     return h + '</div>';
   }
 

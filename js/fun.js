@@ -91,7 +91,7 @@
   var GOAL = { cut: { k: 0.85, p: 2.0, name: 'сушка' }, keep: { k: 1, p: 1.6, name: 'держать форму' }, bulk: { k: 1.1, p: 1.8, name: 'набор массы' } };
   function age() {
     var S = window.KukingSocial, me = S && S.me && S.me(), i = me && S.info ? S.info(me.id) : null, bd = i && i.bday;
-    if (!bd) return 30;
+    if (!bd) { var ga = +get().age; return ga > 12 && ga < 100 ? ga : 30; }
     var d = new Date(bd), n = new Date(), a = n.getFullYear() - d.getFullYear();
     if (n < new Date(n.getFullYear(), d.getMonth(), d.getDate())) a--;
     return a > 12 && a < 100 ? a : 30;

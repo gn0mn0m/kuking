@@ -55,9 +55,10 @@
     return '<ol class="set-steps"><li>Открой эту страницу в <b>Safari</b>.</li><li>Нажми <b>Поделиться</b> — квадрат со стрелкой вверх.</li><li>Выбери <b>«На экран „Домой“»</b> → «Добавить».</li><li>Запускай «Жарко» с иконки — на весь экран и без интернета.</li></ol>';
   }
   /* каждая строка профиля открывает ровно свой раздел — без вкладок «Вид / Аккаунт / …» вперемешку */
-  var TITLES = { account: 'Аккаунт', look: 'Оформление', ai: 'Нейросеть', install: 'Установка на iPhone', about: 'О приложении' };
+  var TITLES = { prefs: 'Предпочтения', kitchen: 'Моя техника', notif: 'Уведомления', account: 'Аккаунт', look: 'Оформление', ai: 'Нейросеть', install: 'Установка на iPhone', about: 'О приложении' };
   /* что нового — коротко, по-человечески */
   var NEWS = [
+    ['4.4', 'Знакомство при первом запуске: цель, тело, аллергии, вкусы, техника картинками, уведомления. В профиле — «Предпочтения», «Моя техника» и «Уведомления» по типам.'],
     ['4.3', 'У каждого рецепта паспорт: категория, кухня, главный продукт, сложность в колпаках, активное время, техника и значки диет.'],
     ['4.2', 'Тексты стали вежливее: без тюремного жаргона и мата, шутки остались.'],
     ['4.1', 'Новое имя — «Жарко»: логотип, иконка и заставка с огоньком.'],
@@ -76,7 +77,7 @@
   var page = false;
   var CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
   function render() {
-    var body = tab === 'account' ? accountHTML() : tab === 'look' ? lookHTML() : tab === 'ai' ? aiHTML() : tab === 'about' ? aboutHTML() : installHTML();
+    var body = (tab === 'prefs' || tab === 'kitchen' || tab === 'notif') && window.KPrefs ? KPrefs.pageHTML(tab) : tab === 'account' ? accountHTML() : tab === 'look' ? lookHTML() : tab === 'ai' ? aiHTML() : tab === 'about' ? aboutHTML() : installHTML();
     el.classList.toggle('page', page);
     el.innerHTML = page
       ? '<div class="set-panel"><header class="tg-head tg-head-sub"><button type="button" class="tg-back" data-a="close">' + CHEV + 'Профиль</button><span class="tg-head-t" id="setTitle">' + TITLES[tab] + '</span></header><section class="set-body">' + body + '</section></div>'
@@ -182,6 +183,7 @@
     shut(); return true;
   }
   el.addEventListener('click', function (e) { if (e.target === el && !page) close(); });
+  if (window.KPrefs) KPrefs.bind(el);
   /* страница: смах вправо — назад, экран идёт за пальцем */
   (function () {
     var sx = null, sy = 0, dx = 0, t0 = 0, on = false;

@@ -54,7 +54,7 @@
   API.info = function (id) { return info[id]; };
   API.badge = function () { return links.filter(function (l) { return l.status === 'pending' && l.b === uid(); }).length; };
   API.reviewsOf = function (userId) { return reviewsBy[userId] || {}; };
-  /* все оценки и комменты хаты — для нейросети: кто, сколько, что сказал, что ответили */
+  /* все оценки и комментарии друзей — для нейросети: кто, сколько, что сказал, что ответили */
   API.feedback = function () {
     var out = [];
     Object.keys(reviewsBy).forEach(function (u) { var rv = reviewsBy[u] || {}, p = people[u] || {}, nm = (info[u] && info[u].name) || p.nick || 'кто-то';
@@ -440,7 +440,7 @@
     if (pi.bday || pi.likes || pi.avoid || pi.allergy) h += '<dl class="soc-facts">' +
       (pi.bday ? '<div' + (bdayToday(pi.bday) ? ' class="today"' : '') + '><dt>Днюха</dt><dd>' + (bdayToday(pi.bday) ? 'Сегодня' : esc(bdayText(pi.bday))) + '</dd></div>' : '') +
       (pi.likes ? '<div><dt>Любит</dt><dd>' + esc(pi.likes) + '</dd></div>' : '') +
-      (pi.avoid ? '<div><dt>Не жрёт</dt><dd>' + esc(pi.avoid) + '</dd></div>' : '') + (pi.allergy ? '<div><dt>Аллергия</dt><dd>' + esc(pi.allergy) + '</dd></div>' : '') + '</dl>';
+      (pi.avoid ? '<div><dt>Не ест</dt><dd>' + esc(pi.avoid) + '</dd></div>' : '') + (pi.allergy ? '<div><dt>Аллергия</dt><dd>' + esc(pi.allergy) + '</dd></div>' : '') + '</dl>';
     if (!ids.length) h += '<p class="small soc-pad">Ещё ничего не оценил. Пни его — пусть пожрёт и отпишется.</p>';
     h += '<div class="soc-revs">' + ids.map(function (rid) {
       var d = rv[rid], my = mine[rid] && mine[rid].score, have = hasRecipe(rid);

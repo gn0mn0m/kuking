@@ -153,6 +153,10 @@
     login: ['#5e5ce6', '<path d="M10 17l5-5-5-5"/><path d="M15 12H4"/><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/>'],
     spark: ['#8e5cf7', '<path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z"/>'],
     dice: ['#ff9f0a', '<rect x="5" y="5" width="14" height="14" rx="3.5"/><circle cx="9.5" cy="9.5" r="1.2" class="f"/><circle cx="14.5" cy="14.5" r="1.2" class="f"/>'],
+    prefs: ['#9c1c3b', '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/>'],
+    kitchen: ['#495057', '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16"/><rect x="8" y="13" width="8" height="4" rx="1"/><circle cx="8" cy="7.5" r=".8" class="f"/><circle cx="11" cy="7.5" r=".8" class="f"/>'],
+    notif: ['#f03e3e', '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>'],
+    quiz: ['#e8590c', '<path d="M12 3c1.4 3 5 5 5 9.5a5 5 0 0 1-10 0c0-2.2 1.3-3.6 2.2-4.4 0 1.8.9 2.7 1.8 2.7-.4-2.7.9-5.3 1-7.8z"/>'],
     feedback: ['#e0a800', '<path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l9-7"/>'],
     about: ['#a0826d', '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1" class="f"/>'],
     pen: ['#30b356', '<path d="M5 19h4L19 9l-4-4L5 15z"/><path d="M13.5 6.5l4 4"/>']
@@ -311,6 +315,7 @@
         if (n < 2) list.push({ key: 'week:' + sun, day: sun, time: '18:00', kind: 'week', title: '', sub: '' }); }
       // давно не заходил — через 3 дня в время готовки (каждый вход отодвигает)
       list.push({ key: 'nudge', day: addDays(td, 3), time: hm(c.cook), kind: 'nudge', title: '', sub: '' });
+      if (window.KPrefs) list = list.filter(function (x) { return KPrefs.notifOn(x.kind); });
       // тихие часы 9–22 и не больше 3 в день: лишнее сливаем в одно
       var byDay = {};
       list.forEach(function (x) { var hh = +x.time.split(':')[0]; if (hh < 9) x.time = '09:00'; if (hh >= 22) x.time = '21:30'; (byDay[x.day] = byDay[x.day] || []).push(x); });
@@ -716,10 +721,16 @@
       var goal = { cut: 'сушка', keep: 'держу форму', bulk: 'масса' }[bg.goal] || '';
       h += '<div class="pf-group">' + pfRow('cook', 'cook', 'Готовка', sk ? ['ур. ' + sk + '/10', { r1: '1–2 р/нед', r3: '3–4 р/нед', r5: '5–6 р/нед', r7: 'каждый день' }[bg.freq]].filter(Boolean).join(' · ') : 'настрой') +
         pfRow('food', 'food', 'Питание', tg ? [goal, tg.day.kcal + ' ккал'].filter(Boolean).join(' · ') : 'не заполнено') + '</div>';
+    }
+    if (window.KPrefs) { var kp = KPrefs.get();
+      h += '<div class="pf-group">' + pfRow('prefs', 'prefs', 'Предпочтения', [KPrefs.SPICE[kp.spice].toLowerCase(), kp.cuisines.length ? kp.cuisines.length + ' кухн.' : ''].filter(Boolean).join(' · ')) +
+        pfRow('kitchen', 'kitchen', 'Моя техника', kp.equip ? kp.equip.length + ' отмечено' : 'не отмечена') + pfRow('notif', 'notif', 'Уведомления') + '</div>';
+    }
+    if (u) {
       if (Soc.enabled) h += '<div class="pf-group">' + pfRow('friends', 'friends', 'Друзья', n ? '<em class="pf-badge">' + n + '</em>' : '') + '</div>';
     } else h += '<div class="pf-group">' + pfRow('login', 'login', 'Войти или зарегистрироваться') + '</div>';
     h += '<div class="pf-group">' + pfRow('ai', 'ai', 'Нейросеть', window.KukingAI && window.KukingAI.ready() ? 'подключена' : 'не подключена') +
-      pfRow('look', 'look', 'Оформление') + pfRow('account', 'account', 'Аккаунт') + pfRow('install', 'install', 'Установка на iPhone') + '</div>' +
+      pfRow('look', 'look', 'Оформление') + pfRow('account', 'account', 'Аккаунт') + pfRow('install', 'install', 'Установка на iPhone') + pfRow('quiz', 'quiz', 'Знакомство заново') + '</div>' +
       '<div class="pf-group">' + pfRow('feedback', 'feedback', 'Обратная связь', 'Telegram') + pfRow('about', 'about', 'О приложении', esc((window.KUKING_CONFIG || {}).version || '')) + '</div>';
 
     return h;
@@ -1023,7 +1034,8 @@
     on('[data-pf]', function (b) {
       var a = b.getAttribute('data-pf'), St = window.KukingSettings, Soc = SOC();
       if (a === 'login') St && St.open('account');
-      if (a === 'account' || a === 'ai' || a === 'look' || a === 'install' || a === 'about') St && St.open(a, { page: true });
+      if (a === 'account' || a === 'ai' || a === 'look' || a === 'install' || a === 'about' || a === 'prefs' || a === 'kitchen' || a === 'notif') St && St.open(a, { page: true });
+      if (a === 'quiz' && window.KPrefs) KPrefs.openQuiz();
       if (a === 'feedback') { var tg = 'https://t.me/gn0mn0mn0m'; try { window.open(tg, '_blank', 'noopener'); } catch (e) { location.href = tg; } }
       if (a === 'friends') { if (Soc.openFriends) Soc.openFriends(); else Soc.open(); }
       if (a === 'anketa' && Soc.openAnketa) Soc.openAnketa('me');
@@ -1315,8 +1327,11 @@
       ov.hidden = false; edit[id] = !rv(id).score || edit[id]; go('detail', id);
       var b = ov.querySelector('.lib-rate'); if (b) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); b.classList.add('lib-flash'); setTimeout(function () { b.classList.remove('lib-flash'); }, 1600); }
     },
-    open: open
+    open: open,
+    resync: function () { syncTasks(); }
   };
+  /* после знакомства: на главную и сразу собрать 10 идей под человека */
+  window.__kStarter = function () { if (window.__kGoTab) window.__kGoTab('list'); go('create'); themesOpen = true; loadThemes(); setTimeout(function () { var t = ov.querySelector('.lib-themes-re, .th-go'); if (t && t.scrollIntoView) t.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 500); };
   if (window.KukingSocial && window.KukingSocial.onChange) window.KukingSocial.onChange(function () { if (!ov.hidden && !typing()) keepY(render); });
 
   /* ---------- таб-бар снизу: Рецепты · План · Чаты · Профиль ---------- */

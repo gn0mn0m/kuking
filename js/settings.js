@@ -92,19 +92,26 @@
       af.addEventListener('submit', function (e) {
         e.preventDefault(); if (busy) return; busy = true;
         var email = el.querySelector('#authEmail').value.trim(), pass = el.querySelector('#authPass').value;
-        msg.account = mode === 'up' ? 'Регистрирую…' : 'Вхожу…'; render(); busy = true;
+        /* всё на месте, без перерисовки: крутилка в кнопке, потом мягкая шторка */
+        var btn = af.querySelector('button[data-mode="' + mode + '"]'), was = btn.textContent;
+        af.querySelectorAll('button[type=submit]').forEach(function (x) { x.disabled = true; });
+        btn.classList.add('busy-c'); btn.textContent = mode === 'up' ? 'Регистрирую…' : 'Вхожу…';
+        function say(t) { var p = af.querySelector('.set-msg'); if (!p) { p = document.createElement('p'); p.className = 'set-msg'; p.setAttribute('aria-live', 'polite'); af.appendChild(p); } p.textContent = t; p.classList.remove('shake'); void p.offsetWidth; p.classList.add('shake'); }
+        function undo() { af.querySelectorAll('button[type=submit]').forEach(function (x) { x.disabled = false; }); btn.classList.remove('busy-c'); btn.textContent = was; }
         (mode === 'up' ? S.signUp(email, pass) : S.signIn(email, pass).then(function () { return 'in'; }))
           .then(function (r) {
             busy = false;
-            if (r === 'confirm') { msg.account = 'Письмо с подтверждением ушло на почту. Подтверди и жми «Войти».'; render(); return; }
-            location.reload();
+            if (r === 'confirm') { undo(); say('Письмо с подтверждением ушло на почту. Подтверди и жми «Войти».'); return; }
+            btn.classList.remove('busy-c'); btn.textContent = 'Готово';
+            var c = document.getElementById('curtain'); if (c) { c.hidden = false; requestAnimationFrame(function () { c.classList.add('on'); }); }
+            setTimeout(function () { location.reload(); }, 320);
           })
           .catch(function (er) {
             busy = false;
             var m = String(er && er.message || '');
-            msg.account = /invalid login|invalid_credentials/i.test(m) ? 'Почта или пароль не подходят.' : /already registered|exists/i.test(m) ? 'Такая почта уже есть — жми «Войти».' :
-              /network|fetch/i.test(m) ? 'Нет интернета.' : 'Не вышло: ' + m;
-            render();
+            undo();
+            say(/invalid login|invalid_credentials/i.test(m) ? 'Почта или пароль не подходят.' : /already registered|exists/i.test(m) ? 'Такая почта уже есть — жми «Войти».' :
+              /network|fetch/i.test(m) ? 'Нет интернета.' : 'Не вышло: ' + m);
           });
       });
     }

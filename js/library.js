@@ -190,6 +190,9 @@
   /* ---------- План: лента по дням, как «Список» в Календаре iPhone ----------
      В каждом дне — блюда и подготовка: закупка, убрать мясо в морозилку, достать на разморозку,
      замариновать, сама готовка. Время подготовки берётся из настроек плана; по нему же — пуш. */
+  var tdSeen = false, planOv = load('kuking:planOv', { tasks: {}, cook: {} });
+  planOv.tasks = planOv.tasks || {}; planOv.cook = planOv.cook || {};
+  function cookAt(k) { return planOv.cook[k] || hm(cfg().cook); }
   var plan = load('kuking:plan', {}), planIntro = lget('kuking:planIntro') === '1';
   var planCfg = load('kuking:planCfg', null), doneTasks = load('kuking:planDone', {});
   var DOW = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], DOW_FULL = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
@@ -202,8 +205,8 @@
   function cfg() { return planCfg || { shop: 'week', shopDay: 6, shopTime: '12:00', meat: 'fresh', cook: '19:00' }; }
   function savePlan() {
     Object.keys(plan).forEach(function (k) { if (!plan[k] || !plan[k].length) delete plan[k]; });
-    lset('kuking:plan', JSON.stringify(plan)); lset('kuking:planCfg', JSON.stringify(planCfg));
-    if (db) db.collection('meta').doc('plan').set({ days: plan, cfg: planCfg, updatedAt: new Date().toISOString() }).catch(function () {});
+    lset('kuking:plan', JSON.stringify(plan)); lset('kuking:planCfg', JSON.stringify(planCfg)); lset('kuking:planOv', JSON.stringify(planOv));
+    if (db) db.collection('meta').doc('plan').set({ days: plan, cfg: planCfg, ov: planOv, updatedAt: new Date().toISOString() }).catch(function () {});
     syncTasks();
   }
   function hasMeat(r) { return (r.ingredients || []).some(function (i) { return /говяд|свин|баран|телят|куриц|курин|бедр|бёдр|крыл|фарш|мяс|индей|утк|лосос|сёмг|семг|рыб|форел|кревет/i.test(i.name); }); }
@@ -241,7 +244,7 @@
     }
     withDishes.forEach(function (k) {
       var ids = plan[k].filter(byId);
-      if (c.shop === 'day') out.push({ key: 'shop:' + k, day: k, time: minus(c.cook, 2), kind: 'shop', title: 'Закупка', sub: 'на сегодняшний ужин', ids: ids });
+      if (c.shop === 'day') out.push({ key: 'shop:' + k, day: k, time: minus(cookAt(k), 2), kind: 'shop', title: 'Закупка', sub: 'на сегодняшний ужин', ids: ids });
       if (c.shop === 'delivery') out.push({ key: 'order:' + k, day: addDays(k, -1), time: '20:00', kind: 'shop', title: 'Заказать продукты', sub: 'доставка к ' + dayName(k).toLowerCase() + ', ' + dayDate(k), ids: ids });
       ids.forEach(function (id) {
         var r = byId(id);
@@ -252,31 +255,70 @@
           if (sday && sday < tday) out.push({ key: 'thaw:' + k + ':' + id, day: tday, time: '20:00', kind: 'thaw', title: 'Достать мясо в холодильник', sub: early ? 'разморозится к маринаду' : 'разморозится к завтрашнему ужину', ids: [id] });
         }
         aheadOf(r).forEach(function (a, ai) {
-          var cm = +hm(c.cook).split(':')[0] * 60 + +hm(c.cook).split(':')[1] - a.hours * 60, dd = k;
+          var cm = +cookAt(k).split(':')[0] * 60 + +cookAt(k).split(':')[1] - a.hours * 60, dd = k;
           while (cm < 0) { cm += 1440; dd = addDays(dd, -1); }
           if (a.hours >= 10) { dd = addDays(k, -1); cm = 21 * 60; } // на ночь — вечером накануне
           var tm = String((cm / 60) | 0).padStart(2, '0') + ':' + String(cm % 60).padStart(2, '0');
           out.push({ key: 'mar:' + k + ':' + id + (ai ? ':' + ai : ''), day: dd, time: tm, kind: 'marinade', title: a.what, sub: 'для «' + r.title + '» — за ' + a.hours + ' ч до готовки', ids: [id], ahead: a });
         });
-        out.push({ key: 'cook:' + k + ':' + id, day: k, time: hm(c.cook), kind: 'cook', title: r.title, sub: String(r.totalTime || '').replace('≈ ', ''), ids: [id], dish: id });
+        out.push({ key: 'cook:' + k + ':' + id, day: k, time: cookAt(k), kind: 'cook', title: r.title, sub: String(r.totalTime || '').replace('≈ ', ''), ids: [id], dish: id });
       });
     });
     if (c.empty !== 'off' && planIntro) for (var e = 1; e <= 7; e++) { var ek = addDays(t, e); if (!(plan[ek] || []).filter(byId).length) out.push({ key: 'empty:' + ek, day: addDays(ek, -1), time: hm(c.cook), kind: 'empty', title: 'На ' + (e === 1 ? 'завтра' : dayName(ek).toLowerCase()) + ' ничего не запланировано', sub: 'Выбери блюдо — успеешь закупиться', ids: [], target: ek }); }
+    out.forEach(function (x) { var o = planOv.tasks[x.key]; if (o && x.kind !== 'cook') { if (o.day) x.day = o.day; if (o.time) x.time = o.time; x.moved = true; } });
     return out.sort(function (x, y) { return (x.day + (x.time || '00:00')).localeCompare(y.day + (y.time || '00:00')); });
   }
   /* пуши: будущие напоминания кладём на сервер, он присылает их вовремя */
+  var syncT = 0;
+  /* Уведомления в духе Duolingo: коротко, по делу, с характером, не чаще 3 в день, ночью тишина */
+  var PUSH = {
+    shop: [['Закупка сегодня', 'Список уже собран — открой «План» и пройдись по полкам.'], ['Пора в магазин', '{sub}. Список в «Плане», ничего не забудешь.'], ['Тележку в руки', 'Сегодня закупка: {sub}.']],
+    freeze: [['Мясо — в морозилку', 'Плоско, в пакет, с датой. Минута дела.'], ['Не забудь про морозилку', 'Убери мясо, пока не забыл — потом скажешь спасибо.']],
+    thaw: [['Достань мясо', 'Из морозилки в холодильник — к ужину будет мягким.'], ['Мясо на разморозку', 'Переложи в холодильник на нижнюю полку. Завтра без нервов.']],
+    marinade: [['{title}', '{sub}. Пять минут сейчас — и вечером вкус в два раза мощнее.'], ['Время маринада', '{title} — {sub}.']],
+    cook: [['Через 30 минут — {title}', 'Достань посуду и включи музыку.'], ['Скоро к плите', '{title} через полчаса. Шеф готов?'], ['{title} сегодня', 'Через 30 минут стартуем. Нож наточен?']],
+    empty: [['На завтра пусто', 'Выбери блюдо сейчас — успеешь закупиться.'], ['А что завтра?', 'Тапни «План» и накидай блюдо за 10 секунд.']],
+    rate: [['Как зашёл {title}?', 'Поставь оценку — следующий рецепт будет точнее.'], ['Оцени {title}', 'Пара тапов — и нейросеть поймёт, что тебе по кайфу.']],
+    week: [['Неделя на подходе', 'Раскидай блюда на 30 секунд — закупка и напоминания распишутся сами.']],
+    nudge: [['Плита скучает', 'Давно не готовил. Крутани барабан — подберу что-нибудь под настроение.'], ['Шеф, ты где?', 'Три дня без готовки. Одно блюдо — и форма вернётся.']]
+  };
+  var PRIO = { cook: 0, marinade: 1, thaw: 2, shop: 3, freeze: 4, empty: 5, rate: 6, week: 7, nudge: 8 };
+  function hashStr(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return Math.abs(h); }
+  function pushText(x) {
+    var v = PUSH[x.kind] || [[x.title, x.sub]], p2 = v[hashStr(x.key) % v.length];
+    function f(t) { return String(t).replace('{title}', x.title || '').replace('{sub}', x.sub || ''); }
+    return { title: f(p2[0]), body: f(p2[1]) };
+  }
   var syncT = 0;
   function syncTasks() {
     clearTimeout(syncT);
     syncT = setTimeout(function () {
       var S = window.KukingStore; if (!S || !S.user || !S.user() || !S.req) return;
-      var me = S.user().id, now = Date.now();
-      var rows = tasksAll().filter(function (x) { return x.time && !doneTasks[x.key]; }).map(function (x) {
-        var d = dParse(x.day), hhmm = x.time.split(':'); d.setHours(+hhmm[0], +hhmm[1], 0, 0);
-        var title = x.kind === 'cook' ? 'Сегодня готовим: ' + x.title : x.kind === 'empty' ? 'На завтра пусто' : x.title;
-        var body = x.kind === 'shop' ? 'Список покупок — в «Плане»: ' + x.sub : x.kind === 'empty' ? 'Открой «План» и накидай блюдо — успеешь закупиться.' : x.sub;
-        return { user_id: me, key: x.key, at: d.toISOString(), title: title, body: body, sent: false, _t: d.getTime() };
-      }).filter(function (x) { return x._t > now; }).map(function (x) { delete x._t; return x; });
+      var me = S.user().id, now = Date.now(), td = today(), c = cfg();
+      var list = tasksAll().filter(function (x) { return x.time && !doneTasks[x.key]; }).map(function (x) {
+        var y = Object.assign({}, x); if (y.kind === 'cook') y.time = minus(y.time, 0.5); return y; });
+      // оценка — назавтра в полдень, если ещё не оценил
+      Object.keys(plan).forEach(function (k) { if (k < addDays(td, -2)) return; (plan[k] || []).filter(byId).forEach(function (id) {
+        if (!reviews[id] || !reviews[id].score) list.push({ key: 'rate:' + k + ':' + id, day: addDays(k, 1), time: '12:00', kind: 'rate', title: titleOf(id), sub: '' }); }); });
+      // воскресенье 18:00 — если на следующую неделю меньше 2 блюд
+      if (planIntro) { var d0 = dParse(td), toSun = (7 - d0.getDay()) % 7, sun = addDays(td, toSun), n = 0; for (var i = 1; i <= 7; i++) n += (plan[addDays(sun, i)] || []).filter(byId).length;
+        if (n < 2) list.push({ key: 'week:' + sun, day: sun, time: '18:00', kind: 'week', title: '', sub: '' }); }
+      // давно не заходил — через 3 дня в время готовки (каждый вход отодвигает)
+      list.push({ key: 'nudge', day: addDays(td, 3), time: hm(c.cook), kind: 'nudge', title: '', sub: '' });
+      // тихие часы 9–22 и не больше 3 в день: лишнее сливаем в одно
+      var byDay = {};
+      list.forEach(function (x) { var hh = +x.time.split(':')[0]; if (hh < 9) x.time = '09:00'; if (hh >= 22) x.time = '21:30'; (byDay[x.day] = byDay[x.day] || []).push(x); });
+      var rows = [];
+      Object.keys(byDay).forEach(function (dk) {
+        var xs = byDay[dk].sort(function (a, b) { return PRIO[a.kind] - PRIO[b.kind]; });
+        var keep = xs.slice(0, 3), rest = xs.slice(3);
+        if (rest.length) { var last = keep[2]; last.digest = rest.map(function (r) { return pushText(r).title; }); }
+        keep.forEach(function (x) {
+          var d = dParse(x.day), hhmm = x.time.split(':'); d.setHours(+hhmm[0], +hhmm[1], 0, 0);
+          var t = pushText(x); if (x.digest) t.body += ' И ещё: ' + x.digest.join(', ') + '.';
+          if (d.getTime() > now) rows.push({ user_id: me, key: x.key, at: d.toISOString(), title: t.title, body: t.body, sent: false });
+        });
+      });
       S.req('DELETE', 'plan_tasks?user_id=eq.' + encodeURIComponent(me) + '&sent=eq.false').then(function () {
         return rows.length ? S.req('POST', 'plan_tasks?on_conflict=user_id,key', rows, 'resolution=merge-duplicates,return=minimal') : null;
       }).catch(function () {});
@@ -378,7 +420,7 @@
     for (var j = 0; j < keys.length; j++) {
       var k2 = keys[j], items = all.filter(function (x) { return x.day === k2; });
       if (j === 14) h += '<h3 class="tg-sec-t ag-later">Дальше</h3>';
-      h += '<section class="ag-day' + (items.length ? '' : ' empty') + '" id="ag-' + k2 + '" style="--i:' + Math.min(j, 8) + '"><header class="ag-h"><b>' + dayName(k2) + '</b><span>' + (j > 1 ? '' : DOW_FULL[dParse(k2).getDay()].toLowerCase() + ', ') + dayDate(k2) + (j >= 14 ? ', ' + DOW_FULL[dParse(k2).getDay()].toLowerCase() : '') + '</span><button type="button" class="ag-add" data-add="' + k2 + '" aria-label="Добавить блюдо на ' + dayDate(k2) + '">' + PLUS + '</button></header>' +
+      h += '<section class="ag-day' + (items.length ? '' : ' empty') + '" id="ag-' + k2 + '" style="--i:' + Math.min(j, 8) + '"><header class="ag-h"' + (items.length ? '' : ' data-add="' + k2 + '" role="button" tabindex="0" aria-label="Добавить блюдо на ' + dayDate(k2) + '"') + '><b>' + dayName(k2) + '</b><span>' + (j > 1 ? '' : DOW_FULL[dParse(k2).getDay()].toLowerCase() + ', ') + dayDate(k2) + (j >= 14 ? ', ' + DOW_FULL[dParse(k2).getDay()].toLowerCase() : '') + '</span><button type="button" class="ag-add" data-add="' + k2 + '" aria-label="Добавить блюдо на ' + dayDate(k2) + '">' + PLUS + '</button></header>' +
         (items.length ? '<ul class="ag-list">' + items.map(function (x) { return taskRow(x, td); }).join('') + '</ul>' : '') + '</section>';
     }
     return h + '</div>';
@@ -429,16 +471,27 @@
         '<p class="small ts-tip">Забыл? Пакет закрытым в миску с холодной водой, меняй воду каждые 30 минут — 1–2 часа, и готово.</p>';
     }
     sheet('<div class="pk-head"><b>' + esc(x.title) + '</b><button type="button" class="ghost-btn" data-pk="x">Закрыть</button></div>' +
-      '<p class="small pk-sub">' + esc(dayName(x.day)) + ', ' + dayDate(x.day) + (x.time ? ' в ' + x.time : '') + (r && x.kind !== 'cook' ? ' · «' + esc(r.title) + '»' : '') + '</p>' + b +
+      '<p class="small pk-sub">' + esc(dayName(x.day)) + ', ' + dayDate(x.day) + (x.time ? ' в ' + x.time : '') + (r && x.kind !== 'cook' ? ' · «' + esc(r.title) + '»' : '') + '</p>' +
+      '<div class="ts-when">' + (x.kind === 'cook' ? '' : '<label>День<input type="date" data-tw="day" value="' + x.day + '"></label>') + '<label>' + (x.kind === 'cook' ? 'Готовлю в этот день в' : 'Время') + '<input type="time" data-tw="time" value="' + esc(x.time || '12:00') + '"></label></div>' +
+      '<p class="small ts-when-h">' + (x.kind === 'cook' ? 'Маринад и закупка сдвинутся вместе с готовкой. Уведомление придёт в новое время.' : 'Уведомление придёт в новое время.' + (x.moved ? ' <button type="button" class="lib-link" data-ts="reset">Вернуть как было</button>' : '')) + '</p>' + b +
       '<div class="pk-acts ts-acts">' + (x.kind === 'cook' ? '<button type="button" class="nav-btn primary" data-ts="open">Открыть рецепт</button>' : '<button type="button" class="nav-btn primary" data-ts="done">' + (dn ? 'Вернуть в дела' : 'Сделано') + '</button>' + (r ? '<button type="button" class="ghost-btn" data-ts="open">Рецепт</button>' : '')) + '</div>' +
       '<button type="button" class="ts-cal" data-ts="ics">' + CAL + '<span>Добавить в календарь iPhone</span></button>',
     function (e, m, shut) {
       var t = e.target.closest('[data-ts]'); if (!t) return;
       var a = t.getAttribute('data-ts');
+      if (a === 'reset') { delete planOv.tasks[key]; savePlan(); shut(); return; }
       if (a === 'ics') { addToCal(x, r); return; }
       if (a === 'done') { setDone(key, !doneTasks[key]); shut(true); }
       else { shut(true); setTimeout(function () { go('detail', r.id); }, 200); }
     });
+    var all = document.querySelectorAll('.pk-ov'), sm = all[all.length - 1];
+    sm.querySelectorAll('[data-tw]').forEach(function (inp) { inp.addEventListener('change', function () {
+      var tv = sm.querySelector('[data-tw=time]').value, dv = sm.querySelector('[data-tw=day]');
+      if (x.kind === 'cook') { if (tv) planOv.cook[x.day] = tv; }
+      else planOv.tasks[key] = { day: dv && dv.value ? dv.value : x.day, time: tv || x.time };
+      savePlan(); if (window.kHaptic) window.kHaptic(6);
+      var h = sm.querySelector('.ts-when-h'); if (h) { h.textContent = 'Сохранено — уведомление придёт в новое время.'; h.classList.add('ok'); }
+    }); });
   }
   /* событие в календарь телефона: .ics — айфон сам предложит «Добавить» */
   function calMins(t) { t = String(t || ''); var h = /(\d+)\s*ч/.exec(t), m = /(\d+)\s*мин/.exec(t); return (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0) || 60; }
@@ -491,20 +544,23 @@
     var all = list.filter(function (x) { return x.day === day; });
     if (!all.length) return '';
     var lab = day === td ? 'Сегодня по плану' : day === addDays(td, 1) ? 'Завтра по плану' : dayName(day) + ', ' + dayDate(day);
-    return '<button type="button" class="td-card" data-a="toPlan"><span class="td-k">' + esc(lab) + '</span>' + all.slice(0, 4).map(function (x) {
+    var still = tdSeen; tdSeen = true;
+    return '<button type="button" class="td-card' + (still ? ' still' : '') + '" data-a="toPlan"><span class="td-k">' + esc(lab) + '</span>' + all.slice(0, 4).map(function (x) {
       return '<span class="td-row"><span class="td-time">' + esc(x.time || '') + '</span>' + tIco(x.kind) + '<b class="td-t">' + esc(x.title) + '</b></span>';
     }).join('') + (all.length > 4 ? '<span class="td-more">и ещё ' + (all.length - 4) + '</span>' : '') + '</button>';
   }
-  function sheet(html, onClick) {
+  function sheet(html, onClick, guard) {
     var m = document.createElement('div'); m.className = 'pk-ov'; m.setAttribute('role', 'dialog');
     m.innerHTML = '<div class="pk-sheet"><span class="set-grab" aria-hidden="true"></span>' + html + '</div>';
     document.body.appendChild(m); requestAnimationFrame(function () { m.classList.add('on'); });
     function shut(quiet) { m.classList.remove('on'); m.querySelector('.pk-sheet').style.transform = ''; setTimeout(function () { m.remove(); }, 320); if (!quiet) planRefresh(); }
-    dragDown(m.querySelector('.pk-sheet'), function () { shut(); });
-    m.addEventListener('click', function (e) { if (e.target === m || e.target.closest('[data-pk=x]')) return shut(); onClick(e, m, shut); });
+    function tryShut(how) { if (guard && guard(shut, how) === false) { m.querySelector('.pk-sheet').style.transform = ''; return; } shut(); }
+    dragDown(m.querySelector('.pk-sheet'), function () { tryShut('drag'); });
+    m.addEventListener('click', function (e) { if (e.target === m) return tryShut('out'); if (e.target.closest('[data-pk=x]')) return tryShut('done'); onClick(e, m, shut); });
     return m;
   }
   function planPicker(day) {
+    if (document.querySelector('.pk-ov')) return;
     var list = R.filter(function (r) { return !isHid(r.id); }).slice().reverse();
     sheet('<div class="pk-head"><b>' + dayName(day) + ', ' + dayDate(day) + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div>' +
       (list.length ? '<ul class="tg-list tg-group">' + list.map(function (r) {
@@ -544,14 +600,31 @@
       li.classList.toggle('on', !!have[k]); li.setAttribute('aria-checked', String(!!have[k])); lset('kuking:shopHave:' + key, JSON.stringify(have));
     });
   }
+  /* сразу на старте плана: включить уведомления? */
+  function askPush(next) {
+    var Soc = SOC(), ps = Soc.pushState ? Soc.pushState() : 'nope';
+    if (ps === 'on' || ps === 'nope' || ps === 'denied') { next(); return; }
+    var done = false;
+    function go2() { if (done) return; done = true; setTimeout(next, 340); }
+    sheet('<div class="ask-box"><svg class="ask-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><h3>Включить уведомления?</h3>' +
+      '<p class="small">Напомню про закупку, морозилку, маринад и готовку. Не чаще трёх раз в день, ночью молчу.</p>' +
+      (ps === 'install' ? '<p class="small">Сначала поставь «Кукинг» на экран «Домой» и открой оттуда — иначе айфон не даст.</p><button type="button" class="nav-btn primary" data-pk="x">Понятно</button>' :
+        '<button type="button" class="nav-btn primary" data-pu="on">Включить</button><button type="button" class="nav-btn" data-pk="x">Позже</button>') + '<p class="small ps-h" id="puMsg"></p></div>',
+      function (e, m, shut) {
+        var b = e.target.closest('[data-pu]'); if (!b) return;
+        b.classList.add('busy-c'); b.textContent = 'Включаю…';
+        Soc.enablePush().then(function () { b.classList.remove('busy-c'); b.textContent = 'Включены'; if (window.kHaptic) window.kHaptic(10); setTimeout(function () { shut(true); go2(); }, 500); })
+          .catch(function (x) { b.classList.remove('busy-c'); b.textContent = 'Включить'; m.querySelector('#puMsg').textContent = 'Не вышло: ' + (x && x.message || ''); });
+      }, function () { go2(); return true; });
+  }
   function planSettings(first) {
     var c = JSON.parse(JSON.stringify(cfg())), Soc = SOC();
     if (!c.empty) c.empty = 'on';
     function seg(name, opts, cur) { return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-seg="' + name + '" data-v="' + o[0] + '" aria-checked="' + (String(cur) === String(o[0])) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
     var HINT = { frozen: 'Напомню убрать в морозилку после закупки и достать в холодильник вечером накануне.', fresh: 'Если мясо из морозилки — переключи, напомню про разморозку.' };
     function pushBlock() { var ps = Soc.pushState ? Soc.pushState() : 'nope';
-      return ps === 'on' ? '<p class="small ps-h ok">Включены — пришлю в нужное время.</p>' : ps === 'install' ? '<p class="small ps-h">Поставь «Кукинг» на экран «Домой» и открой оттуда — тогда включатся.</p>' : ps === 'denied' ? '<p class="small ps-h">Запрещены в настройках iPhone → Уведомления → Кукинг.</p>' : ps === 'nope' ? '<p class="small ps-h">Этот браузер не умеет.</p>' : '<button type="button" class="nav-btn" data-pushon="1">Включить уведомления</button>'; }
-    var m = sheet('<div class="pk-head"><b>' + (first ? 'Как ты закупаешься?' : 'Настройки плана') + '</b><button type="button" class="ghost-btn" data-pk="x">' + (first ? 'Пропустить' : 'Готово') + '</button></div>' +
+      return ps === 'on' ? '<p class="ps-on">Включены</p>' : ps === 'install' ? '<p class="small ps-h">Поставь «Кукинг» на экран «Домой» и открой оттуда — тогда включатся.</p>' : ps === 'denied' ? '<p class="small ps-h">Запрещены в настройках iPhone → Уведомления → Кукинг.</p>' : ps === 'nope' ? '<p class="small ps-h">Этот браузер не умеет.</p>' : '<button type="button" class="nav-btn" data-pushon="1">Включить уведомления</button>'; }
+    var m = sheet('<div class="pk-head"><b>' + (first ? 'Как ты закупаешься?' : 'Настройки плана') + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div>' +
       '<div class="ps"><label class="ps-l">Закупка</label>' + seg('shop', [['week', 'Раз в неделю'], ['day', 'В день готовки'], ['delivery', 'Доставка']], c.shop) +
       '<div class="ps-col' + (c.shop === 'week' ? ' open' : '') + '" id="psWeek"><div class="ps-col-in"><label class="ps-l">День и время закупки</label>' + seg('shopDay', [[1, 'Пн'], [2, 'Вт'], [3, 'Ср'], [4, 'Чт'], [5, 'Пт'], [6, 'Сб'], [0, 'Вс']], c.shopDay) + '<input class="ps-time" type="time" data-f="shopTime" value="' + esc(c.shopTime) + '"></div></div>' +
       '<label class="ps-l">Мясо и рыбу</label>' + seg('meat', [['fresh', 'Беру свежее'], ['frozen', 'Храню в морозилке']], c.meat) +
@@ -571,8 +644,21 @@
         return; }
       if (e.target.closest('[data-pushon]')) { var pb = e.target.closest('[data-pushon]'); pb.classList.add('busy-c'); pb.textContent = 'Включаю…'; (Soc.enablePush ? Soc.enablePush() : Promise.reject()).then(function () { mm.querySelector('#psPush').innerHTML = pushBlock(); }).catch(function (x) { pb.classList.remove('busy-c'); pb.textContent = 'Не вышло: ' + (x && x.message || ''); }); return; }
       if (e.target.closest('[data-allics]')) { var n = addAllToCal(); if (!n) e.target.closest('[data-allics]').lastChild.textContent = 'В плане пока пусто'; return; }
-      if (e.target.closest('[data-psave]')) { m.querySelectorAll('[data-f]').forEach(function (i) { c[i.getAttribute('data-f')] = i.value || c[i.getAttribute('data-f')]; }); planCfg = c; savePlan(); shut(); }
+      if (e.target.closest('[data-ask]')) { var w = e.target.closest('[data-ask]').getAttribute('data-ask'); if (w === 'save') commit(); mm.querySelector('.ps-ask').remove(); if (w !== 'back') shut(); return; }
+      if (e.target.closest('[data-psave]')) { commit(); shut(); }
+    }, function (shut, how) {
+      /* «Готово» — сохраняем; смахнул или тапнул мимо с изменениями — спрашиваем */
+      if (how === 'done' || first) { commit(); return true; }
+      if (!changed()) return true;
+      if (m.querySelector('.ps-ask')) return false;
+      var a = document.createElement('div'); a.className = 'ps-ask'; a.innerHTML = '<div class="ask-box"><h3>Сохранить изменения?</h3><p class="small">Ты поменял настройки плана.</p><button type="button" class="nav-btn primary" data-ask="save">Сохранить</button><button type="button" class="nav-btn" data-ask="drop">Не сохранять</button><button type="button" class="ghost-btn" data-ask="back">Вернуться к настройкам</button></div>';
+      m.querySelector('.pk-sheet').appendChild(a); a.scrollIntoView({ block: 'end', behavior: 'smooth' }); if (window.kHaptic) window.kHaptic(8);
+      return false;
     });
+    var start = JSON.stringify(cfg());
+    function read() { m.querySelectorAll('[data-f]').forEach(function (i) { c[i.getAttribute('data-f')] = i.value || c[i.getAttribute('data-f')]; }); }
+    function changed() { read(); return JSON.stringify(c) !== start; }
+    function commit() { read(); planCfg = c; savePlan(); }
   }
 
   function chev() { return '<svg class="pf-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'; }
@@ -853,7 +939,7 @@
   function bind() {
     on('#libMenu', function () { if (window.KukingDrawer) window.KukingDrawer.open(); });
     on('#libClose', close);
-    on('[data-a=planStart]', function () { planIntro = true; lset('kuking:planIntro', '1'); dir = 'fwd'; render(); ov.scrollTop = 0; planSettings(true); });
+    on('[data-a=planStart]', function () { planIntro = true; lset('kuking:planIntro', '1'); dir = 'fwd'; render(); ov.scrollTop = 0; askPush(function () { planSettings(true); }); });
     on('[data-a=planCfg]', function () { planSettings(false); });
     on('[data-a=toPlan]', function () { TAB = 'plan'; view = 'plan'; dir = 'fwd'; render(); ov.scrollTop = 0; });
     on('[data-jump]', function (b) { openCal(b.getAttribute('data-jump')); });
@@ -1117,7 +1203,7 @@
         if (!ov.hidden && !typing()) keepY(render);
       }).catch(function () {});
       db.collection('meta').doc('plan').get().then(function (x) {
-        var v = x && x.exists && x.data(); if (v && v.days) { Object.keys(v.days).forEach(function (k) { if (!plan[k]) plan[k] = v.days[k]; }); if (v.cfg && !planCfg) planCfg = v.cfg; lset('kuking:plan', JSON.stringify(plan)); lset('kuking:planCfg', JSON.stringify(planCfg)); if (!ov.hidden) keepY(render); }
+        var v = x && x.exists && x.data(); if (v && v.days) { Object.keys(v.days).forEach(function (k) { if (!plan[k]) plan[k] = v.days[k]; }); if (v.cfg && !planCfg) planCfg = v.cfg; if (v.ov && !Object.keys(planOv.tasks).length && !Object.keys(planOv.cook).length) { planOv = v.ov; planOv.tasks = planOv.tasks || {}; planOv.cook = planOv.cook || {}; lset('kuking:planOv', JSON.stringify(planOv)); } lset('kuking:plan', JSON.stringify(plan)); lset('kuking:planCfg', JSON.stringify(planCfg)); if (!ov.hidden) keepY(render); }
       }).catch(function () {});
       db.collection('meta').doc('ideas').get().then(function (x) {
         var v = x && x.exists && x.data();
@@ -1173,7 +1259,8 @@
     if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) Soc.open(); else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
     if (Soc.isOpen && Soc.isOpen()) Soc.close();
     if (t === view) { ov.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    TAB = t; dir = 'tab'; view = t; stagger = t === 'list' || t === 'plan'; render(); ov.scrollTop = 0;
+    var ORD = ['list', 'plan', 'chats', 'profile'], from = ORD.indexOf(SUB[view] ? TAB : view);
+    TAB = t; dir = from < 0 || from === ORD.indexOf(t) ? 'tab' : from < ORD.indexOf(t) ? 'tab-r' : 'tab-l'; view = t; stagger = t === 'list' || t === 'plan'; render(); ov.scrollTop = 0;
   });
   if (window.KukingSocial && window.KukingSocial.onClose) window.KukingSocial.onClose(function () { syncTabs(); });
   new MutationObserver(function () { syncTabs(); document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden); }).observe(ov, { attributes: true, attributeFilter: ['hidden'] });

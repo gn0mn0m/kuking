@@ -778,6 +778,7 @@
     h += rateBlock(r);
     var thr = SOC().thread(r.id, reviews[r.id]); if (thr) h += '<section class="tg-sec">' + thr + '</section>';
     h += '<div class="tg-more">' + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
+      (r.ai && !r.manual ? '<button type="button" class="ghost-btn" data-a="upg" data-id="' + esc(r.id) + '">' + (r.upgraded ? 'Обновить ещё раз' : 'Обновить под новые правила') + '</button>' : '') +
       '<button type="button" class="ghost-btn tg-del" data-id="' + esc(r.id) + '">Убрать из книги</button></div>';
     h += '<div class="tg-cta"><button type="button" class="nav-btn primary lib-go" data-id="' + esc(r.id) + '">' + (on ? 'Продолжить готовку →' : 'Готовим это') + '</button></div>';
     return h;
@@ -1033,6 +1034,7 @@
     on('[data-a=login]', function () { if (window.KukingSettings) window.KukingSettings.open('account'); });
     on('[data-a=setup]', function () { if (window.KukingSettings) window.KukingSettings.open('ai'); });
     on('[data-a=editnew]', function () { draft = blankDraft(); go('edit'); });
+    on('[data-a=upg]', function (b) { upgradeOne(b.getAttribute('data-id')); });
     on('[data-a=editme]', function (b) { var r = byId(b.getAttribute('data-id')); draft = JSON.parse(JSON.stringify(r.manual._draft || blankDraft())); draft.id = r.id; go('edit'); });
     var q = ov.querySelector('#libQ');
     if (q) q.addEventListener('input', function () { query = q.value; var l = ov.querySelector('.tg-lists'); if (!l) { render(); return; } l.innerHTML = listsHTML(visible()); on('.tg-lists [data-open]', openTap); gestures(); });
@@ -1141,9 +1143,9 @@
     var r = byId(id); if (!r || document.querySelector('.ctx-ov')) return;
     var m = document.createElement('div'); m.className = 'ctx-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', r.title);
     var IC = { open: '<path d="M4 12s3-7 8-7 8 7 8 7-3 7-8 7-8-7-8-7z"/><circle cx="12" cy="12" r="3"/>', cook: '<path d="M7 4v16l13-8z"/>',
-      pin: '<path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', del: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>' };
+      pin: '<path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', upg: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/>', del: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>' };
     var items = [['open', 'Открыть'], ['cook', active && active.id === id ? 'Продолжить готовку' : 'Готовим это'], ['pin', isPin(id) ? 'Открепить' : 'Закрепить наверху'],
-      r.manual ? ['edit', 'Править'] : null, ['del', 'Удалить']].filter(Boolean);
+      r.manual ? ['edit', 'Править'] : null, r.ai && !r.manual ? ['upg', 'Обновить под новые правила'] : null, ['del', 'Удалить']].filter(Boolean);
     m.innerHTML = '<div class="ctx-card"><div class="ctx-head"><span class="tg-av m-' + esc(r.mode || 'self') + '">' + emoji(r) + '</span><b>' + esc(r.title) + '</b></div>' +
       items.map(function (x) { return '<button type="button" class="ctx-it' + (x[0] === 'del' ? ' danger' : '') + '" data-c="' + x[0] + '"><span>' + x[1] + '</span><svg viewBox="0 0 24 24" aria-hidden="true">' + IC[x[0]] + '</svg></button>'; }).join('') + '</div>';
     /* как в iOS: строка приподнимается на своём месте, меню выезжает рядом */
@@ -1167,8 +1169,13 @@
       if (c === 'pin') { togglePin(id); keepY(render); }
       if (c === 'edit') { draft = JSON.parse(JSON.stringify(r.manual._draft || blankDraft())); draft.id = r.id; go('edit'); }
       if (c === 'del') removeRow(id);
+      if (c === 'upg') upgradeOne(id);
     });
     m.addEventListener('keydown', function (e) { if (e.key === 'Escape') shut(); });
+  }
+  function upgradeOne(id) {
+    if (!(window.KukingAI && window.KukingAI.ready())) { if (window.KukingSettings) window.KukingSettings.open('ai'); return; }
+    window.Fresh.upgrade(freshCtx, id);
   }
   function toastUndo(text, undo) {
     var old = document.querySelector('.undo-toast'); if (old) old.remove();
@@ -1216,6 +1223,7 @@
   }
   var freshCtx = {
     choose: choose,
+    open: function (id) { TAB = 'list'; detailId = id; ov.hidden = false; go('detail', id); },
     signals: function () {
       return {
         today: today(),

@@ -267,7 +267,7 @@
     return f.slice(-60).map(function (x) { return '- «' + (x.title || x.rid) + '» — ' + x.who + (x.score ? ', ' + x.score + '/10' : '') + (x.comment ? ': ' + x.comment : '') + (x.replies.length ? ' | ответы: ' + x.replies.join(' / ') : ''); }).join('\n');
   }
   var ctxRef = null;
-  function buildPrompt(theme, reviews, existing, retryNote) {
+  function buildPrompt(theme, reviews, existing, retryNote, extra) {
     var mode = GEN && GEN.mode ? GEN.mode : MODE_RU[theme[3]] ? theme[3] : 'friends', sk = skill();
     var fb = Object.keys(reviews || {}).map(function (id) {
       var v = reviews[id]; return '- «' + (v.title || id) + '» — ' + v.score + '/10' + (v.comment ? ': ' + v.comment : '');
@@ -377,6 +377,7 @@
       '',
       '# ОБРАЗЕЦ (только структура и уровень детализации; блюдо, тему и текст НЕ копируй)',
       JSON.stringify(sampleFor(mode)),
+      extra || '',
       retryNote ? '\n# ИСПРАВЬ\nПрошлый ответ не прошёл проверку: ' + retryNote + '. Пришли заново полный исправленный JSON.' : ''
     ].join('\n');
     return { system: system, user: user };
@@ -637,5 +638,53 @@
     ctx.added(r, i >= 0);
     return r;
   }
-  window.Fresh = { custom: custom, manual: manual, spin: spin, merge: merge, toDoc: toDoc, forget: forget, themes: THEMES, stale: stale, refresh: refreshIdeas, setIdeas: setIdeas };
+  /* пересборка старого рецепта со «Свежака» по нынешним правилам: то же блюдо, тот же id и место в плане */
+  function upgrade(ctx, id) {
+    ctxRef = ctx;
+    var old = (window.RECIPES || []).filter(function (x) { return x.id === id; })[0] || cache[id];
+    if (!old) return;
+    var keep = GEN; GEN = { mode: MODE_RU[old.mode] ? old.mode : 'self', guests: old.baseGuests || DEF[old.mode] || 2 };
+    var m = document.createElement('div'); m.className = 'rl-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Обновляю рецепт');
+    m.innerHTML = '<div class="rl-box"><button type="button" class="rl-x">✕ Выйти</button><p class="eyebrow rl-k">Обновляю под новые правила</p><div class="rl-res">' + esc(old.title) + '</div>' +
+      '<div class="fr-gen"><div class="fr-pot" aria-hidden="true"><i></i><i></i><i></i></div><p class="fr-msg">Шеф думает…</p><p class="small fr-sub">Обычно 1–3 минуты. Порция под твою цель, советы по рациону, «Сборка», подача</p></div><div class="rl-btns"><button type="button" class="nav-btn" data-u="stop">Стоп</button></div></div>';
+    document.body.appendChild(m);
+    var msg = m.querySelector('.fr-msg'), sub = m.querySelector('.fr-sub'), btns = m.querySelector('.rl-btns'), gen = m.querySelector('.fr-gen'), k = m.querySelector('.rl-k');
+    var stopTick = window.KFun ? window.KFun.ticker(msg, 'gen') : function () {}, ctl = new AbortController(), done = false;
+    function shut() { stopTick(); ctl.abort(); GEN = keep; m.remove(); }
+    m.querySelector('.rl-x').addEventListener('click', shut);
+    btns.addEventListener('click', function (e) { var b = e.target.closest('[data-u]'); if (!b) return; var a = b.getAttribute('data-u');
+      if (a === 'stop' || a === 'close') shut(); else if (a === 'open') { shut(); if (ctx.open) ctx.open(id); } else if (a === 'cook') { shut(); ctx.choose(id); } });
+    var brief = [old.tagline, (old.dishes || []).map(function (d) { return d.name; }).join(', ')].filter(Boolean).join(' — ');
+    var extra = '\n# ЭТО ОБНОВЛЕНИЕ СУЩЕСТВУЮЩЕГО РЕЦЕПТА\nБлюдо уже есть в книге: «' + old.title + '» — ' + brief + '.\nСохрани блюдо и его идею: тот же главный белок, гарнир, соус и стиль подачи, то же название. Перепиши его ЦЕЛИКОМ по всем правилам выше: граммы под цель повара, советы diet, шаг «Сборка», схема plate, отзывы и оценки хаты на это блюдо — исправь всё, на что жаловались.' +
+      '\nСТАРАЯ ВЕРСИЯ (для справки, не копируй косяки):\n' + JSON.stringify({ ingredients: old.ingredients, dishes: old.dishes, totalTime: old.totalTime }).slice(0, 6000);
+    var existing = (window.RECIPES || []).filter(function (x) { return x.id !== id; }).map(function (x) { return '«' + x.title + '»'; });
+    Promise.resolve(window.claude && window.claude.use ? window.claude.use('sample') : null).then(function (sample) {
+      if (!sample) throw { code: 'not_granted' };
+      function attempt(note) {
+        return sample.json(buildPrompt([old.title, brief, '', GEN.mode], ctx.reviews(), existing, note, extra), { modelTier: 'complex', cache: false, signal: ctl.signal, temperature: 0.5,
+          onText: function (u) { sub.textContent = (note ? 'Переписываю начисто · ' : '') + 'Написано ' + Math.round(u.text.length / 1000) + ' тыс. знаков'; } })
+          .then(function (json) {
+            var r = fix(json, old.title, GEN.mode), pr = window.KRecipe ? window.KRecipe.problems(r) : [];
+            if (pr.length && !note) throw new Error('рецепт не прошёл сверку: ' + pr.join('; '));
+            return window.KRecipe ? window.KRecipe.fix(r) : r;
+          });
+      }
+      return attempt().catch(function (e) { if (e && (e.code === 'cancelled' || e.code === 'not_granted' || e.code === 'bad_key' || e.code === 'network')) throw e; return attempt(e && e.message ? e.message : 'кривой JSON'); });
+    }).then(function (r) {
+      stopTick(); done = true;
+      r.id = id; r.title = old.title; r.added = old.added || r.added; r.theme = old.theme || r.theme; if (!r.icon && old.icon) r.icon = old.icon; r.upgraded = new Date().toISOString().slice(0, 10);
+      cache[id] = r; saveCache();
+      window.RECIPES = (window.RECIPES || []).map(function (x) { return x.id === id ? r : x; });
+      ctx.added(r, true);
+      GEN = keep;
+      gen.hidden = true; k.textContent = 'Обновлён';
+      btns.innerHTML = '<button type="button" class="nav-btn" data-u="open">Посмотреть</button><button type="button" class="nav-btn primary" data-u="cook">Готовим это</button>';
+      if (window.Confetti) try { window.Confetti.fire({ anchor: m.querySelector('.rl-res') }); } catch (e) {}
+    }).catch(function (e) {
+      stopTick(); GEN = keep; if (e && e.code === 'cancelled') return;
+      gen.hidden = true; k.textContent = 'Облом';
+      btns.innerHTML = '<p class="small" style="flex-basis:100%;margin:0 0 6px">' + esc(aiMsg(e)) + '. Старый рецепт на месте, ничего не потерялось.</p><button type="button" class="nav-btn" data-u="close">Закрыть</button>';
+    });
+  }
+  window.Fresh = { upgrade: upgrade, custom: custom, manual: manual, spin: spin, merge: merge, toDoc: toDoc, forget: forget, themes: THEMES, stale: stale, refresh: refreshIdeas, setIdeas: setIdeas };
 })();

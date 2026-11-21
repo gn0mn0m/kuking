@@ -153,6 +153,8 @@
     login: ['#5e5ce6', '<path d="M10 17l5-5-5-5"/><path d="M15 12H4"/><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/>'],
     spark: ['#8e5cf7', '<path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z"/>'],
     dice: ['#ff9f0a', '<rect x="5" y="5" width="14" height="14" rx="3.5"/><circle cx="9.5" cy="9.5" r="1.2" class="f"/><circle cx="14.5" cy="14.5" r="1.2" class="f"/>'],
+    feedback: ['#e0a800', '<path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l9-7"/>'],
+    about: ['#a0826d', '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1" class="f"/>'],
     pen: ['#30b356', '<path d="M5 19h4L19 9l-4-4L5 15z"/><path d="M13.5 6.5l4 4"/>']
   };
   function icoSq(k) { var x = I[k]; return '<span class="pf-ico" style="background:' + x[0] + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + x[1] + '</svg></span>'; }
@@ -717,8 +719,9 @@
       if (Soc.enabled) h += '<div class="pf-group">' + pfRow('friends', 'friends', 'Друзья', n ? '<em class="pf-badge">' + n + '</em>' : '') + '</div>';
     } else h += '<div class="pf-group">' + pfRow('login', 'login', 'Войти или зарегистрироваться') + '</div>';
     h += '<div class="pf-group">' + pfRow('ai', 'ai', 'Нейросеть', window.KukingAI && window.KukingAI.ready() ? 'подключена' : 'не подключена') +
-      pfRow('look', 'look', 'Цвет приложения') + pfRow('account', 'account', 'Аккаунт') + pfRow('install', 'install', 'Установка на iPhone') + '</div>';
-    h += '<p class="pf-ver">Кукинг ' + esc((window.KUKING_CONFIG || {}).version || '') + '</p>';
+      pfRow('look', 'look', 'Оформление') + pfRow('account', 'account', 'Аккаунт') + pfRow('install', 'install', 'Установка на iPhone') + '</div>' +
+      '<div class="pf-group">' + pfRow('feedback', 'feedback', 'Обратная связь', 'Telegram') + pfRow('about', 'about', 'О приложении', esc((window.KUKING_CONFIG || {}).version || '')) + '</div>';
+
     return h;
   }
   function emptyHTML() {
@@ -1016,7 +1019,8 @@
     on('[data-pf]', function (b) {
       var a = b.getAttribute('data-pf'), St = window.KukingSettings, Soc = SOC();
       if (a === 'login') St && St.open('account');
-      if (a === 'account' || a === 'ai' || a === 'look' || a === 'install') St && St.open(a, { page: true });
+      if (a === 'account' || a === 'ai' || a === 'look' || a === 'install' || a === 'about') St && St.open(a, { page: true });
+      if (a === 'feedback') { var tg = 'https://t.me/gn0mn0mn0m'; try { window.open(tg, '_blank', 'noopener'); } catch (e) { location.href = tg; } }
       if (a === 'friends') { if (Soc.openFriends) Soc.openFriends(); else Soc.open(); }
       if (a === 'anketa' && Soc.openAnketa) Soc.openAnketa('me');
       if (a === 'cook' && Soc.openAnketa) Soc.openAnketa('cook');

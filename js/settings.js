@@ -40,10 +40,13 @@
       '<div class="set-row"><button type="submit" class="nav-btn primary">Сохранить и проверить</button>' + (c.key ? '<button type="button" class="ghost-btn" data-a="aiclear">Удалить ключ</button>' : '') + '</div></form>' +
       (msg.ai ? '<p class="set-msg' + (msg.aiOk ? ' ok' : '') + (/…$/.test(msg.ai) ? ' busy' : '') + '">' + esc(msg.ai) + '</p>' : '');
   }
-  var ACCENTS = [['saffron', 'Шафран'], ['orange', 'Оранжевый'], ['burgundy', 'Бордовый'], ['green', 'Зелёный'], ['blue', 'Синий'], ['violet', 'Фиолет']];
+  var ACCENTS = [['saffron', 'Терракота'], ['orange', 'Оранжевый'], ['burgundy', 'Бордовый'], ['green', 'Зелёный'], ['blue', 'Синий'], ['violet', 'Фиолет']];
   function curAccent() { return document.documentElement.getAttribute('data-accent') || 'saffron'; }
+  function curTheme() { try { return localStorage.getItem('kuking:theme') || 'auto'; } catch (e) { return 'auto'; } }
   function lookHTML() {
-    return '<p class="small">Цвет кнопок и акцентов. Только на этом телефоне.</p><div class="set-acc" role="radiogroup" aria-label="Цвет приложения">' + ACCENTS.map(function (a) {
+    return '<span class="ps-l">Тема</span><div class="seg set-theme" role="radiogroup" aria-label="Тема">' + [['auto', 'Как в телефоне'], ['light', 'Светлая'], ['dark', 'Тёмная']].map(function (t) {
+      return '<button type="button" role="radio" data-theme-set="' + t[0] + '" aria-checked="' + (curTheme() === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+      '<span class="ps-l">Акцент</span><p class="small">Цвет кнопок и выделений. Только на этом телефоне.</p><div class="set-acc" role="radiogroup" aria-label="Цвет приложения">' + ACCENTS.map(function (a) {
       return '<button type="button" class="set-sw acc-' + a[0] + '" role="radio" data-acc="' + a[0] + '" aria-checked="' + (curAccent() === a[0]) + '"><i aria-hidden="true"></i><span>' + a[1] + '</span></button>';
     }).join('') + '</div>';
   }
@@ -52,11 +55,25 @@
     return '<ol class="set-steps"><li>Открой эту страницу в <b>Safari</b>.</li><li>Нажми <b>Поделиться</b> — квадрат со стрелкой вверх.</li><li>Выбери <b>«На экран „Домой“»</b> → «Добавить».</li><li>Запускай «Кукинг» с иконки — на весь экран и без интернета.</li></ol>';
   }
   /* каждая строка профиля открывает ровно свой раздел — без вкладок «Вид / Аккаунт / …» вперемешку */
-  var TITLES = { account: 'Аккаунт', look: 'Цвет приложения', ai: 'Нейросеть', install: 'Установка на iPhone' };
+  var TITLES = { account: 'Аккаунт', look: 'Оформление', ai: 'Нейросеть', install: 'Установка на iPhone', about: 'О приложении' };
+  /* что нового — коротко, по-человечески */
+  var NEWS = [
+    ['4.0', 'Новый вид «Журнал»: тёплая светлая и тёмная темы, шрифты с засечками. Кнопка «Обратная связь».'],
+    ['3.19', 'Тако подаются тарелкой на каждого, детальные схемы подачи.'],
+    ['3.17', 'Рецепты со «Свежака» можно пересобрать по новым правилам.'],
+    ['3.16', 'Работает без связи с облаком: всё сохраняется в телефоне и уходит само.'],
+    ['3.15', 'Время в плане правится прямо в строке, закупка сохраняется, оценка закрывает готовку.'],
+    ['3.14', 'Рецепты под твою цель и рацион, «Для кого готовим?» перед генерацией.'],
+    ['3.12', 'Чаты и Друзья разведены, профиль по разделам, обновления ставятся сами.']
+  ];
+  function aboutHTML() {
+    return '<p class="about-ver">Кукинг ' + esc(VERSION) + '</p><p class="small">Рецепты, план и готовка вместе с друзьями.</p><ul class="about-log">' +
+      NEWS.map(function (n) { return '<li><b>' + n[0] + '</b>' + (n[0] === NEWS[0][0] ? '<small>последнее</small>' : '') + '<p>' + esc(n[1]) + '</p></li>'; }).join('') + '</ul>';
+  }
   var page = false;
   var CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
   function render() {
-    var body = tab === 'account' ? accountHTML() : tab === 'look' ? lookHTML() : tab === 'ai' ? aiHTML() : installHTML();
+    var body = tab === 'account' ? accountHTML() : tab === 'look' ? lookHTML() : tab === 'ai' ? aiHTML() : tab === 'about' ? aboutHTML() : installHTML();
     el.classList.toggle('page', page);
     el.innerHTML = page
       ? '<div class="set-panel"><header class="tg-head tg-head-sub"><button type="button" class="tg-back" data-a="close">' + CHEV + 'Профиль</button><span class="tg-head-t" id="setTitle">' + TITLES[tab] + '</span></header><section class="set-body">' + body + '</section></div>'
@@ -75,6 +92,16 @@
         if (a === 'close') { if (el.classList.contains('page')) { el.style.transform = ''; } close(); }
         if (a === 'out') { S.signOut(); location.reload(); }
         if (a === 'aiclear') { AI.clear(); msg.ai = 'Ключ удалён с телефона'; msg.aiOk = true; render(); }
+      });
+    });
+    el.querySelectorAll('[data-theme-set]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var t = b.getAttribute('data-theme-set'), de = document.documentElement; de.classList.add('acc-swap'); clearTimeout(window.__accT);
+        if (t === 'auto') de.removeAttribute('data-theme'); else de.setAttribute('data-theme', t);
+        try { if (t === 'auto') localStorage.removeItem('kuking:theme'); else localStorage.setItem('kuking:theme', t); } catch (e) {}
+        window.__accT = setTimeout(function () { de.classList.remove('acc-swap'); }, 600);
+        try { var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', getComputedStyle(de).getPropertyValue('--bg').trim()); } catch (e) {}
+        if (window.kHaptic) window.kHaptic(10); render();
       });
     });
     el.querySelectorAll('[data-acc]').forEach(function (b) {

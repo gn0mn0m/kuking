@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>try{var th=localStorage.getItem("kuking:theme");if(th==="light"||th==="dark")document.documentElement.setAttribute("data-theme",th)}catch(e){}</script>
 <script>try{var a=localStorage.getItem("kuking:accent");if(a&&a!=="saffron"){document.documentElement.setAttribute("data-accent",a);addEventListener("DOMContentLoaded",function(){var m=document.querySelector("meta[name=theme-color]");if(m)m.setAttribute("content",getComputedStyle(document.documentElement).getPropertyValue("--bg").trim())})}}catch(e){}</script>
 <meta name="apple-mobile-web-app-title" content="Кукинг">
 <meta name="format-detection" content="telephone=no">
@@ -31,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- шрифты не держат загрузку: тупит Google — приложение открывается на системных и подменяет, когда скачаются -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Marck+Script&family=Yeseva+One&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Marck+Script&family=Yeseva+One&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Кухня ночью: бордовая комната, оранжевый свет лампы, бутылочно-зелёные акценты. Крупный кегль — читается с другого конца столешницы. */
 :root {
@@ -727,7 +728,7 @@ html.acc-swap, html.acc-swap body, html.acc-swap *:not(.tg-screen):not(.set-shee
 .set-sw i { width: 44px; height: 44px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(255,255,255,.12); transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s; }
 .set-sw[aria-checked="true"] { color: var(--fg); font-weight: 700; }
 .set-sw[aria-checked="true"] i { transform: scale(1.08); box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px currentColor; }
-.acc-saffron i { background: #FFB547; } .acc-orange i { background: #ff8c32; } .acc-burgundy i { background: #c2304f; } .acc-green i { background: #6fae4c; } .acc-blue i { background: #3b8cf0; } .acc-violet i { background: #9466f0; }
+.acc-saffron i { background: #c2603a; } .acc-orange i { background: #ff8c32; } .acc-burgundy i { background: #c2304f; } .acc-green i { background: #6fae4c; } .acc-blue i { background: #3b8cf0; } .acc-violet i { background: #9466f0; }
 
 /* ===== главная в духе Telegram ===== */
 .lib-ov { padding: 0 max(16px, env(safe-area-inset-right, 0px)) 110px max(16px, env(safe-area-inset-left, 0px)); }
@@ -1693,6 +1694,51 @@ body:has(.set-ov.page:not([hidden])) .tg-tabs.on { transform: none; opacity: 1; 
 .net-pill.on { transform: translate(-50%, 0); }
 .net-pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); flex: none; }
 @media (prefers-reduced-motion: reduce) { .net-pill { transition: opacity .2s; } }
+/* 4.0 — дизайн «Журнал» (вариант A): тёплая бумага днём, эспрессо ночью; заголовки Lora, текст Inter */
+:root, :root[data-accent] {
+  color-scheme: dark;
+  --bg: #13100e; --surface: #1c1815; --surface-2: #26201b; --line: #332b25;
+  --fg: #f3ebe1; --muted: #a59787; --shadow: rgba(0,0,0,.55);
+  --green: #93b87c; --burgundy: #a33a4c; --burgundy-text: #e58a9a; --wine: #5a2a1a;
+  --f-display: 'Lora', 'Georgia', 'Times New Roman', serif;
+  --f-body: 'Inter', -apple-system, 'SF Pro Text', 'Golos Text', system-ui, sans-serif;
+}
+:root, :root[data-accent="saffron"] { --orange: #e5845a; --orange-ink: #1d0f08; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]), :root[data-accent]:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f6f0e7; --surface: #fffaf3; --surface-2: #efe5d6; --line: #e6dccd;
+    --fg: #1f1712; --muted: #7a6b5f; --shadow: rgba(70,40,20,.22);
+    --green: #3f5b3a; --burgundy: #8a2a3c; --burgundy-text: #8a2a3c; --wine: #a8452a;
+  }
+  :root:not([data-theme="dark"]):not([data-accent]), :root[data-accent="saffron"]:not([data-theme="dark"]) { --orange: #b8522f; --orange-ink: #fffaf3; }
+}
+:root[data-theme="light"], :root[data-theme="light"][data-accent] {
+  color-scheme: light;
+  --bg: #f6f0e7; --surface: #fffaf3; --surface-2: #efe5d6; --line: #e6dccd;
+  --fg: #1f1712; --muted: #7a6b5f; --shadow: rgba(70,40,20,.22);
+  --green: #3f5b3a; --burgundy: #8a2a3c; --burgundy-text: #8a2a3c; --wine: #a8452a;
+}
+:root[data-theme="light"]:not([data-accent]), :root[data-theme="light"][data-accent="saffron"] { --orange: #b8522f; --orange-ink: #fffaf3; }
+/* типографика журнала */
+.display, .tg-big, .lib-title, .soc-form-h, .gs-h, .soc-title { font-weight: 600 !important; letter-spacing: -.015em; }
+.tg-big { font-size: 2.35rem !important; line-height: 1.08; }
+.tg-mini, .tg-head-t, .soc-sec, .tg-sec-t, .ps-l { letter-spacing: .02em; }
+.tg-sec-t, .soc-sec { font-family: var(--f-display); text-transform: none; letter-spacing: 0; font-size: 1.15rem; font-weight: 600; color: var(--fg); margin: 22px 4px 10px; }
+/* карточки — мягкие, как бумага */
+.tg-group, .pf-group, .soc-list.tgl, .td-card, .tg-pin, .set-ov.page .set-body, .soc-nickf { border-radius: 18px; box-shadow: 0 14px 34px -22px var(--shadow); border: 1px solid var(--line); }
+.tg-chip { border-radius: 999px; font-weight: 500; }
+.tg-chip[aria-pressed="true"] { background: var(--fg) !important; color: var(--bg) !important; border-color: var(--fg) !important; }
+.tg-search { border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+.nav-btn.primary { border-radius: 16px; }
+.tg-tabs { border: 1px solid var(--line); }
+.set-theme { margin: 4px 0 16px; }
+.about-log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 12px; }
+.about-log li { padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.about-log b { font-family: var(--f-display); font-size: 1.02rem; }
+.about-log small { color: var(--muted); margin-left: 6px; }
+.about-log p { margin: 4px 0 0; font-size: .92rem; line-height: 1.45; color: var(--muted); }
+.about-ver { font-family: var(--f-display); font-size: 1.6rem; font-weight: 600; margin: 0; }
 </style>
 
 <div id="app">

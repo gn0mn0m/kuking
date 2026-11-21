@@ -1,4 +1,4 @@
-// Кукинг: нейросеть для всех без ключей. Supabase → Edge Functions → функция ai.
+// Жарко: нейросеть для всех без ключей. Supabase → Edge Functions → функция ai.
 // Ключ GigaChat лежит в секрете GIGACHAT_KEY (Authorization key из личного кабинета Сбера).
 // Телефон шлёт сообщения с токеном входа, функция отвечает потоком в формате OpenAI (SSE).
 // Сертификат НУЦ Минцифры (Russian Trusted Root CA) зашит ниже; отпечаток SHA-256
@@ -80,7 +80,7 @@ async function chat(body, model) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
-    // кто зовёт: только вошедшие в «Кукинг»
+    // кто зовёт: только вошедшие в «Жарко»
     const auth = req.headers.get('authorization') || '';
     const u = await fetch(Deno.env.get('SUPABASE_URL') + '/auth/v1/user', { headers: { authorization: auth, apikey: req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY') || '' } });
     if (!u.ok) return json({ error: { message: 'Войди в аккаунт' } }, 401);

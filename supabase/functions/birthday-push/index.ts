@@ -1,4 +1,4 @@
-// Кукинг: пуши на днюху. Supabase → Edge Functions → функция birthday-push.
+// Жарко: пуши на днюху. Supabase → Edge Functions → функция birthday-push.
 // action "init" — отдать публичный ключ пушей (создаёт ключи при первом вызове);
 // action "run"  — раз в день по расписанию: поздравить именинника (только его самого);
 // action "tasks" — каждые 10 минут: напоминания плана, которым пора;
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
       if (!u.ok) return json({ error: 'not signed in' }, 401);
       const me = await u.json();
       await keys();
-      const n = await send([me.id], { title: '🔥 Кукинг на связи', body: 'Уведомления работают.' });
+      const n = await send([me.id], { title: '🔥 Жарко на связи', body: 'Уведомления работают.' });
       return json({ sent: n });
     }
 
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
           and (extract(day from i.bday) = ${t.d} or (${feb28} and extract(day from i.bday) = 29))`;
       let total = 0;
       for (const b of born) {
-        total += await send([b.id], { title: `🎂 С днюхой, ${b.name}!`, body: 'Вся хата поздравляет. Сегодня ты не у плиты — пусть кенты кормят тебя.' });
+        total += await send([b.id], { title: `🎂 С днюхой, ${b.name}!`, body: 'Вся компания поздравляет! Сегодня ты не у плиты — пусть друзья кормят тебя.' });
       }
       return json({ birthdays: born.length, sent: total });
     }

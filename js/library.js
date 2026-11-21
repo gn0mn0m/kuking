@@ -1256,7 +1256,7 @@
   bar.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]'); if (!b) return;
     var t = b.getAttribute('data-tab'), Soc = SOC();
-    if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) Soc.open(); else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
+    if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) { var fi = ['list', 'plan', 'chats', 'profile'].indexOf(SUB[view] ? TAB : view); if (Soc.openTab) Soc.openTab(fi > 2 ? 'l' : 'r'); else Soc.open(); } else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
     if (Soc.isOpen && Soc.isOpen()) Soc.close();
     if (t === view) { ov.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     var ORD = ['list', 'plan', 'chats', 'profile'], from = ORD.indexOf(SUB[view] ? TAB : view);

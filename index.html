@@ -1595,6 +1595,39 @@ input, select, textarea { font-size: max(16px, 1em); }
 .ts-when-h.ok { color: var(--green); }
 .ask-ico { width: 44px; height: 44px; justify-self: center; fill: none; stroke: var(--orange); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .ps-ask { margin-top: 14px; padding: 14px; border-radius: 16px; background: var(--surface); animation: row-in .3s var(--ease-out) both; }
+/* 3.11 — Чаты как обычная вкладка, вид как в Телеграме */
+.soc-ov.as-tab { transform: translateX(28px); opacity: 0; box-shadow: none; transition: transform .32s var(--ease-drawer, cubic-bezier(.22,1,.36,1)), opacity .22s ease-out; }
+.soc-ov.as-tab.from-l { transform: translateX(-28px); }
+.soc-ov.as-tab.on { transform: none; opacity: 1; }
+.soc-head2 { margin-bottom: 0; }
+.soc-head2.tg-head-sub { margin-bottom: 12px; }
+.soc-head2 .tg-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.soc-ov.scrolled .tg-mini { opacity: 1; transform: none; }
+.soc-ov.scrolled .soc-head2:not(.tg-head-sub) { border-bottom-color: var(--line); }
+.soc-ov .tg-mini { padding-left: 0; }
+.soc-find { margin: 0 0 10px; }
+.soc-list.tgl { gap: 0; margin: 0 -6px; }
+.soc-list.tgl .soc-row { border-radius: 0; position: relative; margin: 0; background: none; border: 0; }
+.soc-list.tgl .soc-row + .soc-row::before { content: ''; position: absolute; top: 0; left: 76px; right: 6px; height: 1px; background: var(--line); }
+.soc-list.tgl .soc-who { padding: 9px 6px; gap: 12px; border-radius: 12px; }
+.soc-list.tgl .soc-av { width: 54px; height: 54px; font-size: 1.3rem; }
+.soc-list.tgl .soc-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.soc-list.tgl .soc-who-t { flex: 1; gap: 3px; }
+.soc-l1, .soc-l2 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.soc-l1 .soc-nm { flex: 0 1 auto; }
+.soc-real { color: var(--muted); font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.soc-when { margin-left: auto; flex: none; padding-left: 8px; color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.soc-l2 .small { flex: 1; min-width: 0; }
+.soc-pin { flex: none; width: 15px; height: 15px; fill: var(--muted); transform: rotate(45deg); opacity: .8; }
+.soc-list.tgl .soc-row.is-chef .soc-av { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--orange); }
+.soc-av-add { background: color-mix(in srgb, var(--orange) 14%, var(--surface)); color: var(--orange); }
+.soc-av-add svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.soc-add-t { color: var(--orange); font-weight: 600; }
+.soc-list.tgl + .soc-sec { margin-top: 14px; }
+.soc-list.tgl .soc-act { padding-right: 4px; }
+.soc-list.tgl .soc-chef:not(.adm) { display: none; }
+@media (hover: hover) { .soc-list.tgl button.soc-who:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .soc-ov.as-tab, .soc-ov.as-tab.from-l { transform: none; transition: opacity .2s; } }
 </style>
 
 <div id="app">

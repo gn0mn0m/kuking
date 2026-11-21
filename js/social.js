@@ -128,13 +128,16 @@
     wrap = ov.querySelector('.soc-wrap');
     if (!ov.hidden && wasDeep !== deep) { void wrap.offsetWidth; wrap.classList.toggle('deep', deep); }
     bind();
+    ov.querySelectorAll('.soc-page').forEach(function (pg) { pg.addEventListener('scroll', function () { if (pg.classList.contains('cur')) ov.classList.toggle('scrolled', pg.scrollTop > 40); }, { passive: true }); });
     pages = ov.querySelectorAll('.soc-page'); pages[0].scrollTop = pos[0]; pages[1].scrollTop = wasDeep === deep ? pos[1] : 0;
     if (keep) { var el = ov.querySelector('#' + keep); if (el) { el.focus(); if (el.setSelectionRange && el.value) el.setSelectionRange(el.value.length, el.value.length); } }
   }
+  function tabMode() { return openFrom === 'chats'; }
   function head(title, back) {
-    if (!back && openFrom === 'profile') return '<header class="soc-head"><button type="button" class="ghost-btn soc-back" data-a="close" aria-label="Назад в профиль">← Профиль</button><span class="soc-head-t">' + (!me ? 'Анкета' : 'Друзья') + '</span><span class="soc-head-sp"></span></header>';
-    return '<header class="soc-head">' + (back ? '<button type="button" class="ghost-btn soc-back" data-a="back" aria-label="Назад">← Друзья</button>' : '<h2 class="soc-title">' + (!me ? 'Анкета' : 'Друзья') + '</h2>') +
-      (back ? '<span class="soc-head-t">' + esc(title) + '</span>' : '') + '<button type="button" class="ghost-btn" data-a="close">Готово</button></header>';
+    var t = !me ? 'Анкета' : tabMode() ? 'Чаты' : 'Друзья';
+    if (back) return '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' + (tabMode() ? 'Чаты' : 'Друзья') + '</button><span class="tg-head-t">' + esc(title) + '</span></header>';
+    if (!tabMode()) return '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Профиль</button><span class="tg-head-t">' + t + '</span></header>';
+    return '<header class="tg-head soc-head2"><span class="tg-mini" aria-hidden="true">' + t + '</span><span class="tg-nav-r"></span></header><h2 class="lib-title tg-big">' + t + '</h2>';
   }
 
   function listHTML() {
@@ -144,27 +147,28 @@
     if (view === 'push') return head() + pushCard(true);
     var m = uid(), h = head();
     var mi = info[m] || {};
-    h += '<div class="soc-me">' + avatar(me, true) + '<div class="soc-me-t">' + nickHTML(me) + '<span class="small">' + esc([mi.name, mi.bday ? bdayText(mi.bday) : ''].filter(Boolean).join(' · ') || 'это ты') + '</span></div>' +
+    if (!tabMode()) h += '<div class="soc-me">' + avatar(me, true) + '<div class="soc-me-t">' + nickHTML(me) + '<span class="small">' + esc([mi.name, mi.bday ? bdayText(mi.bday) : ''].filter(Boolean).join(' · ') || 'это ты') + '</span></div>' +
       '<button type="button" class="ghost-btn" data-a="nick">Анкета</button></div>';
-    if (view === 'push') h += pushCard(true);
-    h += '<div class="soc-invite"><button type="button" class="nav-btn primary" data-a="invite">Позвать по ссылке</button>' +
-      '<p class="small">Кинь ссылку в чат — друг тапнет, войдёт, и вы сразу кенты. Или пусть найдёт тебя по нику <b>' + esc(me.nick) + '</b>.</p></div>';
-    h += '<form class="soc-search" id="socFind" role="search"><input id="socQ" type="search" placeholder="Найти по нику" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(searchQ) + '" aria-label="Ник друга"><button type="submit" class="ghost-btn">Найти</button></form>';
-    if (found) h += '<ul class="soc-list">' + (found.length ? found.map(function (p) { return row(p, true); }).join('') : '<li class="small soc-pad">Никого с таким ником.</li>') + '</ul>';
+    h += '<form class="tg-search soc-find" id="socFind" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
+      '<input id="socQ" type="search" enterkeyhint="search" placeholder="Найти кента по нику" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(searchQ) + '" aria-label="Ник друга"></form>';
+    h += '<ul class="soc-list tgl"><li class="soc-row"><button type="button" class="soc-who soc-add" data-a="invite"><span class="soc-av soc-av-add" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.6"/><path d="M3.5 19c.9-3.4 3.4-5.2 6.5-5.2 1.4 0 2.6.3 3.6 1M18 13v6M15 16h6"/></svg></span>' +
+      '<span class="soc-who-t"><b class="soc-add-t">Позвать по ссылке</b><span class="small">или пусть найдёт тебя по нику ' + esc(me.nick) + '</span></span></button></li></ul>';
+    if (found) h += '<h3 class="soc-sec">Поиск</h3><ul class="soc-list tgl">' + (found.length ? found.map(function (p) { return row(p, true); }).join('') : '<li class="small soc-pad">Никого с таким ником.</li>') + '</ul>';
     var inc = links.filter(function (l) { return l.status === 'pending' && l.b === m; });
-    if (inc.length) h += '<h3 class="soc-sec">Хотят в друзья · ' + inc.length + '</h3><ul class="soc-list">' + inc.map(function (l) { return row(people[l.a] || { id: l.a, nick: '…' }, false); }).join('') + '</ul>';
+    if (inc.length) h += '<h3 class="soc-sec">Хотят в друзья · ' + inc.length + '</h3><ul class="soc-list tgl">' + inc.map(function (l) { return row(people[l.a] || { id: l.a, nick: '…' }, false); }).join('') + '</ul>';
     var out = links.filter(function (l) { return l.status === 'pending' && l.a === m; });
     var fr = friendIds().map(function (id) { return people[id] || { id: id, nick: '…' }; }).filter(function (p) { return !admin || p.id !== admin.id; })
-      .sort(function (a, b) { return a.nick.localeCompare(b.nick, 'ru'); });
-    h += '<h3 class="soc-sec">Хата</h3><ul class="soc-list">';
+      .sort(function (a, b) { var x = lastAt(b.id), y = lastAt(a.id); return x !== y ? (x > y ? 1 : -1) : a.nick.localeCompare(b.nick, 'ru'); });
+    h += '<h3 class="soc-sec">Хата</h3><ul class="soc-list tgl">';
     if (admin && admin.id !== m) h += row(admin, false, true);
     h += fr.map(function (p) { return row(p, false); }).join('');
     if (!fr.length && (!admin || admin.id === m)) h += '<li class="small soc-pad">Пока ты один, как волк. Зови кентов.</li>';
     h += '</ul>';
-    if (out.length) h += '<h3 class="soc-sec">Ждут ответа</h3><ul class="soc-list">' + out.map(function (l) { return row(people[l.b] || { id: l.b, nick: '…' }, false); }).join('') + '</ul>';
+    if (out.length) h += '<h3 class="soc-sec">Ждут ответа</h3><ul class="soc-list tgl">' + out.map(function (l) { return row(people[l.b] || { id: l.b, nick: '…' }, false); }).join('') + '</ul>';
     if (msg) h += '<p class="set-msg soc-pad">' + esc(msg) + '</p>';
     return h;
   }
+  function lastAt(id) { var rv = reviewsBy[id] || {}, t = ''; Object.keys(rv).forEach(function (k) { if (rv[k].score && String(rv[k].at || '') > t) t = String(rv[k].at); }); return t; }
   function stats(id) {
     var rv = reviewsBy[id] || {}, ks = Object.keys(rv).filter(function (k) { return rv[k].score; });
     if (!ks.length) return '';
@@ -178,13 +182,18 @@
     else if (rel === 'sent') act = '<button type="button" class="ghost-btn soc-sm" data-a="cancel" data-id="' + p.id + '">Отменить</button>';
     else if (rel === 'none' && searching) act = '<button type="button" class="nav-btn primary soc-sm" data-a="add" data-id="' + p.id + '">Добавить</button>';
     var open = rel === 'friend' || p.is_admin;
-    var pi = info[p.id] || {};
-    var sub = rel === 'sent' ? 'заявка ушла' : rel === 'incoming' ? 'стучится к тебе' : bdayToday(pi.bday) ? 'Сегодня день рождения' : (stats(p.id) || (open ? 'ещё ничего не оценил' : ''));
-    if (pi.name && rel !== 'sent' && rel !== 'incoming' && !bdayToday(pi.bday)) sub = pi.name + (sub ? ' · ' + sub : '');
+    var pi = info[p.id] || {}, rv = reviewsBy[p.id] || {}, lastId = null;
+    Object.keys(rv).forEach(function (k) { if (rv[k].score && (!lastId || String(rv[k].at || '') > String(rv[lastId].at || ''))) lastId = k; });
+    var lr = lastId && rv[lastId];
+    var sub = rel === 'sent' ? 'заявка ушла' : rel === 'incoming' ? 'стучится к тебе' : bdayToday(pi.bday) ? '🎂 Сегодня день рождения' :
+      lr ? 'Оценил «' + titleOf(lastId, lr.title) + '» — ' + lr.score + '/10' : open ? 'ещё ничего не оценил' : (pi.name || '');
+    var when = lr && rel !== 'sent' && rel !== 'incoming' && lr.at ? ago(lr.at) : '';
+    var pin = pinned ? '<svg class="soc-pin" viewBox="0 0 24 24" aria-label="Закреплён"><path d="M14 3l7 7-3 1-4 4 1 4-2 2-4-5-5 5-1-1 5-5-5-4 2-2 4 1 4-4z"/></svg>' : '';
     return '<li class="soc-row' + (p.is_admin ? ' is-chef' : '') + '">' +
       (open ? '<button type="button" class="soc-who" data-a="profile" data-id="' + p.id + '">' : '<div class="soc-who">') +
-      avatar(p) + '<span class="soc-who-t">' + nickHTML(p) + (sub ? '<span class="small">' + esc(sub) + '</span>' : '') + '</span>' +
-      (open ? '<svg class="soc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>' : '</div>') +
+      avatar(p) + '<span class="soc-who-t"><span class="soc-l1">' + nickHTML(p) + (pi.name && rel !== 'sent' && rel !== 'incoming' ? '<span class="soc-real">' + esc(pi.name) + '</span>' : '') + '<span class="soc-when">' + esc(when) + '</span></span>' +
+      '<span class="soc-l2"><span class="small">' + esc(sub) + '</span>' + pin + '</span></span>' +
+      (open ? '</button>' : '</div>') +
       (act ? '<span class="soc-act">' + act + '</span>' : '') + '</li>';
   }
   /* черновик анкеты: что ввёл — не пропадёт, даже если экран перерисуется */
@@ -260,8 +269,8 @@
 
   function anketaPage() {
     var back = anketaFrom === 'friends' && me;
-    var h = '<header class="soc-head">' + (back ? '<button type="button" class="ghost-btn soc-back" data-a="nickx">← Друзья</button><span class="soc-head-t">Анкета</span>' : '<h2 class="soc-title">Анкета</h2>') +
-      '<button type="button" class="ghost-btn" data-a="' + (back ? 'close' : 'nickx') + '">' + (back ? 'Готово' : 'Закрыть') + '</button></header>';
+    var h = back ? '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="nickx"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' + (tabMode() ? 'Чаты' : 'Друзья') + '</button><span class="tg-head-t">Анкета</span></header>'
+      : '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="nickx"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Профиль</button><span class="tg-head-t">Анкета</span></header>';
     if (!loaded) return h + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-card"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
     return h + nickForm(false);
   }
@@ -507,6 +516,8 @@
         found = rows || []; found.forEach(function (p) { people[p.id] = p; }); render();
       }).catch(function () { found = []; render(); });
     });
+    var qi = ov.querySelector('#socQ');
+    if (qi && f) qi.addEventListener('input', function () { clearTimeout(qi._t); qi._t = setTimeout(function () { if (f.isConnected) f.dispatchEvent(new Event('submit', { cancelable: true })); }, 380); });
     var nf = ov.querySelector('#socNick');
     if (nf) {
       var bd = ov.querySelector('#socBday'); if (bd) bd.addEventListener('input', maskDate);
@@ -619,14 +630,21 @@
   }
   function close() {
     ov.classList.remove('on'); clearInterval(timer);
-    setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; openFrom = 'chats'; ov.style.transform = ''; ov.style.transition = ''; }, 360);
+    searchQ = ''; found = null;
+    setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; openFrom = 'chats'; ov.style.transform = ''; ov.style.transition = ''; ov.classList.remove('as-tab', 'from-l', 'scrolled'); }, ov.classList.contains('as-tab') ? 220 : 360);
     if (last && last.focus) last.focus();
     (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} });
   }
   var closeSubs = [];
   API.open = open; API.close = close;
   API.mode = function () { return view === 'nick' && anketaFrom === 'profile' ? 'anketa' : openFrom === 'profile' ? 'profile' : 'friends'; };
-  API.openFriends = function () { openFrom = 'profile'; open(); };
+  API.openFriends = function () { openFrom = 'profile'; ov.classList.remove('as-tab', 'from-l'); open(); };
+  /* «Чаты» — обычная вкладка: без шторки справа, въезжает как остальные страницы */
+  API.openTab = function (dir) {
+    openFrom = 'chats'; anketaFrom = 'friends';
+    if (!ov.hidden && ov.classList.contains('on')) { var c = ov.querySelector('.soc-page.cur'); if (c) c.scrollTo({ top: 0, behavior: 'smooth' }); if (view !== 'list') { view = 'list'; render(); } return; }
+    ov.classList.add('as-tab'); ov.classList.toggle('from-l', dir === 'l'); open();
+  };
   /* смах вправо: со второй страницы — назад, с первой — закрыть; экран идёт за пальцем */
   (function () {
     var sx = null, sy = 0, dx = 0, t0 = 0, on = false;
@@ -637,7 +655,7 @@
       dx = Math.max(0, mx);
       var deep = view === 'profile' || view === 'nick';
       if (deep) { var w = ov.querySelector('.soc-wrap'); if (w) { w.style.transition = 'none'; w.style.transform = 'translateX(calc(-50% + ' + dx + 'px))'; } }
-      else { ov.style.transition = 'none'; ov.style.transform = 'translateX(' + dx + 'px)'; }
+      else if (!ov.classList.contains('as-tab')) { ov.style.transition = 'none'; ov.style.transform = 'translateX(' + dx + 'px)'; }
     }, { passive: true });
     ov.addEventListener('touchend', function () {
       if (sx == null || !on) { sx = null; return; } sx = null; on = false;
@@ -646,7 +664,7 @@
       if (deep && view === 'nick' && anketaFrom === 'profile') { if (w) { w.style.transition = ''; w.style.transform = ''; } if (go) { ov.style.transition = 'none'; ov.style.transform = 'translateX(' + dx + 'px)'; void ov.offsetWidth; ov.style.transition = ''; ov.style.transform = ''; if (window.kHaptic) window.kHaptic(6); close(); } }
       else if (deep) { if (w) { w.style.transition = ''; w.style.transform = go ? 'translateX(0)' : ''; }
         if (go) { if (window.kHaptic) window.kHaptic(6); setTimeout(function () { if (w) w.style.transform = ''; view = 'list'; render(); }, 340); } }
-      else { ov.style.transition = ''; ov.style.transform = ''; if (go) { if (window.kHaptic) window.kHaptic(6); close(); } }
+      else if (!ov.classList.contains('as-tab')) { ov.style.transition = ''; ov.style.transform = ''; if (go) { if (window.kHaptic) window.kHaptic(6); close(); } }
     });
   })();
   /* потянул вниз — обновить друзей и оценки */

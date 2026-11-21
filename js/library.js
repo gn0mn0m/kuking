@@ -39,6 +39,7 @@
   function titleOf(id) { var r = byId(id); return r ? r.title : id; }
   function persist(id) {
     saveLocal();
+    if (reviews[id] && reviews[id].score) try { autoDone(id); } catch (e) {}
     if (!db) return;
     var v = reviews[id], ref = db.collection('reviews').doc(id);
     (v ? ref.set({ score: v.score, comment: v.comment || '', title: titleOf(id), at: v.at || today(), updatedAt: new Date().toISOString() }) : ref.delete()).catch(function () {});
@@ -352,20 +353,28 @@
   function tIco(k) { var x = TK[k]; return '<span class="pf-ico" style="background:' + x[0] + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + x[1] + '</svg></span>'; }
   var CAL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
   var GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>';
+  /* время — прямо в строке: тапнул, крутанул барабан, план пересобрался */
+  function timeIn(x) { return '<label class="ag-time ag-tin"><input type="time" data-tin="' + esc(x.key) + '" value="' + esc(x.time || '') + '" aria-label="Время: ' + esc(x.title) + '"><span>' + esc(x.time || '—') + '</span></label>'; }
+  function chkBtn(k, dn) { return '<button type="button" class="ag-chk' + (dn ? ' on' : '') + '" data-tdone="' + esc(k) + '" role="checkbox" aria-checked="' + dn + '" aria-label="Сделано"><span class="chk-box"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span></button>'; }
+  function shopProg(x) {
+    var h = shopHave[x.key] || {}, n = 0, got = 0, seen = {};
+    x.ids.forEach(function (id) { ((byId(id) || {}).ingredients || []).forEach(function (i) { if (!i || !i.name) return; var k = i.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() + '|' + (i.unit || ''); if (seen[k]) return; seen[k] = 1; n++; if (h[k]) got++; }); });
+    return got ? got + '/' + n : 'Список';
+  }
   function taskRow(x, tday) {
     var dn = !!doneTasks[x.key], past = x.day < tday;
     if (x.kind === 'cook') {
       var r = byId(x.dish);
-      return '<li class="ag-it ag-cook' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '" data-swk="cook" data-dish="' + esc(x.dish) + '" data-pday="' + x.day + '"><div class="ag-bg"><span class="ag-bg-r"></span><span class="ag-bg-l"><button type="button" class="ag-sw mv" data-agsw="move" tabindex="-1">Перенести</button><button type="button" class="ag-sw del" data-agsw="del" tabindex="-1">Убрать</button></span></div><div class="ag-row"><span class="ag-time">' + esc(x.time) + '</span>' +
+      return '<li class="ag-it ag-cook' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '" data-swk="cook" data-dish="' + esc(x.dish) + '" data-pday="' + x.day + '"><div class="ag-bg"><span class="ag-bg-r"></span><span class="ag-bg-l"><button type="button" class="ag-sw mv" data-agsw="move" tabindex="-1">Перенести</button><button type="button" class="ag-sw del" data-agsw="del" tabindex="-1">Убрать</button></span></div><div class="ag-row">' + timeIn(x) +
         '<button type="button" class="ag-main" data-task="' + esc(x.key) + '"><span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span><span class="ag-t"><b>' + esc(r.title) + '</b><small>' + esc(x.sub) + '</small></span></button>' +
-        '<button type="button" class="pl-x" data-unplan="' + esc(x.dish) + '" data-pday="' + x.day + '" aria-label="Убрать из плана"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></div></li>';
+        chkBtn(x.key, dn) + '</div></li>';
     }
     if (x.kind === 'empty') return '<li class="ag-it ag-empty" data-k="' + esc(x.key) + '"><span class="ag-time">' + esc(x.time || '') + '</span>' +
       '<button type="button" class="ag-main" data-add="' + x.target + '">' + tIco('empty') + '<span class="ag-t"><b>' + esc(x.title) + '</b><small>' + esc(x.sub) + '</small></span><span class="ag-more">Добавить</span></button></li>';
-    return '<li class="ag-it' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '" data-swk="task"><div class="ag-bg"><span class="ag-bg-r">' + (dn ? 'Вернуть' : 'Сделано') + '</span><span class="ag-bg-l"></span></div><div class="ag-row"><span class="ag-time">' + esc(x.time || '') + '</span>' +
+    return '<li class="ag-it' + (dn ? ' done' : '') + '" data-k="' + esc(x.key) + '" data-swk="task"><div class="ag-bg"><span class="ag-bg-r">' + (dn ? 'Вернуть' : 'Сделано') + '</span><span class="ag-bg-l"></span></div><div class="ag-row">' + timeIn(x) +
       '<button type="button" class="ag-main"' + (x.kind === 'shop' ? ' data-shop="' + esc(x.key) + '"' : ' data-task="' + esc(x.key) + '"') + '>' + tIco(x.kind) + '<span class="ag-t"><b>' + esc(x.title) + '</b><small>' + esc(x.sub) + '</small></span>' +
-      '<span class="ag-more">' + (x.kind === 'shop' ? 'Список' : 'Как') + '</span></button>' +
-      '<button type="button" class="ag-chk' + (dn ? ' on' : '') + '" data-tdone="' + esc(x.key) + '" role="checkbox" aria-checked="' + dn + '" aria-label="Сделано"><span class="chk-box"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span></button></div></li>';
+      '<span class="ag-more">' + (x.kind === 'shop' ? shopProg(x) : 'Как') + '</span></button>' +
+      chkBtn(x.key, dn) + '</div></li>';
   }
   /* смахи в плане: дело вправо — сделано; блюдо влево — кнопки «Перенести / Убрать», до конца — убрать */
   function agSwipes() {
@@ -526,10 +535,30 @@
     sendIcs(list.map(function (x) { return vevent(x, x.ids && x.ids[0] ? byId(x.ids[0]) : null); }), 'kuking-plan');
     return list.length;
   }
+  /* оценил блюдо из плана — значит приготовил: готовка и её дела (закупка, маринад, разморозка) отмечаются сами */
+  function autoDone(id) {
+    var td = today(), all = tasksAll().filter(function (x) { return x.kind === 'cook' && x.dish === id && !doneTasks[x.key]; });
+    var mine = all.filter(function (x) { return x.day <= td; });
+    if (!mine.length) mine = all.filter(function (x) { return x.day <= addDays(td, 2); }).slice(0, 1); // приготовил раньше плана
+    if (!mine.length) return;
+    mine.forEach(function (c) {
+      doneTasks[c.key] = Date.now();
+      tasksAll().forEach(function (x) { if (x.kind !== 'cook' && x.kind !== 'empty' && x.ids && x.ids.length === 1 && x.ids[0] === id && x.day <= c.day && !doneTasks[x.key]) doneTasks[x.key] = Date.now(); });
+    });
+    saveDone();
+  }
+  /* сделанное и купленное — в облако, чтобы не терялось между телефоном и приложением с экрана «Домой» */
+  var shopHave = load('kuking:shopAll', {});
+  Object.keys(localStorage).forEach(function (k) { if (k.indexOf('kuking:shopHave:') === 0) { var key = k.slice(16); if (!shopHave[key]) try { shopHave[key] = JSON.parse(localStorage.getItem(k)) || {}; } catch (e) {} } });
+  var doneT = null;
+  function saveDone() {
+    lset('kuking:planDone', JSON.stringify(doneTasks)); lset('kuking:shopAll', JSON.stringify(shopHave)); syncTasks();
+    clearTimeout(doneT); doneT = setTimeout(function () { if (db) db.collection('meta').doc('done').set({ done: doneTasks, shop: shopHave, updatedAt: new Date().toISOString() }).catch(function () {}); }, 600);
+  }
   /* отметка «сделано» — на месте, без перерисовки */
   function setDone(k, on) {
     if (on) doneTasks[k] = Date.now(); else delete doneTasks[k];
-    lset('kuking:planDone', JSON.stringify(doneTasks)); syncTasks();
+    saveDone();
     var li = ov.querySelector('.ag-it[data-k="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]');
     if (li) { li.classList.toggle('done', on); var c = li.querySelector('.ag-chk'); if (c) { c.classList.toggle('on', on); c.setAttribute('aria-checked', String(on)); } }
     if (on && window.kHaptic) window.kHaptic(10);
@@ -586,24 +615,28 @@
   function shopList(key) {
     var x = tasksAll().filter(function (t) { return t.key === key; })[0]; if (!x) return;
     var sum = {}, order = [];
-    x.ids.forEach(function (id) { (byId(id).ingredients || []).forEach(function (i) {
-      var k = i.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() + '|' + (i.unit || '');
+    x.ids.forEach(function (id) { ((byId(id) || {}).ingredients || []).forEach(function (i) {
+      if (!i || !i.name) return; var k = i.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() + '|' + (i.unit || '');
       if (!sum[k]) { sum[k] = { name: i.name.replace(/\s*\(.*?\)\s*/g, ' ').trim(), unit: i.unit || '', amount: 0, text: i.unitText || '' }; order.push(k); }
       if (i.amount) sum[k].amount += +i.amount;
     }); });
-    var have = load('kuking:shopHave:' + key, {});
+    var have = shopHave[key] = shopHave[key] || {};
     var rows = order.map(function (k) { var v = sum[k], q = v.amount ? (Math.round(v.amount * 10) / 10) + ' ' + v.unit : v.text;
       return '<li class="chk' + (have[k] ? ' on' : '') + '" data-sh="' + esc(k) + '" role="checkbox" aria-checked="' + !!have[k] + '" tabindex="0"><span class="chk-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span><span class="chk-name">' + esc(v.name) + '</span><span class="chk-am">' + esc(q) + '</span></li>'; });
     var txt = order.map(function (k) { var v = sum[k]; return '• ' + v.name + (v.amount ? ' — ' + Math.round(v.amount * 10) / 10 + ' ' + v.unit : v.text ? ' — ' + v.text : ''); }).join('\n');
     sheet('<div class="pk-head"><b>' + esc(x.title) + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div><p class="small pk-sub">' + esc(x.sub) + ' · ' + x.ids.map(function (id) { return '«' + esc(byId(id).title) + '»'; }).join(', ') + '</p>' +
       '<div class="pk-acts"><a class="nav-btn" href="https://t.me/share/url?url=' + encodeURIComponent(' ') + '&text=' + encodeURIComponent('Закупка:\n' + txt) + '" target="_blank" rel="noopener">Отправить в Telegram</a><button type="button" class="ghost-btn" data-copy="1">Скопировать</button></div>' +
-      '<ul class="chk-list">' + rows.join('') + '</ul><button type="button" class="ts-cal" data-ics="1">' + CAL + '<span>Закупку — в календарь iPhone</span></button>',
-    function (e) {
+      '<p class="small sh-prog" aria-live="polite">Куплено ' + order.filter(function (o) { return have[o]; }).length + ' из ' + order.length + '</p><ul class="chk-list">' + rows.join('') + '</ul><button type="button" class="ts-cal" data-ics="1">' + CAL + '<span>Закупку — в календарь iPhone</span></button>',
+    function (e, m) {
       if (e.target.closest('[data-ics]')) { addToCal(x, null); return; }
       if (e.target.closest('[data-copy]')) { try { navigator.clipboard.writeText('Закупка:\n' + txt); e.target.textContent = 'Скопировано'; } catch (x2) {} return; }
       var li = e.target.closest('[data-sh]'); if (!li) return;
       var k = li.getAttribute('data-sh'); have[k] = !have[k]; if (!have[k]) delete have[k];
-      li.classList.toggle('on', !!have[k]); li.setAttribute('aria-checked', String(!!have[k])); lset('kuking:shopHave:' + key, JSON.stringify(have));
+      li.classList.toggle('on', !!have[k]); li.setAttribute('aria-checked', String(!!have[k])); if (window.kHaptic) window.kHaptic(6);
+      var got = order.filter(function (o) { return have[o]; }).length, pr = m.querySelector('.sh-prog'); if (pr) pr.textContent = 'Куплено ' + got + ' из ' + order.length;
+      if (got === order.length && !doneTasks[key]) { doneTasks[key] = Date.now(); if (pr) pr.textContent = 'Всё куплено — закупка закрыта'; }
+      else if (got < order.length && doneTasks[key]) delete doneTasks[key];
+      saveDone();
     });
   }
   /* сразу на старте плана: включить уведомления? */
@@ -959,6 +992,16 @@
     function agGuard(b) { if (Date.now() < noClickUntil) return true; var o = b.closest('.ag-it.sw-open'); if (o) { o._reset(); return true; } return false; }
     on('[data-shop]', function (b) { if (!agGuard(b)) shopList(b.getAttribute('data-shop')); });
     on('[data-tdone]', function (b) { var k = b.getAttribute('data-tdone'); setDone(k, !doneTasks[k]); });
+    ov.querySelectorAll('[data-tin]').forEach(function (inp) {
+      ['touchstart', 'pointerdown'].forEach(function (ev) { inp.addEventListener(ev, function (e) { e.stopPropagation(); }, { passive: true }); });
+      inp.addEventListener('input', function () { var sp = inp.nextElementSibling; if (sp && inp.value) sp.textContent = inp.value; });
+      inp.addEventListener('change', function () {
+        var k = inp.getAttribute('data-tin'), x = tasksAll().filter(function (t) { return t.key === k; })[0]; if (!x || !inp.value || inp.value === x.time) return;
+        if (x.kind === 'cook') planOv.cook[x.day] = inp.value; else planOv.tasks[k] = { day: x.day, time: inp.value };
+        savePlan(); if (window.kHaptic) window.kHaptic(8);
+        setTimeout(planRefresh, 250);
+      });
+    });
     on('[data-task]', function (b) { if (!agGuard(b)) taskSheet(b.getAttribute('data-task')); });
     on('[data-unplan]', function (b) { var id = b.getAttribute('data-unplan'), d = b.getAttribute('data-pday'), li = b.closest('.ag-it');
       plan[d] = (plan[d] || []).filter(function (x) { return x !== id; }); savePlan();
@@ -1223,6 +1266,13 @@
       }).catch(function () {});
       db.collection('meta').doc('plan').get().then(function (x) {
         var v = x && x.exists && x.data(); if (v && v.days) { Object.keys(v.days).forEach(function (k) { if (!plan[k]) plan[k] = v.days[k]; }); if (v.cfg && !planCfg) planCfg = v.cfg; if (v.ov && !Object.keys(planOv.tasks).length && !Object.keys(planOv.cook).length) { planOv = v.ov; planOv.tasks = planOv.tasks || {}; planOv.cook = planOv.cook || {}; lset('kuking:planOv', JSON.stringify(planOv)); } lset('kuking:plan', JSON.stringify(plan)); lset('kuking:planCfg', JSON.stringify(planCfg)); if (!ov.hidden) keepY(render); }
+      }).catch(function () {});
+      db.collection('meta').doc('done').get().then(function (x) {
+        var v = x && x.exists && x.data(); if (!v) return;
+        Object.keys(v.done || {}).forEach(function (k) { if (!doneTasks[k]) doneTasks[k] = v.done[k]; });
+        Object.keys(v.shop || {}).forEach(function (k) { shopHave[k] = shopHave[k] || {}; Object.keys(v.shop[k] || {}).forEach(function (i) { shopHave[k][i] = shopHave[k][i] || v.shop[k][i]; }); });
+        lset('kuking:planDone', JSON.stringify(doneTasks)); lset('kuking:shopAll', JSON.stringify(shopHave));
+        if (!ov.hidden && !typing()) keepY(render);
       }).catch(function () {});
       db.collection('meta').doc('ideas').get().then(function (x) {
         var v = x && x.exists && x.data();

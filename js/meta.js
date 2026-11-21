@@ -143,7 +143,7 @@
     h += '<div class="mt-row">' + [CATS[m.category], m.cuisine, m.main].filter(Boolean).map(function (x) { return '<span class="mt-chip">' + esc(x) + '</span>'; }).join('') + '</div>';
     h += '<div class="mt-grid">' +
       '<div class="mt-cell"><span class="mt-k">Сложность</span><span class="mt-hats" aria-label="' + m.difficulty + ' из 5">' +
-        [1, 2, 3, 4, 5].map(function (i) { return '<i class="' + (i <= m.difficulty ? 'on' : '') + '">' + HAT + '</i>'; }).join('') + '</span><span class="mt-v">' + DLV[m.difficulty] + '</span></div>' +
+        [1, 2, 3, 4, 5].map(function (i) { return '<i class="' + (i <= m.difficulty ? 'on' : '') + '">' + HAT + '</i>'; }).join('') + '</span><span class="mt-v">' + DLV[m.difficulty] + (window.KCat ? ' · ' + KCat.forYou(r)[1] : '') + '</span></div>' +
       (m.activeMin ? '<div class="mt-cell"><span class="mt-k">Активно</span><b class="mt-big">≈ ' + m.activeMin + ' мин</b><span class="mt-v">у плиты и доски</span></div>' : '') +
       '</div>';
     if (m.diets.length) h += '<div class="mt-row">' + m.diets.map(function (d) { return '<span class="mt-diet d-' + d + '">' + DIETS[d] + '</span>'; }).join('') + '</div>';

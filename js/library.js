@@ -98,13 +98,15 @@
     var a = R.slice().reverse().filter(function (r) {
       if (isHid(r.id)) return false;
       if (forMode === 'new') { if (rv(r.id).score) return false; } else if (forMode && r.mode !== forMode) return false;
-      if (q && (r.title + ' ' + (r.tagline || '') + ' ' + (r.tags || []).join(' ') + ' ' + (r.dishes || []).map(function (d) { return d.name; }).join(' ')).toLowerCase().indexOf(q) < 0) return false;
+      if (window.KCat && !KCat.pass(r)) return false;
+      if (q && !(window.KCat && KCat.aiOn()) && (r.title + ' ' + (r.tagline || '') + ' ' + (r.tags || []).join(' ') + ' ' + (r.dishes || []).map(function (d) { return d.name; }).join(' ')).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     var by = { fast: function (x, y) { return mins(x) - mins(y); }, slow: function (x, y) { return mins(y) - mins(x); },
       hi: function (x, y) { return rv(y.id).score - rv(x.id).score; }, lo: function (x, y) { return (rv(x.id).score || 99) - (rv(y.id).score || 99); } }[sortBy];
     if (by) a.sort(by);
     if (sortBy === 'old') a.reverse();
+    if (window.KCat) a = KCat.order(a);
     return a.filter(function (r) { return isPin(r.id); }).sort(function (x, y) { return pinned.indexOf(x.id) - pinned.indexOf(y.id); }).concat(a.filter(function (r) { return !isPin(r.id); }));
   }
 
@@ -182,10 +184,11 @@
       }).join('') +
       '<button type="button" class="tg-chip tg-sort" aria-expanded="' + sortOpen + '" aria-label="Порядок">⇅ ' + esc((SORTS.filter(function (s) { return s[0] === sortBy; })[0] || SORTS[0])[1]) + '</button></div>' +
       (sortOpen ? '<div class="tg-pop" role="menu">' + SORTS.map(function (s) { return '<button type="button" role="menuitemradio" data-sort="' + s[0] + '" aria-checked="' + (sortBy === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>' : '') + '</div>';
+    if (window.KCat && all.length) h += KCat.barHTML(all) + '<div class="kc-askw">' + KCat.askHTML(query) + '</div>';
     h += todayCard();
     if (active && !isHid(active.id)) h += '<button type="button" class="tg-pin" id="libClose"><span class="tg-pin-bar"></span><span class="tg-pin-t"><small>Сейчас готовишь</small><b>' + esc(active.title) + '</b></span><span class="tg-pin-go">Открыть →</span></button>';
     if (!all.length) h += emptyHTML();
-    else if (!list.length) h += '<p class="small tg-none">Ничего не нашёл. Попробуй другое слово или сбрось фильтр.</p>';
+    else if (!list.length) h += '<p class="small tg-none">Ничего не нашёл. Попробуй другое слово или сбрось фильтр.</p>' + (window.KCat && KCat.active() ? '<button type="button" class="nav-btn kc-reset">Сбросить фильтры</button>' : '');
     else h += '<div class="tg-lists">' + listsHTML(list) + '</div>';
     h += hiddenBlock();
     return h;
@@ -755,7 +758,7 @@
       '<span class="tg-av m-' + esc(r.mode || 'self') + '" aria-hidden="true">' + emoji(r) + '</span>' +
       '<span class="tg-body"><span class="tg-l1"><b class="tg-name">' + esc(r.title) + '</b>' + (isPin(r.id) ? '<svg class="tg-pinico" viewBox="0 0 24 24" aria-label="Закреплён"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg>' : '') + '<small class="tg-time">' + esc(String(r.totalTime || '').replace('≈ ', '')) + '</small></span>' +
       '<span class="tg-l2"><span class="tg-sub">' + (MODE_SHORT[r.mode] ? '<span class="tg-mode m-' + r.mode + '">' + MODE_SHORT[r.mode] + '</span>' : '') + esc(r.tagline || '') + '</span>' +
-      (scoreHTML(r.id) || (!sc ? '<span class="tg-new" title="Ещё не готовил" aria-label="Новый"></span>' : '')) + '</span></span></button></li>';
+      (scoreHTML(r.id) || (!sc ? '<span class="tg-new" title="Ещё не готовил" aria-label="Новый"></span>' : '')) + '</span>' + (window.KCat ? KCat.rowBadges(r) : '') + '</span></button></li>';
   }
 
   /* карточка рецепта */
@@ -795,7 +798,7 @@
     if (ch && adm) h += '<section class="tg-sec tg-chefrow">' + CROWN + '<span>Админ <b>' + esc(adm.nick) + '</b> поставил</span><b class="lib-score ' + scCls(ch) + '">' + ch + '<small>/10</small></b></section>';
     h += rateBlock(r);
     var thr = SOC().thread(r.id, reviews[r.id]); if (thr) h += '<section class="tg-sec">' + thr + '</section>';
-    h += '<div class="tg-more">' + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
+    h += '<div class="tg-more">' + (window.KCat ? '<button type="button" class="ghost-btn" data-a="tocol" data-id="' + esc(r.id) + '">📁 ' + (KCat.inCols(r.id).length ? esc(KCat.inCols(r.id).join(', ')) : 'В коллекцию') + '</button>' : '') + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
       (r.ai && !r.manual ? '<button type="button" class="ghost-btn" data-a="upg" data-id="' + esc(r.id) + '">' + (r.upgraded ? 'Обновить ещё раз' : 'Обновить под новые правила') + '</button>' : '') +
       '<button type="button" class="ghost-btn tg-del" data-id="' + esc(r.id) + '">Убрать из книги</button></div>';
     h += '<div class="tg-cta"><button type="button" class="nav-btn primary lib-go" data-id="' + esc(r.id) + '">' + (on ? 'Продолжить готовку →' : 'Готовим это') + '</button></div>';
@@ -1057,7 +1060,10 @@
     on('[data-a=upg]', function (b) { upgradeOne(b.getAttribute('data-id')); });
     on('[data-a=editme]', function (b) { var r = byId(b.getAttribute('data-id')); draft = JSON.parse(JSON.stringify(r.manual._draft || blankDraft())); draft.id = r.id; go('edit'); });
     var q = ov.querySelector('#libQ');
-    if (q) q.addEventListener('input', function () { query = q.value; var l = ov.querySelector('.tg-lists'); if (!l) { render(); return; } l.innerHTML = listsHTML(visible()); on('.tg-lists [data-open]', openTap); gestures(); });
+    if (q) q.addEventListener('input', function () { query = q.value; var aw = ov.querySelector('.kc-askw'); if (aw && window.KCat) { aw.innerHTML = KCat.askHTML(query); var ab = aw.querySelector('[data-kc=ask]'); if (ab) ab.addEventListener('click', function () { KCat.bind(ov, R.filter(function (r) { return !isHid(r.id); }), function () { keepY(render); }, function () { return query; }, ab); }); } var l = ov.querySelector('.tg-lists'); if (!l) { render(); return; } l.innerHTML = listsHTML(visible()); on('.tg-lists [data-open]', openTap); gestures(); });
+    if (window.KCat && view === 'list') KCat.bind(ov, R.filter(function (r) { return !isHid(r.id); }), function () { keepY(render); }, function () { return query; });
+    on('.kc-reset', function () { KCat.reset(); render(); });
+    on('[data-a=tocol]', function (b) { KCat.openCols(b.getAttribute('data-id'), function () { keepY(render); }); });
     on('[data-for]', function (b) { forMode = b.getAttribute('data-for'); lset('kuking:for', forMode); render(); });
     on('.tg-sort', function () { sortOpen = !sortOpen; render(); });
     on('[data-sort]', function (b) { sortBy = b.getAttribute('data-sort'); sortOpen = false; lset('kuking:sort2', sortBy); render(); });
@@ -1328,9 +1334,11 @@
       var b = ov.querySelector('.lib-rate'); if (b) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); b.classList.add('lib-flash'); setTimeout(function () { b.classList.remove('lib-flash'); }, 1600); }
     },
     open: open,
-    resync: function () { syncTasks(); }
+    resync: function () { syncTasks(); },
+    show: function (id) { ov.hidden = false; go('detail', id); render(); }
   };
   /* после знакомства: на главную и сразу собрать 10 идей под человека */
+  window.__kCustom = function (idea, mode) { window.Fresh.custom(freshCtx, idea, mode || 'self'); };
   window.__kStarter = function () { if (window.__kGoTab) window.__kGoTab('list'); go('create'); themesOpen = true; loadThemes(); setTimeout(function () { var t = ov.querySelector('.lib-themes-re, .th-go'); if (t && t.scrollIntoView) t.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 500); };
   if (window.KukingSocial && window.KukingSocial.onChange) window.KukingSocial.onChange(function () { if (!ov.hidden && !typing()) keepY(render); });
 

@@ -1,6 +1,6 @@
 /* Кукинг: подача — детальная схема тарелки сверху с номерами слоёв.
    plate = { vessel: 'bowl'|'plate'|'board'|'skillet', color?, layers: [ {
-     what: 'Рис', shape: 'base'|'sector'|'mound'|'drizzle'|'scatter'|'sticks'|'dollop'|'fan'|'ring',
+     what: 'Рис', shape: 'base'|'sector'|'mound'|'drizzle'|'scatter'|'sticks'|'dollop'|'fan'|'ring'|'taco'|'ramekin'|'wedge'|'quenelle'|'flat',
      item: 'grain'|'cube'|'ring'|'leaf'|'strip'|'chunk'|'slice'|'tri'|'dot'|'noodle'|'smooth'|'sauce',
      color: '#hex', from?: градусы, to?: градусы, r?: 0..1 (доля радиуса), at?: градусы (для dollop/sticks), n?: кол-во } ] } */
 (function () {
@@ -96,6 +96,62 @@
         var at3 = L.at != null ? L.at : 0, cnt3 = L.n || 6, fc = pol(at3, R0 * 0.35);
         for (var w = 0; w < cnt3; w++) { var o = (w - (cnt3 - 1) / 2) * 11; s += piece(L.item || 'slice', fc[0] + Math.cos((at3) * Math.PI / 180) * o, fc[1] + Math.sin((at3) * Math.PI / 180) * o, at3 + 90, 1.25, col, rn); }
         anchor = fc; break;
+      case 'taco': {
+        /* тако стоя, вид сверху: края лепёшки по бокам, начинка полосой посередине — слоями, как в «Сборке» */
+        var tc = pol(L.at != null ? L.at : 0, (L.d != null ? L.d : 0) * R0), rot = L.rot || 0, len = (L.len || 0.62) * R0, wd = (L.w || 0.24) * R0;
+        var tcol = L.color || '#e6c27a', fills = L.fill || [], g = '';
+        g += '<ellipse cx="0" cy="4" rx="' + (len / 2 + 6) + '" ry="' + (wd / 2 + 5) + '" fill="rgba(0,0,0,.18)"/>';
+        g += '<rect x="' + (-len / 2) + '" y="' + (-wd / 2) + '" width="' + len + '" height="' + wd + '" rx="' + (wd / 2) + '" fill="' + tcol + '" stroke="' + shade(tcol, -0.3) + '" stroke-width="1.4"/>';
+        for (var sp = 0; sp < 14; sp++) g += '<circle cx="' + ((rn() - .5) * len * .9).toFixed(1) + '" cy="' + ((rn() < .5 ? -1 : 1) * (wd * .38)).toFixed(1) + '" r="' + (1 + rn() * 1.6).toFixed(1) + '" fill="' + shade(tcol, -0.35) + '" opacity=".55"/>';
+        var iw = wd * 0.52;
+        g += '<rect x="' + (-len / 2 + wd * .32) + '" y="' + (-iw / 2) + '" width="' + (len - wd * .64) + '" height="' + iw + '" rx="' + (iw / 2) + '" fill="' + shade((fills[0] || {}).color || '#7b3a22', -0.25) + '"/>';
+        fills.forEach(function (f, fi) {
+          var cnt = f.n || (f.item === 'dot' ? 10 : f.item === 'leaf' ? 5 : 7);
+          for (var q = 0; q < cnt; q++) {
+            var x = (-len / 2 + wd * .4) + rn() * (len - wd * .8), y = (rn() - .5) * iw * .8;
+            g += piece(f.item, x, y, rn() * 360, (f.s || 0.55) * (0.8 + rn() * .4), f.color, rn);
+          }
+        });
+        if (L.sauce) { var zz = 'M' + (-len / 2 + wd * .4) + ' 0'; for (var zi = 1; zi <= 9; zi++) zz += 'L' + (-len / 2 + wd * .4 + (len - wd * .8) * zi / 9).toFixed(1) + ' ' + (zi % 2 ? -iw * .28 : iw * .28).toFixed(1);
+          g += '<path d="' + zz + '" fill="none" stroke="' + L.sauce + '" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>'; }
+        s += '<g transform="translate(' + tc[0].toFixed(1) + ' ' + tc[1].toFixed(1) + ') rotate(' + rot + ')">' + g + '</g>';
+        anchor = tc; break; }
+      case 'ramekin': {
+        /* пиала с соусом/гарниром на тарелке или рядом */
+        var rc = pol(L.at != null ? L.at : 45, (L.d != null ? L.d : 0.7) * R0), rr2 = (L.r || 0.16) * R0, rcol = L.color || '#f0dfb8';
+        s += '<circle cx="' + rc[0].toFixed(1) + '" cy="' + (rc[1] + 4).toFixed(1) + '" r="' + (rr2 + 6) + '" fill="rgba(0,0,0,.22)"/>' +
+          '<circle cx="' + rc[0].toFixed(1) + '" cy="' + rc[1].toFixed(1) + '" r="' + (rr2 + 6) + '" fill="' + (L.bowl || '#fbf8f3') + '" stroke="#ddd5c8" stroke-width="1.5"/>' +
+          '<circle cx="' + rc[0].toFixed(1) + '" cy="' + rc[1].toFixed(1) + '" r="' + rr2 + '" fill="' + rcol + '"/>';
+        if (L.item && L.item !== 'smooth' && L.item !== 'sauce') for (var ri = 0; ri < (L.n || 14); ri++) { var ra = rn() * 360, rd = Math.sqrt(rn()) * rr2 * .85, rp = [rc[0] + Math.cos(ra) * rd, rc[1] + Math.sin(ra) * rd]; s += piece(L.item, rp[0], rp[1], rn() * 360, 0.6, L.pc || rcol, rn); }
+        else s += '<path d="M' + (rc[0] - rr2 * .5) + ' ' + rc[1] + 'q' + rr2 * .25 + ' ' + (-rr2 * .3) + ' ' + rr2 * .5 + ' 0t' + rr2 * .5 + ' 0" fill="none" stroke="' + shade(rcol, 0.3) + '" stroke-width="3" stroke-linecap="round" opacity=".7"/>';
+        if (L.top) s += '<circle cx="' + (rc[0] + rr2 * .2).toFixed(1) + '" cy="' + (rc[1] - rr2 * .15).toFixed(1) + '" r="' + (rr2 * .28) + '" fill="' + L.top + '"/>';
+        anchor = rc; break; }
+      case 'wedge': {
+        /* дольки лайма/лимона: корка, мякоть, сегменты */
+        var wc = pol(L.at != null ? L.at : 120, (L.d != null ? L.d : 0.72) * R0), wn = L.n || 2, wcol = L.color || '#8cc152';
+        for (var wi = 0; wi < wn; wi++) {
+          var wr = (L.r || 0.13) * R0, ang2 = (L.rot || 0) + wi * 38;
+          s += '<g transform="translate(' + (wc[0] + wi * 10).toFixed(1) + ' ' + (wc[1] + wi * 6).toFixed(1) + ') rotate(' + ang2 + ')"><path d="M' + (-wr) + ' 0A' + wr + ' ' + wr + ' 0 0 0 ' + wr + ' 0z" fill="' + shade(wcol, -0.25) + '"/><path d="M' + (-wr * .82) + ' 0A' + wr * .82 + ' ' + wr * .82 + ' 0 0 0 ' + wr * .82 + ' 0z" fill="' + shade(wcol, 0.45) + '"/>' +
+            [30, 70, 110, 150].map(function (aa) { var x2 = Math.cos(aa * Math.PI / 180) * wr * .78, y2 = Math.sin(aa * Math.PI / 180) * wr * .78; return '<path d="M0 0L' + x2.toFixed(1) + ' ' + y2.toFixed(1) + '" stroke="' + shade(wcol, 0.1) + '" stroke-width="1.2"/>'; }).join('') + '</g>';
+        }
+        anchor = wc; break; }
+      case 'quenelle': {
+        /* кнель: вытянутая капля ложкой, с бликом */
+        var qc = pol(L.at != null ? L.at : 90, (L.d != null ? L.d : 0.5) * R0), ql = (L.r || 0.2) * R0, qcol = L.color || '#7fa64a';
+        s += '<g transform="translate(' + qc[0].toFixed(1) + ' ' + qc[1].toFixed(1) + ') rotate(' + (L.rot || 20) + ')"><ellipse cx="0" cy="4" rx="' + ql + '" ry="' + ql * .5 + '" fill="rgba(0,0,0,.15)"/>' +
+          '<path d="M' + (-ql) + ' 0C' + (-ql * .6) + ' ' + (-ql * .62) + ' ' + ql * .6 + ' ' + (-ql * .62) + ' ' + ql + ' 0C' + ql * .6 + ' ' + ql * .62 + ' ' + (-ql * .6) + ' ' + ql * .62 + ' ' + (-ql) + ' 0z" fill="' + qcol + '" stroke="' + shade(qcol, -0.25) + '" stroke-width="1.2"/>' +
+          '<path d="M' + (-ql * .55) + ' ' + (-ql * .18) + 'Q0 ' + (-ql * .42) + ' ' + ql * .5 + ' ' + (-ql * .2) + '" stroke="' + shade(qcol, 0.4) + '" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".8"/>' +
+          (L.dots ? Array.apply(null, Array(6)).map(function () { return '<circle cx="' + ((rn() - .5) * ql * 1.2).toFixed(1) + '" cy="' + ((rn() - .5) * ql * .5).toFixed(1) + '" r="1.6" fill="' + L.dots + '"/>'; }).join('') : '') + '</g>';
+        anchor = qc; break; }
+      case 'flat': {
+        /* лепёшка/тортилья плашмя */
+        var fc2 = pol(L.at != null ? L.at : 0, (L.d != null ? L.d : 0) * R0), fr = (L.r || 0.3) * R0, fcol = L.color || '#e6c27a';
+        for (var fi2 = (L.n || 1) - 1; fi2 >= 0; fi2--) {
+          var ox = fi2 * 6, oy = fi2 * 4;
+          s += '<circle cx="' + (fc2[0] + ox).toFixed(1) + '" cy="' + (fc2[1] + oy).toFixed(1) + '" r="' + fr + '" fill="' + fcol + '" stroke="' + shade(fcol, -0.25) + '" stroke-width="1.3"/>';
+          for (var fs = 0; fs < 16; fs++) { var fa = rn() * Math.PI * 2, fd = Math.sqrt(rn()) * fr * .9; s += '<circle cx="' + (fc2[0] + ox + Math.cos(fa) * fd).toFixed(1) + '" cy="' + (fc2[1] + oy + Math.sin(fa) * fd).toFixed(1) + '" r="' + (1.2 + rn() * 1.8).toFixed(1) + '" fill="' + shade(fcol, -0.3) + '" opacity=".5"/>'; }
+        }
+        anchor = fc2; break; }
       case 'ring':
         s += '<circle cx="' + C + '" cy="' + C + '" r="' + R + '" fill="none" stroke="' + col + '" stroke-width="' + (L.w || 14) + '" stroke-dasharray="' + (L.dash || '2 10') + '" stroke-linecap="round"/>';
         anchor = pol(L.at != null ? L.at : 135, R); break;

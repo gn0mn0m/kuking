@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#140a0d">
 <script src="js/haptic.js"></script>
 <script src="js/fun.js"></script>
+<script src="js/plate.js"></script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1107,7 +1108,7 @@ html.hero-on .sb-strip { opacity: 0; }
 .pl-intro { display: grid; justify-items: center; text-align: center; gap: 12px; padding: 18px 8px 8px; }
 .pl-intro h3 { margin: 6px 0 0; font-family: var(--f-display); font-weight: 400; font-size: 1.7rem; line-height: 1.15; }
 .pl-intro .small { margin: 0; max-width: 32ch; }
-.pl-start { position: sticky; bottom: calc(var(--tabs-h) + 14px); z-index: 2; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+.pl-intro { padding-bottom: calc(var(--tabs-h) + 24px); }
 .pl-art { display: grid; grid-template-columns: repeat(7, 34px); gap: 6px; margin-bottom: 4px; }
 .pl-art i { height: 46px; border-radius: 10px; background: var(--surface-2); animation: pl-pop .5s var(--ease-out) both; animation-delay: calc(var(--i) * 45ms); }
 .pl-art i.on { background: var(--orange); box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--orange) 70%, transparent); }
@@ -1519,6 +1520,40 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
 .soc-head-sp { width: 1px; }
 .soc-head { position: sticky; } .soc-head .soc-head-t { position: absolute; left: 50%; transform: translateX(-50%); max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 .soc-head .soc-head-sp { margin-left: auto; }
+
+/* ===== 3.9 ===== */
+.pl-stripw { display: grid; grid-template-columns: 32px 1fr 32px; align-items: center; gap: 2px; margin: 0 -8px; }
+.pl-stripw .pl-strip { margin: 0; min-width: 0; }
+.pl-arr { width: 32px; height: 56px; border: 0; border-radius: 10px; background: none; color: var(--orange); display: grid; place-items: center; transition: transform 140ms var(--ease-out), background-color .2s; }
+.pl-arr:active { transform: scale(.88); background: var(--surface); }
+.pl-arr svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+/* что нужно на шаге */
+.step-need { margin: 2px 0 14px; }
+.step-need summary { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); cursor: pointer; list-style: none; }
+.step-need summary::-webkit-details-marker { display: none; }
+.step-need summary::after { content: ''; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg) translateY(-2px); transition: transform .25s var(--ease-out); }
+.step-need[open] summary::after { transform: rotate(225deg) translateY(-1px); }
+.need-n { min-width: 22px; height: 22px; border-radius: 11px; display: grid; place-items: center; background: var(--orange); color: var(--orange-ink); font-weight: 800; font-size: .78rem; }
+.need-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; animation: row-in .3s var(--ease-out) both; }
+.need-k { font: 600 .72rem/1 var(--f-mono, monospace); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.need { display: inline-flex; gap: 5px; align-items: baseline; padding: 5px 9px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line); font-size: .82rem; white-space: nowrap; }
+.need b { font-weight: 600; } .need .q { color: var(--orange); font-weight: 700; }
+/* детальная подача */
+.plate-grid { align-items: start; }
+.plate-fig { margin: 0; padding: 8px; border-radius: 24px; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--fg) 6%, transparent), transparent 70%); }
+.plate-svg { display: block; width: 100%; max-width: 460px; margin: 0 auto; height: auto; filter: drop-shadow(0 18px 30px rgba(0,0,0,.35)); }
+.plate-svg .pl-l { animation: pl-in .5s var(--ease-out) both; animation-delay: calc(var(--i) * 110ms); transform-origin: 200px 200px; }
+.plate-svg .pl-n { animation: pl-in .35s var(--ease-out) both; animation-delay: calc(var(--i) * 110ms + 500ms); }
+@keyframes pl-in { from { opacity: 0; transform: scale(.92); } }
+.plate-legend { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.plate-legend li { display: grid; grid-template-columns: 26px 14px 1fr; gap: 10px; align-items: center; animation: row-in .35s var(--ease-out) both; animation-delay: calc(var(--i) * 80ms + 300ms); }
+.pl-num { width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; background: #1d1013; color: #fff; border: 2px solid var(--fg); font-weight: 800; font-size: .85rem; }
+.plate-legend i { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
+@media (prefers-reduced-motion: reduce) { .plate-svg .pl-l, .plate-svg .pl-n, .plate-legend li { animation: none; } }
+/* назад + главная в шапке готовки */
+.back-btn svg { width: 18px; height: 18px; }
+.lib-ic { padding: 0; width: 44px; justify-content: center; }
+.lib-ic .home-ico { margin: 0; }
 </style>
 
 <div id="app">
@@ -1526,7 +1561,7 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
     <div id="progress" class="progress"></div>
     <div class="bar">
       <div class="brand" id="brand">Кукинг</div>
-      <button type="button" class="lib-btn" id="libBtn"><svg class="home-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.5V20h5v-5.5h3V20h5V9.5"/></svg>Главная</button>
+      <button type="button" class="lib-btn back-btn" id="backBtn" aria-label="Назад к рецепту"><svg class="home-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Назад</button><button type="button" class="lib-btn lib-ic" id="libBtn" aria-label="Главная"><svg class="home-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.5V20h5v-5.5h3V20h5V9.5"/></svg></button>
       <div class="modes" id="modes" aria-label="Режим"></div>
       <div class="guests" aria-label="Количество гостей">
         <button type="button" id="gMinus" aria-label="Меньше гостей">−</button>

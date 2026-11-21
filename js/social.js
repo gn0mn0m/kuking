@@ -47,6 +47,14 @@
   API.info = function (id) { return info[id]; };
   API.badge = function () { return links.filter(function (l) { return l.status === 'pending' && l.b === uid(); }).length; };
   API.reviewsOf = function (userId) { return reviewsBy[userId] || {}; };
+  /* все оценки и комменты хаты — для нейросети: кто, сколько, что сказал, что ответили */
+  API.feedback = function () {
+    var out = [];
+    Object.keys(reviewsBy).forEach(function (u) { var rv = reviewsBy[u] || {}, p = people[u] || {}, nm = (info[u] && info[u].name) || p.nick || 'кто-то';
+      Object.keys(rv).forEach(function (rid) { var v = rv[rid] || {}; if (!v.score && !v.comment) return;
+        out.push({ rid: rid, who: nm + (u === uid() ? ' (я)' : ''), score: v.score, comment: v.comment || '', replies: replies.filter(function (x) { return x.recipe_id === rid && x.review_owner === u; }).map(function (x) { var a = people[x.author] || {}; return ((info[x.author] && info[x.author].name) || a.nick || '?') + ': ' + x.body; }) }); }); });
+    return out;
+  };
   /* кто ест: имя, любимое и что не жрёт — для нейросети */
   API.eaters = function () {
     var ids = [uid()].concat(friendIds()); if (admin && ids.indexOf(admin.id) < 0) ids.push(admin.id);
@@ -337,9 +345,12 @@
   }
   function b64u(s) { var p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
   function fnCall(action) {
-    return S.token().then(function (t) {
-      return fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + t }, body: JSON.stringify({ action: action }) });
-    }).then(function (r) { if (!r.ok) throw new Error(r.status === 404 ? 'функция birthday-push не загружена в Supabase' : 'функция ответила ' + r.status); return r.json(); });
+    /* init — «простой» запрос без своих заголовков: браузер не делает предзапрос CORS, который чаще всего и падает */
+    var req = action === 'init' ? Promise.resolve(fetch(FN, { method: 'POST', body: JSON.stringify({ action: action }) })) :
+      S.token().then(function (t) { return fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + t }, body: JSON.stringify({ action: action }) }); });
+    return req.catch(function () { throw new Error('сервер уведомлений не отвечает. В Supabase у функции birthday-push выключи «Verify JWT» и нажми Deploy ещё раз'); })
+      .then(function (r) { if (!r.ok) throw new Error(r.status === 404 ? 'функция birthday-push не загружена в Supabase' : r.status === 401 ? 'у функции birthday-push включён «Verify JWT» — выключи его' : 'функция ответила ' + r.status + ' — открой у неё Logs'); return r.json(); })
+      .then(function (j) { if (j && j.error) throw new Error('функция: ' + j.error); return j; });
   }
   function enablePush() {
     return Notification.requestPermission().then(function (perm) {

@@ -1,5 +1,5 @@
 /* Service worker «Кукинга»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-3cd62930c4';
+var CACHE = 'kuking-a912eb8d68';
 var ASSETS = [
 "./",
 "icons/favicon-16.png",
@@ -19,6 +19,7 @@ var ASSETS = [
 "js/fun.js",
 "js/haptic.js",
 "js/library.js",
+"js/plate.js",
 "js/progress-bar.js",
 "js/recipes/chashushuli-pasta.js",
 "js/recipes/shawarma-bowl.js",

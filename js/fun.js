@@ -98,3 +98,31 @@
   }
   window.KBody = { get: get, set: set, targets: targets };
 })();
+
+/* Сверка рецепта: если по шагам уходит больше, чем в списке покупок, — список дотягиваем, чтобы не бегать докупать. */
+(function () {
+  function fix(r) {
+    if (!r || r._fixed || !Array.isArray(r.ingredients)) return r;
+    var need = {}, full = {};
+    JSON.stringify(r.slides || []).replace(/\{(\w+)(?::([\d.]+))?\}/g, function (m, id, p) { if (p != null) need[id] = (need[id] || 0) + parseFloat(p); else full[id] = 1; return m; });
+    r.ingredients.forEach(function (i) {
+      if (i.amount == null || full[i.id] || !need[i.id]) return;
+      if (need[i.id] > i.amount * 1.001) i.amount = Math.round(need[i.id] * 10) / 10;
+    });
+    r._fixed = true; return r;
+  }
+  /* что сломано в рецепте — для повторной генерации */
+  function problems(r) {
+    var out = [], ids = {}, used = {};
+    (r.ingredients || []).forEach(function (i) { ids[i.id] = i; });
+    var txt = JSON.stringify(r.slides || []);
+    txt.replace(/\{(\w+)(?::[\d.]+)?\}/g, function (m, id) { used[id] = 1; if (!ids[id] && id !== 'guests') out.push('в шагах есть {' + id + '}, а в ingredients такого id нет'); return m; });
+    (r.ingredients || []).forEach(function (i) { if (!i.hidden && !used[i.id] && txt.toLowerCase().indexOf(String(i.name || '').toLowerCase().split(' ')[0]) < 0) out.push('ингредиент «' + i.name + '» (' + i.id + ') куплен, но ни в одном шаге не используется'); });
+    var serve = (r.slides || []).filter(function (s) { return s.type === 'serve'; });
+    if (!serve.length) out.push('нет слайда подачи (serve)');
+    serve.forEach(function (s) { if (!s.plate || !Array.isArray(s.plate.layers) || s.plate.layers.length < 3) out.push('у подачи нет plate с 3+ слоями'); });
+    if (!(r.slides || []).some(function (s) { return s.type === 'step' && /сбор|собер|подач/i.test((s.title || '') + (s.short || '')); })) out.push('нет отдельного шага сборки/подачи перед слайдом serve');
+    return out.filter(function (x, i, a) { return a.indexOf(x) === i; }).slice(0, 12);
+  }
+  window.KRecipe = { fix: fix, problems: problems };
+})();

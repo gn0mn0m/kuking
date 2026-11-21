@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var M = window.MENU;
+  if (M && window.KRecipe) window.KRecipe.fix(M);
   var doneActs = (function () { try { return JSON.parse(localStorage.getItem('kuking:done')) || {}; } catch (e) { return {}; } })();
   var SKILL = +(function () { try { return localStorage.getItem('kuking:skill'); } catch (e) { return 0; } })() || 5; // уровень готовки 1–10 из анкеты
   if (!M) return; // рецептов ещё нет — живём на главной
@@ -458,6 +459,7 @@
       '<div class="shop-top"><div class="counter" id="shopCount"></div><div class="send-row" role="group" aria-label="Скинуть, чего нет">' +
       '<a class="send-btn send-tg" id="sendTg" href="#" target="_blank" rel="noopener" aria-label="Отправить, чего нет, в Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l12-9"/></svg>Telegram</a>' +
       '<button type="button" class="send-btn send-ghost" id="sendCopy" aria-label="Скопировать, чего нет"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Копия</button>' +
+      '<button type="button" class="send-btn send-ghost send-ic" id="shopAll" aria-label="Отметить всё — всё есть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l4 4 8-9"/><path d="M12 16l1 1 8-9"/></svg></button>' +
       '<button type="button" class="send-btn send-ghost send-ic" id="shopReset" aria-label="Сбросить отметки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/></svg></button></div></div>' +
       '<p class="note">' + E(k + '.note', s.note) + '</p>';
     var grid = h('div', 'shop-grid tiles'), ci = 0;
@@ -538,6 +540,11 @@
       if (!t) { toast(EMPTY); return; }
       copy(t, 'Список в буфере, как малява за пазухой');
     });
+    el.querySelector('#shopAll').addEventListener('click', function () {
+      items.forEach(function (x) { state.have[x.id] = true; }); store.set('have', state.have);
+      el.querySelectorAll('.chk').forEach(function (c, i) { setTimeout(function () { c.classList.add('on'); c.setAttribute('aria-checked', 'true'); }, i * 30); });
+      if (window.kHaptic) window.kHaptic(10); setTimeout(function () { count(); shopDone(); }, items.length * 30 + 120);
+    });
     el.querySelector('#shopReset').addEventListener('click', function () {
       state.have = {}; store.set('have', {});
       el.querySelectorAll('.chk').forEach(function (c) { c.classList.remove('on'); c.setAttribute('aria-checked', 'false'); }); count(); shopCancel();
@@ -572,7 +579,7 @@
     var all = [], k = 's' + state.idx;
     M.tools.forEach(function (z) { all = all.concat(z.items); });
     el.innerHTML = '<p class="eyebrow">Шаг 2 · до первого ножа</p><h2 class="step-title">' + E(k + '.title', s.title) + '</h2>' +
-      '<div class="shop-top"><div class="counter" id="toolCount"></div><button type="button" class="ghost-btn" id="toolReset">Убрать всё обратно</button></div>' +
+      '<div class="shop-top"><div class="counter" id="toolCount"></div><div class="send-row"><button type="button" class="send-btn send-ghost" id="toolAll"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l4 4 8-9"/><path d="M12 16l1 1 8-9"/></svg>Всё на месте</button><button type="button" class="send-btn send-ghost send-ic" id="toolReset" aria-label="Убрать всё обратно"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/></svg></button></div></div>' +
       '<p class="note">' + E(k + '.note', s.note) + '</p>';
     var ci = 0, goT = null, slideAt = state.idx;
     var fxT = [], flyers = [];
@@ -660,6 +667,11 @@
       var n = all.filter(function (t) { return state.picked[t.id]; }).length;
       el.querySelector('#toolCount').innerHTML = '<span class="cn">' + n + '</span> из ' + all.length + ' на столе' + (n === all.length ? ' · <b>арсенал собран</b>' : '');
     }
+    el.querySelector('#toolAll').addEventListener('click', function () {
+      all.forEach(function (t) { state.picked[t.id] = true; }); store.set('picked', state.picked);
+      el.querySelectorAll('.tool-card').forEach(function (c, i) { setTimeout(function () { c.classList.add('got'); c.setAttribute('aria-pressed', 'true'); }, i * 40); });
+      if (window.kHaptic) window.kHaptic(10); count(); setTimeout(celebrate, all.length * 40 + 120);
+    });
     el.querySelector('#toolReset').addEventListener('click', function () {
       state.picked = {}; store.set('picked', {});
       el.querySelectorAll('.tool-card').forEach(function (c) { c.classList.remove('got'); c.setAttribute('aria-pressed', 'false'); }); count(); cancelGo();
@@ -721,10 +733,20 @@
     while (out.chef.length - out.sous.length > 1) out.sous.unshift(out.chef.shift());
     return out;
   }
+  /* что нужно на этом шаге — чтобы не листать назад к продуктам */
+  function stepNeeds(s) {
+    var seen = {}, out = [];
+    JSON.stringify([s.both || [], s.lanes || {}]).replace(/\{(\w+)(?::([\d.]+))?\}/g, function (m, id, p) {
+      var ing = ING[id]; if (!ing || ing.hidden || id === 'guests') return m;
+      var key = id + ':' + (p || ''); if (seen[key]) return m; seen[key] = 1;
+      out.push('<span class="need"><b>' + esc(ing.name.replace(/\s*\(.*?\)\s*/g, ' ').trim().split(/[ ,]+/).slice(0, 2).join(' ')) + '</b> ' + qty(id, p != null ? parseFloat(p) : null) + '</span>'); return m;
+    });
+    return out.length ? '<details class="step-need"><summary><span class="need-k">Понадобится на шаге</span><span class="need-n">' + out.length + '</span></summary><div class="need-list">' + out.join('') + '</div></details>' : '';
+  }
   function buildStep(s, el) {
     var friends = modeOf(state.guests) === 'friends', k = 's' + state.idx;
     el.innerHTML = '<div class="step-meta"><span class="pill pill-time">' + esc(s.time) + '</span><span class="pill">' + esc(s.dur) + '</span></div>' +
-      '<h2 class="step-title">' + E(k + '.title', s.title) + '</h2>';
+      '<h2 class="step-title">' + E(k + '.title', s.title) + '</h2>' + stepNeeds(s);
     var lanes = h('div', 'lanes');
     if (s.both && friends && !state.solo && !hasLanes()) { // рецепт без разделения, а у плиты двое — делим сами
       var parts = splitBoth(visibleActs(keyed(s.both, k + '.both')));
@@ -756,6 +778,13 @@
     var k = 's' + state.idx;
     el.innerHTML = '<p class="eyebrow">Подача</p><h2 class="step-title">' + E(k + '.title', s.title) + '</h2>';
     var g = h('div', 'serve-grid');
+    if (s.plate && window.KPlate) {
+      var pr = window.KPlate.render(s.plate, M.id + state.idx);
+      var g2 = h('div', 'serve-grid plate-grid'); g2.innerHTML = '<figure class="serve-fig plate-fig">' + pr.svg + '</figure><div class="serve-txt">' + pr.legend +
+        '<div class="dish-tags">' + s.dishes.map(function (d, i) { return '<span class="tool-chip">' + E(k + '.dish.' + i, d) + '</span>'; }).join('') + '</div>' +
+        '<ul class="serve-points">' + s.points.map(function (p, i) { return '<li>' + E(k + '.pt.' + i, p) + '</li>'; }).join('') + '</ul></div>';
+      el.appendChild(g2); return;
+    }
     var art = s.art === 'main' ? artMain() : s.art === 'chicken' ? artChicken() : s.art === 'burger' ? artBurger() : s.art === 'wings' ? artWings() : s.art === 'pasta' ? artPasta() : artAperitivo();
     var fig = h('figure', 'serve-fig' + (s.variant ? ' v-' + s.variant : ''), art);
     var txt = h('div', 'serve-txt');
@@ -843,7 +872,7 @@
     var need = Math.max(120, stage.clientWidth * 0.3);
     var sel = window.getSelection && String(window.getSelection());
     if (sel || dt > 800 || Math.abs(dx) < need || Math.abs(dx) < Math.abs(dy) * 2.2) return;
-    if (dx < 0) go(state.idx + 1, 1); else if (state.idx === 0) { var lb = $('#libBtn'); if (lb) lb.click(); } else go(state.idx - 1, -1);
+    if (dx < 0) go(state.idx + 1, 1); else if (state.idx === 0) { var lb = $('#backBtn') || $('#libBtn'); if (lb) lb.click(); } else go(state.idx - 1, -1);
   });
   stage.addEventListener('pointercancel', function () { sw = null; });
 

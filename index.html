@@ -1595,38 +1595,55 @@ input, select, textarea { font-size: max(16px, 1em); }
 .ts-when-h.ok { color: var(--green); }
 .ask-ico { width: 44px; height: 44px; justify-self: center; fill: none; stroke: var(--orange); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .ps-ask { margin-top: 14px; padding: 14px; border-radius: 16px; background: var(--surface); animation: row-in .3s var(--ease-out) both; }
-/* 3.11 — Чаты как обычная вкладка, вид как в Телеграме */
+/* 3.12 — Чаты и Друзья: тот же фон, масштаб и сгруппированные списки, что в Рецептах и Профиле */
+.soc-ov { background: radial-gradient(700px 380px at 90% -10%, color-mix(in srgb, var(--orange) 7%, transparent), transparent 65%), var(--bg); }
 .soc-ov.as-tab { transform: translateX(28px); opacity: 0; box-shadow: none; transition: transform .32s var(--ease-drawer, cubic-bezier(.22,1,.36,1)), opacity .22s ease-out; }
 .soc-ov.as-tab.from-l { transform: translateX(-28px); }
 .soc-ov.as-tab.on { transform: none; opacity: 1; }
 .soc-head2 { margin-bottom: 0; }
-.soc-head2.tg-head-sub { margin-bottom: 12px; }
+.soc-head2.tg-head-sub { margin-bottom: 14px; }
 .soc-head2 .tg-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.soc-head2:not(.tg-head-sub) { min-height: 44px; }
 .soc-ov.scrolled .tg-mini { opacity: 1; transform: none; }
 .soc-ov.scrolled .soc-head2:not(.tg-head-sub) { border-bottom-color: var(--line); }
 .soc-ov .tg-mini { padding-left: 0; }
-.soc-find { margin: 0 0 10px; }
-.soc-list.tgl { gap: 0; margin: 0 -6px; }
-.soc-list.tgl .soc-row { border-radius: 0; position: relative; margin: 0; background: none; border: 0; }
-.soc-list.tgl .soc-row + .soc-row::before { content: ''; position: absolute; top: 0; left: 76px; right: 6px; height: 1px; background: var(--line); }
-.soc-list.tgl .soc-who { padding: 9px 6px; gap: 12px; border-radius: 12px; }
-.soc-list.tgl .soc-av { width: 54px; height: 54px; font-size: 1.3rem; }
+.soc-find { margin: 0 0 14px; }
+.soc-sec { margin: 18px 4px 8px; font: 500 .8rem/1 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.soc-list.tgl { gap: 0; margin: 0 0 4px; background: var(--surface); border-radius: 14px; overflow: hidden; }
+.soc-list.tgl .soc-row { border-radius: 0; position: relative; margin: 0; background: none; border: 0; animation: none; }
+.soc-list.tgl .soc-row + .soc-row::before { content: ''; position: absolute; top: 0; left: 74px; right: 0; height: 1px; background: var(--line); }
+.soc-list.tgl .soc-who { padding: 10px 12px; gap: 12px; border-radius: 0; }
+.soc-list.tgl button.soc-who:active { transform: none; background: color-mix(in srgb, var(--fg) 7%, var(--surface)); }
+.soc-list.tgl .soc-av { width: 50px; height: 50px; font-size: 1.2rem; }
 .soc-list.tgl .soc-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .soc-list.tgl .soc-who-t { flex: 1; gap: 3px; }
+.soc-list.tgl .soc-nick { font-weight: 600; font-size: 1.02rem; }
+.soc-list.tgl .small { font-size: .9rem; }
+.soc-list.tgl .soc-pad { padding: 14px; }
 .soc-l1, .soc-l2 { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .soc-l1 .soc-nm { flex: 0 1 auto; }
 .soc-real { color: var(--muted); font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .soc-when { margin-left: auto; flex: none; padding-left: 8px; color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
 .soc-l2 .small { flex: 1; min-width: 0; }
 .soc-pin { flex: none; width: 15px; height: 15px; fill: var(--muted); transform: rotate(45deg); opacity: .8; }
-.soc-list.tgl .soc-row.is-chef .soc-av { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--orange); }
-.soc-av-add { background: color-mix(in srgb, var(--orange) 14%, var(--surface)); color: var(--orange); }
+.soc-list.tgl .soc-row.is-chef .soc-av { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--orange); }
+.soc-list.tgl .soc-chef:not(.adm) { display: none; }
+.soc-av-add { background: color-mix(in srgb, var(--orange) 16%, var(--surface)); color: var(--orange); }
 .soc-av-add svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .soc-add-t { color: var(--orange); font-weight: 600; }
-.soc-list.tgl + .soc-sec { margin-top: 14px; }
-.soc-list.tgl .soc-act { padding-right: 4px; }
-.soc-list.tgl .soc-chef:not(.adm) { display: none; }
-@media (hover: hover) { .soc-list.tgl button.soc-who:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); } }
+.soc-inv { margin-bottom: 4px; }
+.soc-list.tgl .soc-act { padding-right: 12px; }
+.soc-empty-chats { padding: 48px 10px; }
+.soc-empty-chats p { color: var(--muted); margin: 0; }
+.anq-g { display: grid; gap: 12px; }
+.anq-g .soc-body { margin: 0; padding: 0; background: none; border-radius: 0; gap: 10px; }
+.anq-g .soc-body-h { margin: 0 0 4px; }
+.anq-g .seg { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.anq-g .seg button { padding: 0 6px; }
+.soc-norm { margin: 6px 0 0; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--green) 12%, var(--surface-2)); line-height: 1.45; }
+.anq-g[hidden] { display: none; }
+.anq-h { margin: 0; }
+@media (hover: hover) { .soc-list.tgl button.soc-who:hover { background: color-mix(in srgb, var(--fg) 5%, var(--surface)); } }
 @media (prefers-reduced-motion: reduce) { .soc-ov.as-tab, .soc-ov.as-tab.from-l { transform: none; transition: opacity .2s; } }
 </style>
 
@@ -1690,19 +1707,46 @@ input, select, textarea { font-size: max(16px, 1em); }
 <script src="js/cuts.js"></script>
 <script src="js/app.js"></script>
 <script>
-if ('serviceWorker' in navigator) window.addEventListener('load', function () {
-  navigator.serviceWorker.register('sw.js').then(function (reg) {
-    reg.addEventListener('updatefound', function () {
-      var w = reg.installing; if (!w) return;
-      w.addEventListener('statechange', function () {
-        if (w.state === 'installed' && navigator.serviceWorker.controller) {
-          var t = document.createElement('button'); t.type = 'button'; t.className = 'upd-toast'; t.textContent = 'Вышло обновление — тапни, чтобы обновить';
-          t.addEventListener('click', function () { location.reload(); }); document.body.appendChild(t);
-        }
-      });
+/* обновления: проверяем при запуске, при возврате в приложение и раз в 20 минут.
+   Новая версия ставится сама; если ты не в процессе готовки — тихо перезагружаемся за шторкой, иначе — плашка. */
+(function () {
+  if (!('serviceWorker' in navigator)) { window.kUpdate = function () { return Promise.resolve(false); }; return; }
+  var reg = null, had = !!navigator.serviceWorker.controller, reloading = false, last = 0;
+  function busy() { var c = document.getElementById('library'); return (c && c.hidden) || !!document.querySelector('input:focus, textarea:focus'); }
+  function curtainReload() {
+    if (reloading) return; reloading = true;
+    try { sessionStorage.setItem('kuking:curtain', '1'); if (window.__kSaveTab) window.__kSaveTab(); } catch (e) {}
+    var c = document.getElementById('curtain'); if (c) { c.hidden = false; requestAnimationFrame(function () { c.classList.add('on'); }); }
+    setTimeout(function () { location.reload(); }, 240);
+  }
+  function offer() {
+    if (document.querySelector('.upd-toast')) return;
+    var t = document.createElement('button'); t.type = 'button'; t.className = 'upd-toast'; t.textContent = 'Вышла новая версия — тапни, обновлю';
+    t.addEventListener('click', curtainReload); document.body.appendChild(t);
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!had) { had = true; return; }  // первая установка — перезагружать нечего
+    if (window.__kWantReload || !busy()) curtainReload(); else offer();
+  });
+  function check() {
+    if (!reg || Date.now() - last < 5000) return Promise.resolve(); last = Date.now();
+    return reg.update().catch(function () {}).then(function () { if (reg.waiting) reg.waiting.postMessage('skip'); });
+  }
+  /* потянул вниз: если есть свежак — ставим и перезагружаемся, нет — просто перезагрузка */
+  window.kUpdate = function () {
+    window.__kWantReload = true; last = 0;
+    var t = setTimeout(curtainReload, 2500);
+    return check().then(function () {
+      var w = reg && (reg.installing || reg.waiting);
+      if (!w) { clearTimeout(t); curtainReload(); }
     });
-  }).catch(function () {});
-});
+  };
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (r) { reg = r; check(); }).catch(function () {});
+  });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+  setInterval(function () { if (!document.hidden) check(); }, 20 * 60 * 1000);
+})();
 </script>
 </body>
 </html>

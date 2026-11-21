@@ -142,30 +142,46 @@
 
   function listHTML() {
     if (!S.user()) return head() + '<div class="soc-empty"><p>Чтобы дружить, надо войти. Без входа ты как сиделец без погонялова.</p><button type="button" class="nav-btn primary" data-a="login">Войти</button></div>';
-    if (!loaded) return head() + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-card"></i><i class="sk-btn"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
+    if (!loaded) return head() + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-btn"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
     if (!me) return head() + nickForm(true);
     if (view === 'push') return head() + pushCard(true);
-    var m = uid(), h = head();
-    var mi = info[m] || {};
-    if (!tabMode()) h += '<div class="soc-me">' + avatar(me, true) + '<div class="soc-me-t">' + nickHTML(me) + '<span class="small">' + esc([mi.name, mi.bday ? bdayText(mi.bday) : ''].filter(Boolean).join(' · ') || 'это ты') + '</span></div>' +
-      '<button type="button" class="ghost-btn" data-a="nick">Анкета</button></div>';
-    h += '<form class="tg-search soc-find" id="socFind" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
-      '<input id="socQ" type="search" enterkeyhint="search" placeholder="Найти кента по нику" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(searchQ) + '" aria-label="Ник друга"></form>';
-    h += '<ul class="soc-list tgl"><li class="soc-row"><button type="button" class="soc-who soc-add" data-a="invite"><span class="soc-av soc-av-add" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.6"/><path d="M3.5 19c.9-3.4 3.4-5.2 6.5-5.2 1.4 0 2.6.3 3.6 1M18 13v6M15 16h6"/></svg></span>' +
+    return head() + (tabMode() ? chatsBody() : friendsBody()) + (msg ? '<p class="set-msg soc-pad">' + esc(msg) + '</p>' : '');
+  }
+  function byActivity() {
+    var m = uid();
+    return friendIds().map(function (id) { return people[id] || { id: id, nick: '…' }; }).filter(function (p) { return !admin || p.id !== admin.id; })
+      .sort(function (a, b) { var x = lastAt(b.id), y = lastAt(a.id); return x !== y ? (x > y ? 1 : -1) : a.nick.localeCompare(b.nick, 'ru'); });
+  }
+  /* Чаты: только кенты и строка поиска по ним — без заявок и приглашений, это в Профиль → Друзья */
+  var chatQ = '';
+  function chatsBody() {
+    var m = uid(), fr = byActivity();
+    var h = '<label class="tg-search soc-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
+      '<input id="socChatQ" type="search" enterkeyhint="search" placeholder="Поиск по чатам" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(chatQ) + '" aria-label="Поиск по нику, имени и сообщениям"></label>';
+    var rows = (admin && admin.id !== m ? row(admin, false, true) : '') + fr.map(function (p) { return row(p, false); }).join('');
+    if (!rows) return h + '<div class="soc-empty soc-empty-chats"><p>Чатов пока нет — ты один, как волк.</p><button type="button" class="nav-btn primary" data-a="tofriends">Найти друзей</button></div>';
+    return h + '<ul class="soc-list tgl" id="socChats">' + rows + '</ul><p class="small soc-pad soc-nores" id="socNoRes" hidden>Никого не нашёл.</p>';
+  }
+  function filterChats() {
+    var q = chatQ.trim().toLowerCase(), n = 0, list = ov.querySelector('#socChats'); if (!list) return;
+    list.querySelectorAll('.soc-row').forEach(function (r) { var ok = !q || (r.getAttribute('data-q') || '').indexOf(q) >= 0; r.hidden = !ok; if (ok) n++; });
+    var nr = ov.querySelector('#socNoRes'); if (nr) nr.hidden = n > 0;
+  }
+  /* Друзья: найти человека и позвать — плюс заявки и кто уже в хате */
+  function friendsBody() {
+    var m = uid();
+    var h = '<form class="tg-search soc-find" id="socFind" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
+      '<input id="socQ" type="search" enterkeyhint="search" placeholder="Найти по нику" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(searchQ) + '" aria-label="Ник друга"></form>';
+    if (found) h += '<h3 class="soc-sec">Нашёл</h3><ul class="soc-list tgl">' + (found.length ? found.map(function (p) { return row(p, true); }).join('') : '<li class="small soc-pad">Никого с таким ником.</li>') + '</ul>';
+    h += '<ul class="soc-list tgl soc-inv"><li class="soc-row"><button type="button" class="soc-who soc-add" data-a="invite"><span class="soc-av soc-av-add" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.6"/><path d="M3.5 19c.9-3.4 3.4-5.2 6.5-5.2 1.4 0 2.6.3 3.6 1M18 13v6M15 16h6"/></svg></span>' +
       '<span class="soc-who-t"><b class="soc-add-t">Позвать по ссылке</b><span class="small">или пусть найдёт тебя по нику ' + esc(me.nick) + '</span></span></button></li></ul>';
-    if (found) h += '<h3 class="soc-sec">Поиск</h3><ul class="soc-list tgl">' + (found.length ? found.map(function (p) { return row(p, true); }).join('') : '<li class="small soc-pad">Никого с таким ником.</li>') + '</ul>';
     var inc = links.filter(function (l) { return l.status === 'pending' && l.b === m; });
     if (inc.length) h += '<h3 class="soc-sec">Хотят в друзья · ' + inc.length + '</h3><ul class="soc-list tgl">' + inc.map(function (l) { return row(people[l.a] || { id: l.a, nick: '…' }, false); }).join('') + '</ul>';
     var out = links.filter(function (l) { return l.status === 'pending' && l.a === m; });
-    var fr = friendIds().map(function (id) { return people[id] || { id: id, nick: '…' }; }).filter(function (p) { return !admin || p.id !== admin.id; })
-      .sort(function (a, b) { var x = lastAt(b.id), y = lastAt(a.id); return x !== y ? (x > y ? 1 : -1) : a.nick.localeCompare(b.nick, 'ru'); });
-    h += '<h3 class="soc-sec">Хата</h3><ul class="soc-list tgl">';
-    if (admin && admin.id !== m) h += row(admin, false, true);
-    h += fr.map(function (p) { return row(p, false); }).join('');
-    if (!fr.length && (!admin || admin.id === m)) h += '<li class="small soc-pad">Пока ты один, как волк. Зови кентов.</li>';
-    h += '</ul>';
     if (out.length) h += '<h3 class="soc-sec">Ждут ответа</h3><ul class="soc-list tgl">' + out.map(function (l) { return row(people[l.b] || { id: l.b, nick: '…' }, false); }).join('') + '</ul>';
-    if (msg) h += '<p class="set-msg soc-pad">' + esc(msg) + '</p>';
+    var fr = byActivity().sort(function (a, b) { return a.nick.localeCompare(b.nick, 'ru'); });
+    var rows = (admin && admin.id !== m ? row(admin, false, true) : '') + fr.map(function (p) { return row(p, false); }).join('');
+    h += '<h3 class="soc-sec">В хате · ' + (fr.length + (admin && admin.id !== m ? 1 : 0)) + '</h3>' + (rows ? '<ul class="soc-list tgl">' + rows + '</ul>' : '<p class="small soc-pad">Пока никого. Зови кентов по ссылке.</p>');
     return h;
   }
   function lastAt(id) { var rv = reviewsBy[id] || {}, t = ''; Object.keys(rv).forEach(function (k) { if (rv[k].score && String(rv[k].at || '') > t) t = String(rv[k].at); }); return t; }
@@ -189,7 +205,7 @@
       lr ? 'Оценил «' + titleOf(lastId, lr.title) + '» — ' + lr.score + '/10' : open ? 'ещё ничего не оценил' : (pi.name || '');
     var when = lr && rel !== 'sent' && rel !== 'incoming' && lr.at ? ago(lr.at) : '';
     var pin = pinned ? '<svg class="soc-pin" viewBox="0 0 24 24" aria-label="Закреплён"><path d="M14 3l7 7-3 1-4 4 1 4-2 2-4-5-5 5-1-1 5-5-5-4 2-2 4 1 4-4z"/></svg>' : '';
-    return '<li class="soc-row' + (p.is_admin ? ' is-chef' : '') + '">' +
+    return '<li class="soc-row' + (p.is_admin ? ' is-chef' : '') + '" data-q="' + esc([p.nick, pi.name, sub].join(' ').toLowerCase()) + '">' +
       (open ? '<button type="button" class="soc-who" data-a="profile" data-id="' + p.id + '">' : '<div class="soc-who">') +
       avatar(p) + '<span class="soc-who-t"><span class="soc-l1">' + nickHTML(p) + (pi.name && rel !== 'sent' && rel !== 'incoming' ? '<span class="soc-real">' + esc(pi.name) + '</span>' : '') + '<span class="soc-when">' + esc(when) + '</span></span>' +
       '<span class="soc-l2"><span class="small">' + esc(sub) + '</span>' + pin + '</span></span>' +
@@ -250,27 +266,32 @@
     if (e.inputType && e.inputType.indexOf('delete') === 0 && /\.$/.test(el.value)) out = el.value;
     el.value = out;
   }
+  /* анкета разложена по смыслу: Обо мне · Готовка · Питание. Поля других разделов остаются в форме скрытыми — сохраняются как были */
+  var anqSect = null;
+  var SECT = { me: 'Обо мне', cook: 'Готовка', body: 'Питание' };
   function nickForm(first) {
-    var i = info[uid()] || {};
+    var i = info[uid()] || {}, sc = first ? null : anqSect;
+    function g(k) { var show = sc ? sc === k : k !== 'body'; return '<div class="anq-g"' + (show ? '' : ' hidden') + '>'; }
     return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — кенты увидят, нейросеть учтёт. Первый в хате становится админом.</p>' : '') +
-      '<div class="soc-avpick"><span class="soc-avprev" id="socAvPrev">' + (fv('avatar', i.avatar) ? '<img src="' + esc(fv('avatar', i.avatar)) + '" alt="">' : '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>') + '</span>' +
+      g('me') + '<div class="soc-avpick"><span class="soc-avprev" id="socAvPrev">' + (fv('avatar', i.avatar) ? '<img src="' + esc(fv('avatar', i.avatar)) + '" alt="">' : '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>') + '</span>' +
       '<label class="ghost-btn soc-avbtn">' + (fv('avatar', i.avatar) ? 'Сменить фото' : 'Добавить фото') + '<input id="socAvIn" type="file" accept="image/*" hidden></label>' + (fv('avatar', i.avatar) ? '<button type="button" class="lib-link soc-avdel" data-a="avdel">Убрать</button>' : '') + '<small id="socAvMsg" class="soc-nick-hint"></small></div>' +
       '<label class="set-f"><span>Ник — по нему найдут кенты</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(fv('nick', me ? me.nick : '')) + '"><small id="socNickHint" class="soc-nick-hint" aria-live="polite"></small></label>' +
       '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(fv('name', i.name || '')) + '" placeholder="Как к тебе обращаться"></label>' +
       '<label class="set-f"><span>День рождения</span><input id="socBday" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="дд.мм.гггг" value="' + esc(String(fv('bday', isoToRu(i.bday))).replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$3.$2.$1')) + '"></label>' +
+      '</div>' + g('cook') + (sc === 'cook' ? '<p class="small anq-h">По этому нейросеть решает, сколько разжёвывать в шагах и что тебе вообще предлагать.</p>' : '') +
+      '<label class="set-f soc-skill"><span>Уровень готовки: <b id="socSkillV">' + esc(fv('skill', i.skill || mySkill())) + '</b> из 10 <em id="socSkillT">' + skillText(fv('skill', i.skill || mySkill())) + '</em></span><input id="socSkill" type="range" min="1" max="10" step="1" value="' + esc(fv('skill', i.skill || mySkill())) + '" aria-describedby="socSkillT"></label>' +
       '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(fv('likes', i.likes || '')) + '" placeholder="Грузинская, острое, бургеры…"></label>' +
       '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
       '<label class="set-f"><span>Аллергии</span><input id="socAllergy" type="text" maxlength="200" value="' + esc(fv('allergy', i.allergy || '')) + '" placeholder="Орехи, лактоза, морепродукты…"></label>' +
-      '<label class="set-f soc-skill"><span>Уровень готовки: <b id="socSkillV">' + esc(fv('skill', i.skill || mySkill())) + '</b> из 10 <em id="socSkillT">' + skillText(fv('skill', i.skill || mySkill())) + '</em></span><input id="socSkill" type="range" min="1" max="10" step="1" value="' + esc(fv('skill', i.skill || mySkill())) + '" aria-describedby="socSkillT"></label>' +
-      (first ? '' : bodyHTML()) +
-      '<div class="set-row"><button type="submit" class="nav-btn primary soc-save" id="socSave"><span>' + (first ? 'Погнали' : 'Сохранить') + '</span></button></div>' +
+      '</div>' + (first ? '' : g('body') + bodyHTML() + '</div>') +
+      '<div class="set-row"><button type="submit" class="nav-btn primary soc-save" id="socSave"><span>' + (first ? 'Погнали' : sc === 'body' ? 'Готово' : 'Сохранить') + '</span></button></div>' +
       '<div class="soc-msgw' + (nickMsg ? ' open' : '') + '" id="socMsgW"><div><p class="set-msg' + (/…$/.test(nickMsg) ? ' busy' : '') + '" id="socNickMsg" aria-live="polite">' + esc(nickMsg) + '</p></div></div></form>';
   }
 
   function anketaPage() {
     var back = anketaFrom === 'friends' && me;
-    var h = back ? '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="nickx"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' + (tabMode() ? 'Чаты' : 'Друзья') + '</button><span class="tg-head-t">Анкета</span></header>'
-      : '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="nickx"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Профиль</button><span class="tg-head-t">Анкета</span></header>';
+    var h = back ? '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="nickx"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' + (tabMode() ? 'Чаты' : 'Друзья') + '</button><span class="tg-head-t">' + (SECT[anqSect] || 'Анкета') + '</span></header>'
+      : '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="nickx"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Профиль</button><span class="tg-head-t">' + (SECT[anqSect] || 'Анкета') + '</span></header>';
     if (!loaded) return h + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-card"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
     return h + nickForm(false);
   }
@@ -278,11 +299,11 @@
   function bodyHTML() {
     var b = window.KBody ? window.KBody.get() : {};
     function seg(n, opts) { return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-body="' + n + '" data-v="' + o[0] + '" aria-checked="' + (b[n] === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
-    return '<fieldset class="soc-body"><legend>Тело и цель</legend><p class="small soc-body-h">Видишь только ты — хранится в телефоне. По этим цифрам нейросеть считает КБЖУ твоей порции.</p>' +
+    return '<fieldset class="soc-body"><p class="small soc-body-h">Видишь только ты — хранится в телефоне. По этим цифрам нейросеть считает КБЖУ твоей порции.</p>' +
       '<span class="ps-l">Пол</span>' + seg('sex', [['m', 'Мужской'], ['f', 'Женский']]) +
       '<div class="soc-body-row"><label class="set-f"><span>Рост, см</span><input data-bodyn="h" type="number" inputmode="numeric" min="120" max="230" value="' + (b.h || '') + '" placeholder="180"></label>' +
       '<label class="set-f"><span>Вес, кг</span><input data-bodyn="w" type="number" inputmode="decimal" min="35" max="250" step="0.1" value="' + (b.w || '') + '" placeholder="80"></label></div>' +
-      '<span class="ps-l">Активность</span>' + seg('act', [['low', 'Сижу'], ['light', '1–3 трен.'], ['mid', '3–5 трен.'], ['high', 'Каждый день']]) +
+      '<span class="ps-l">Тренировки в неделю</span>' + seg('act', [['low', 'Сижу'], ['light', '1–3'], ['mid', '3–5'], ['high', 'Каждый день']]) +
       '<span class="ps-l">Цель</span>' + seg('goal', [['cut', 'Сушка'], ['keep', 'Держать'], ['bulk', 'Масса']]) +
       '<p class="soc-norm" id="socNorm" aria-live="polite">' + normText() + '</p></fieldset>';
   }
@@ -484,6 +505,7 @@
     if (a === 'avdel') { fd = fd || {}; fd.avatar = ''; saveFd(); var pv = ov.querySelector('#socAvPrev'); pv.classList.add('swap'); setTimeout(function () { pv.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>'; pv.classList.remove('swap'); }, 180); b.remove(); var mm = ov.querySelector('#socAvMsg'); mm.textContent = 'Фото уберу после «Сохранить»'; mm.className = 'soc-nick-hint'; return; }
     if (a === 'profile') { viewing = id; view = 'profile'; render(); ov.querySelectorAll('.soc-page')[1].scrollTop = 0; return; }
     if (a === 'invite') return invite();
+    if (a === 'tofriends') { close(); if (window.__kGoTab) window.__kGoTab('profile'); setTimeout(function () { API.openFriends(); }, 380); return; }
     if (a === 'pon') { msg = 'Включаю…'; render(); enablePush().then(function () { msg = ''; render(); toast('Пуши включены'); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
     if (a === 'ptest') { msg = 'Шлю…'; render(); API.testPush().then(function (r) { msg = r && r.sent ? 'Ушло — глянь шторку' : 'Подписка не нашлась, включи пуши заново'; if (!(r && r.sent)) try { localStorage.removeItem('kuking:push'); } catch (e) {} render(); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
     if (a === 'pdone') { msg = ''; view = 'list'; render(); return; }
@@ -516,6 +538,8 @@
         found = rows || []; found.forEach(function (p) { people[p.id] = p; }); render();
       }).catch(function () { found = []; render(); });
     });
+    var cq = ov.querySelector('#socChatQ');
+    if (cq) { filterChats(); cq.addEventListener('input', function () { chatQ = cq.value; filterChats(); }); }
     var qi = ov.querySelector('#socQ');
     if (qi && f) qi.addEventListener('input', function () { clearTimeout(qi._t); qi._t = setTimeout(function () { if (f.isConnected) f.dispatchEvent(new Event('submit', { cancelable: true })); }, 380); });
     var nf = ov.querySelector('#socNick');
@@ -546,6 +570,7 @@
     }
     if (nf) nf.addEventListener('submit', function (e) {
       e.preventDefault(); if (busy) return;
+      if (me && anqSect === 'body' && anketaFrom === 'profile') { if (window.kHaptic) window.kHaptic(10); emit(); close(); return; } // тело хранится в телефоне сразу
       var v = function (id) { return ov.querySelector(id).value.trim(); };
       var nick = v('#socNickIn'), first = !me;
       var bdIso = ruToIso(v('#socBday'));
@@ -630,7 +655,7 @@
   }
   function close() {
     ov.classList.remove('on'); clearInterval(timer);
-    searchQ = ''; found = null;
+    searchQ = ''; found = null; chatQ = '';
     setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; openFrom = 'chats'; ov.style.transform = ''; ov.style.transition = ''; ov.classList.remove('as-tab', 'from-l', 'scrolled'); }, ov.classList.contains('as-tab') ? 220 : 360);
     if (last && last.focus) last.focus();
     (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} });
@@ -671,7 +696,7 @@
   setTimeout(function () { if (window.KPull) window.KPull(ov, function (done) { lastHTML = ''; refresh().then(done, done); }, function () { var c = ov.querySelector('.soc-page.cur'); return c ? c.scrollTop : 0; }); }, 0);
   API.isOpen = function () { return !ov.hidden && ov.classList.contains('on'); };
   API.onClose = function (f) { closeSubs.push(f); };
-  API.openAnketa = function () { anketaFrom = 'profile'; nickMsg = ''; open('#anketa'); };
+  API.openAnketa = function (sect) { anketaFrom = 'profile'; anqSect = SECT[sect] ? sect : 'me'; nickMsg = ''; lastHTML = ''; ov.classList.remove('as-tab', 'from-l'); open('#anketa'); };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) { if (view === 'profile' || (view === 'nick' && anketaFrom === 'friends')) { view = 'list'; render(); } else close(); } });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
   API.enabled = true;

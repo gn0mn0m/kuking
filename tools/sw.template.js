@@ -1,9 +1,11 @@
 /* Service worker «Кукинга»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
 var CACHE = 'kuking-__VERSION__';
 var ASSETS = __ASSETS__;
+/* ставим свежие файлы мимо HTTP-кэша (GitHub держит старьё 10 минут) и сразу становимся главными — без «закрой и открой» */
 self.addEventListener('install', function (e) {
-  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }));
+  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS.map(function (u) { return new Request(u, { cache: 'reload' }); })); }).then(function () { return self.skipWaiting(); }));
 });
+self.addEventListener('message', function (e) { if (e.data === 'skip') self.skipWaiting(); });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k.indexOf('kuking-') === 0 && k !== CACHE; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); }));
 });

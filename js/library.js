@@ -140,6 +140,8 @@
   var PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   var DICE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="9" cy="9" r="1.3" class="f"/><circle cx="15" cy="15" r="1.3" class="f"/><circle cx="15" cy="9" r="1.3" class="f"/><circle cx="9" cy="15" r="1.3" class="f"/></svg>';
   var I = { /* значки в цветных квадратиках, как в Настройках iPhone */
+    cook: ['#ff9f0a', '<path d="M4 11h13a0 0 0 0 1 0 0 6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z"/><path d="M17 12h3"/><path d="M8 4c-1 1.5 1 2.5 0 4M12 4c-1 1.5 1 2.5 0 4"/>'],
+    food: ['#30b356', '<path d="M12 7c-1.5-2-5-2-6 1-1.2 3.6 1.5 10 4 10 .8 0 1.2-.5 2-.5s1.2.5 2 .5c2.5 0 5.2-6.4 4-10-1-3-4.5-3-6-1z"/><path d="M12 7c0-2 1-3.5 3-4"/>'],
     anketa: ['#ff9f0a', '<path d="M6 4h9l3 3v13H6z"/><path d="M9 12h6M9 16h4"/>'],
     friends: ['#30b356', '<circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M15.5 6a3 3 0 0 1 0 6M17.5 14.2c1.9.6 3 2.2 3.3 4.8"/>'],
     ai: ['#8e5cf7', '<path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z"/><path d="M18 15l.8 1.8 1.7.7-1.7.8L18 20l-.8-1.7-1.7-.8 1.7-.7z"/>'],
@@ -670,8 +672,13 @@
     var h = bigHead('Профиль');
     h += '<button type="button" class="pf-card" data-pf="' + (u ? 'anketa' : 'login') + '"><span class="pf-av' + (me && me.is_admin ? ' chef' : '') + '" aria-hidden="true">' + (inf.avatar ? '<img src="' + esc(inf.avatar) + '" alt="">' : esc(String(name).charAt(0).toUpperCase())) + (me && me.is_admin ? CROWN : '') + '</span>' +
       '<span class="pf-who"><b>' + esc(name) + '</b>' + (me ? '<span class="pf-nick">@' + esc(me.nick) + (me.is_admin ? ' <span class="soc-chef adm">' + CROWN + 'админ</span>' : ' <span class="soc-chef">шеф</span>') + '</span>' : '<span class="pf-nick">' + (u ? 'заполни анкету' : 'войди, чтобы дружить и хранить рецепты') + '</span>') + '</span>' + chev() + '</button>';
-    h += '<div class="pf-group">' + (u ? pfRow('anketa', 'anketa', 'Анкета', sk ? 'уровень ' + sk + '/10' : '') : pfRow('login', 'login', 'Войти или зарегистрироваться')) +
-      (Soc.enabled && u ? pfRow('friends', 'friends', 'Друзья', n ? '<em class="pf-badge">' + n + '</em>' : '') : '') + '</div>';
+    if (u) {
+      var tg = window.KBody && window.KBody.targets && window.KBody.targets(0.4), bg = window.KBody ? window.KBody.get() : {};
+      var goal = { cut: 'сушка', keep: 'держу форму', bulk: 'масса' }[bg.goal] || '';
+      h += '<div class="pf-group">' + pfRow('cook', 'cook', 'Готовка', sk ? 'уровень ' + sk + '/10' : 'настрой') +
+        pfRow('food', 'food', 'Питание', tg ? [goal, tg.day.kcal + ' ккал'].filter(Boolean).join(' · ') : 'не заполнено') + '</div>';
+      if (Soc.enabled) h += '<div class="pf-group">' + pfRow('friends', 'friends', 'Друзья', n ? '<em class="pf-badge">' + n + '</em>' : '') + '</div>';
+    } else h += '<div class="pf-group">' + pfRow('login', 'login', 'Войти или зарегистрироваться') + '</div>';
     h += '<div class="pf-group">' + pfRow('ai', 'ai', 'Нейросеть', window.KukingAI && window.KukingAI.ready() ? 'подключена' : 'не подключена') +
       pfRow('look', 'look', 'Цвет приложения') + pfRow('account', 'account', 'Аккаунт') + pfRow('install', 'install', 'Установка на iPhone') + '</div>';
     h += '<p class="pf-ver">Кукинг ' + esc((window.KUKING_CONFIG || {}).version || '') + '</p>';
@@ -963,7 +970,9 @@
       if (a === 'login' || a === 'account') St && St.open('account');
       if (a === 'ai' || a === 'look' || a === 'install') St && St.open(a);
       if (a === 'friends') { if (Soc.openFriends) Soc.openFriends(); else Soc.open(); }
-      if (a === 'anketa' && Soc.openAnketa) Soc.openAnketa();
+      if (a === 'anketa' && Soc.openAnketa) Soc.openAnketa('me');
+      if (a === 'cook' && Soc.openAnketa) Soc.openAnketa('cook');
+      if (a === 'food' && Soc.openAnketa) Soc.openAnketa('body');
     });
     on('.lib-fresh', function () { window.Fresh.spin(freshCtx); });
     on('[data-open]', openTap);
@@ -1248,7 +1257,7 @@
     var n = SOC().badge ? SOC().badge() : 0;
     bar.innerHTML = TABS.map(function (t) {
       return '<button type="button" data-tab="' + t[0] + '"' + (cur === t[0] ? ' aria-current="page"' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true">' + t[2] + '</svg><span>' + t[1] + '</span>' +
-        (t[0] === 'chats' && n ? '<em>' + n + '</em>' : '') + '</button>';
+        (t[0] === 'profile' && n ? '<em>' + n + '</em>' : '') + '</button>';
     }).join('');
     bar.classList.toggle('on', show);
     document.documentElement.classList.toggle('tabs-on', show);
@@ -1263,6 +1272,8 @@
     TAB = t; dir = from < 0 || from === ORD.indexOf(t) ? 'tab' : from < ORD.indexOf(t) ? 'tab-r' : 'tab-l'; view = t; stagger = t === 'list' || t === 'plan'; render(); ov.scrollTop = 0;
   });
   if (window.KukingSocial && window.KukingSocial.onClose) window.KukingSocial.onClose(function () { syncTabs(); });
+  window.__kGoTab = function (k) { var b = bar.querySelector('[data-tab="' + k + '"]'); if (b) b.click(); };
+  window.__kSyncTabs = syncTabs;
   new MutationObserver(function () { syncTabs(); document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden); }).observe(ov, { attributes: true, attributeFilter: ['hidden'] });
 
   /* потянул вниз сверху — обновить (заодно подтянет свежую версию) */
@@ -1286,10 +1297,12 @@
   pullRefresh(ov, function () {
     if (SUB[view]) { keepY(render); return; }
     try { sessionStorage.setItem('kuking:curtain', '1'); sessionStorage.setItem('kuking:tab', TAB); } catch (e) {}
+    if (window.kUpdate) { window.kUpdate(); return; } // подтянет свежую версию, если вышла
     var c = document.getElementById('curtain'); if (c) { c.hidden = false; requestAnimationFrame(function () { c.classList.add('on'); }); }
     setTimeout(function () { location.reload(); }, 260);
   });
   window.KPull = pullRefresh;
+  window.__kSaveTab = function () { try { sessionStorage.setItem('kuking:tab', TAB); } catch (e) {} };
 
   /* свайп вправо — назад, экран идёт за пальцем (в рецепте — откуда угодно, в формах — от края) */
   (function () {

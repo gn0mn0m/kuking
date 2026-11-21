@@ -344,13 +344,21 @@
     return localStorage.getItem('kuking:push') === '1' && Notification.permission === 'granted' ? 'on' : 'off';
   }
   function b64u(s) { var p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
-  function fnCall(action) {
+  /* у функции может быть имя birthday-push или birthday-pushing — пробуем оба, рабочее запоминаем */
+  var FNS = [FN, FN + 'ing'];
+  try { var fk = localStorage.getItem('kuking:fn'); if (fk === '1') FNS.reverse(); } catch (e) {}
+  function fnCall(action, i) {
+    i = i || 0; var url = FNS[i];
     /* init — «простой» запрос без своих заголовков: браузер не делает предзапрос CORS, который чаще всего и падает */
-    var req = action === 'init' ? Promise.resolve(fetch(FN, { method: 'POST', body: JSON.stringify({ action: action }) })) :
-      S.token().then(function (t) { return fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + t }, body: JSON.stringify({ action: action }) }); });
-    return req.catch(function () { throw new Error('сервер уведомлений не отвечает. В Supabase у функции birthday-push выключи «Verify JWT» и нажми Deploy ещё раз'); })
-      .then(function (r) { if (!r.ok) throw new Error(r.status === 404 ? 'функция birthday-push не загружена в Supabase' : r.status === 401 ? 'у функции birthday-push включён «Verify JWT» — выключи его' : 'функция ответила ' + r.status + ' — открой у неё Logs'); return r.json(); })
-      .then(function (j) { if (j && j.error) throw new Error('функция: ' + j.error); return j; });
+    var req = action === 'init' ? fetch(url, { method: 'POST', body: JSON.stringify({ action: action }) }) :
+      S.token().then(function (t) { return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + t }, body: JSON.stringify({ action: action }) }); });
+    return Promise.resolve(req).catch(function () { throw new Error('сервер уведомлений не отвечает. В Supabase у функции birthday-push выключи «Verify JWT» и нажми Deploy ещё раз'); })
+      .then(function (r) {
+        if (r.status === 404 && i + 1 < FNS.length) return fnCall(action, i + 1);
+        if (!r.ok) throw new Error(r.status === 404 ? 'функция birthday-push не загружена в Supabase' : r.status === 401 ? 'у функции birthday-push включён «Verify JWT» — выключи его' : 'функция ответила ' + r.status + ' — открой у неё Logs');
+        try { localStorage.setItem('kuking:fn', url === FN ? '0' : '1'); } catch (e) {}
+        return r.json().then(function (j) { if (j && j.error) throw new Error('функция: ' + j.error); return j; });
+      });
   }
   function enablePush() {
     return Notification.requestPermission().then(function (perm) {

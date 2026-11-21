@@ -227,17 +227,21 @@ begin
   create extension if not exists pg_net with schema extensions;
   perform cron.schedule('kuking-birthdays', '0 6 * * *', $job$
     select net.http_post(
-      url := 'https://akwijavguhthhxpdjgfq.supabase.co/functions/v1/birthday-push',
+      url := u,
       headers := jsonb_build_object('Content-Type', 'application/json',
         'x-cron', (select v from kuking_private.settings where k = 'cron_secret')),
       body := '{"action":"run"}'::jsonb)
+    from unnest(array['https://akwijavguhthhxpdjgfq.supabase.co/functions/v1/birthday-push',
+                      'https://akwijavguhthhxpdjgfq.supabase.co/functions/v1/birthday-pushing']) as u -- функция могла получить любое из двух имён
   $job$);
   perform cron.schedule('kuking-tasks', '*/10 * * * *', $job$
     select net.http_post(
-      url := 'https://akwijavguhthhxpdjgfq.supabase.co/functions/v1/birthday-push',
+      url := u,
       headers := jsonb_build_object('Content-Type', 'application/json',
         'x-cron', (select v from kuking_private.settings where k = 'cron_secret')),
       body := '{"action":"tasks"}'::jsonb)
+    from unnest(array['https://akwijavguhthhxpdjgfq.supabase.co/functions/v1/birthday-push',
+                      'https://akwijavguhthhxpdjgfq.supabase.co/functions/v1/birthday-pushing']) as u -- функция могла получить любое из двух имён
   $job$);
 exception when others then
   raise notice 'Расписание не включилось: %', sqlerrm;

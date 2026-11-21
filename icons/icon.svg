@@ -1,14 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<defs>
-<linearGradient id="bowl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFB547"/><stop offset="1" stop-color="#F0821A"/></linearGradient>
-</defs>
-<rect width="512" height="512" fill="#FFFFFF"/>
-<g fill="none" stroke="#84193C" stroke-width="30" stroke-linecap="round">
-<path d="M198 222c-24-30 24-50 0-86" stroke="#B4475F"/>
-<path d="M256 212c-24-30 24-50 0-86"/>
-<path d="M314 222c-24-30 24-50 0-86" stroke="#B4475F"/>
-</g>
-<path d="M104 268h304c0 84-68 152-152 152S104 352 104 268z" fill="url(#bowl)"/>
-<path d="M104 268h304c0 18-3 35-9 51H113c-6-16-9-33-9-51z" fill="#FFF1D6" opacity=".5"/>
-<rect x="92" y="252" width="328" height="32" rx="16" fill="#E2740F"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#f6f0e7"/><circle cx="512" cy="512" r="380.0" fill="#b8522f"/><g transform="translate(512 548) scale(5.9)"><path d="M0,-60 C16,-40 34,-26 34,0 C34,22 18,36 0,36 C-18,36 -34,22 -34,0 C-34,-16 -25,-25 -17,-33 C-15,-20 -9,-13 -3,-11 C-8,-30 -6,-45 0,-60 Z" fill="#f6f0e7"/><path d="M2,-14 C10,-4 16,4 16,14 C16,24 9,30 1,30 C-8,30 -15,24 -15,14 C-15,6 -10,0 -5,-4 C-4,4 0,6 3,6 C0,-2 -1,-8 2,-14 Z" fill="#b8522f"/></g></svg>

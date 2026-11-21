@@ -388,7 +388,7 @@
   stage.addEventListener('click', function (e) {
     if (editing && e.target.closest && e.target.closest('[data-ek]')) { e.preventDefault(); e.stopPropagation(); }
   }, true);
-  function syncTitle() { $('#brand').textContent = effTitle(); document.title = 'Кукинг · ' + effTitle(); }
+  function syncTitle() { $('#brand').textContent = effTitle(); document.title = 'Жарко · ' + effTitle(); }
 
   var editBtn = $('#editBtn'), editBar = $('#editBar'), resetArm = 0;
   function setEditing(on) {

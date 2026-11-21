@@ -1,4 +1,4 @@
-/* Library — главная «Кукинга» в духе Telegram: список рецептов строками, поиск, фильтры,
+/* Library — главная «Жарко» в духе Telegram: список рецептов строками, поиск, фильтры,
    карточка рецепта (оценка, коммент, обсуждение), создание (нейросеть по идее, 10 идей, вручную),
    шторка ☰. Выбирает активный рецепт (window.MENU) до запуска app.js.
    Встроенные рецепты книги видит только шеф; у остальных аккаунт с нуля. */
@@ -168,7 +168,7 @@
   }
   function listHTML() {
     var list = visible(), all = R.filter(function (r) { return !isHid(r.id); });
-    var h = bigHead('Кукинг', '<button type="button" class="tg-ic lib-fresh" aria-label="Рулетка идей" title="Рулетка идей">' + DICE + '</button>' +
+    var h = bigHead('Жарко', '<button type="button" class="tg-ic lib-fresh" aria-label="Рулетка идей" title="Рулетка идей">' + DICE + '</button>' +
       '<button type="button" class="tg-ic tg-plus" data-a="create" aria-label="Новый рецепт">' + PLUS + '</button>');
     h += '<div class="tg-tools"><label class="tg-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
       '<input id="libQ" type="search" placeholder="Поиск по рецептам" autocomplete="off" value="' + esc(query) + '" aria-label="Поиск по рецептам"></label>' +
@@ -417,7 +417,7 @@
   function planHTML() {
     if (!planIntro) return bigHead('План') +
       '<div class="pl-intro"><div class="pl-art" aria-hidden="true">' + [0, 1, 2, 3, 4, 5, 6].map(function (i) { return '<i style="--i:' + i + '"' + (i === 2 || i === 4 ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
-      '<h3>Неделя без вопроса «что пожрать»</h3><p class="small">Раскидай блюда по дням — «Кукинг» сам напомнит, когда закупиться, достать мясо и встать к плите.</p>' +
+      '<h3>Неделя без вопроса «что пожрать»</h3><p class="small">Раскидай блюда по дням — «Жарко» сам напомнит, когда закупиться, достать мясо и встать к плите.</p>' +
       '<button type="button" class="nav-btn primary pl-start" data-a="planStart">Начать</button>' +
       '<ol class="pl-steps"><li><b>Скажи, как закупаешься</b><span>раз в неделю, в день готовки или доставкой</span></li><li><b>Добавь блюда в дни</b><span>из своей книги, в пару тапов</span></li><li><b>Лови напоминания</b><span>закупка, морозилка, маринад, готовка</span></li></ol>' +
       '</div>';
@@ -517,13 +517,13 @@
     function u(z) { return z.getUTCFullYear() + p2(z.getUTCMonth() + 1) + p2(z.getUTCDate()) + 'T' + p2(z.getUTCHours()) + p2(z.getUTCMinutes()) + '00Z'; }
     function q(t) { return String(t).replace(/[\;,]/g, function (c) { return '\\' + c; }).replace(/\n/g, '\\n'); }
     var title = x.kind === 'cook' && r ? 'Готовим: ' + r.title : x.title + (r && x.kind !== 'shop' ? ' — ' + r.title : '');
-    var desc = (x.sub || '') + (x.kind === 'shop' ? '\nСписок покупок — в «Кукинге», вкладка «План».' : '') + '\nКукинг';
+    var desc = (x.sub || '') + (x.kind === 'shop' ? '\nСписок покупок — в «Жарко», вкладка «План».' : '') + '\nЖарко';
     return ['BEGIN:VEVENT', 'UID:' + x.key.replace(/[^\w:-]/g, '') + '@kuking', 'DTSTAMP:' + u(n), 'DTSTART:' + f(d), 'DTEND:' + f(e), 'SUMMARY:' + q(title), 'DESCRIPTION:' + q(desc),
       'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + q(title), 'TRIGGER:-PT0M', 'END:VALARM', 'END:VEVENT'].join('\r\n');
   }
   /* в календарь телефона: .ics — айфон сам предложит «Добавить» (одно дело или все сразу) */
   function sendIcs(events, name) {
-    var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kuking//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Кукинг'].concat(events, ['END:VCALENDAR']).join('\r\n');
+    var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kuking//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Жарко'].concat(events, ['END:VCALENDAR']).join('\r\n');
     var url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) location.href = url;
     else { var a = document.createElement('a'); a.href = url; a.download = name + '.ics'; document.body.appendChild(a); a.click(); a.remove(); }
@@ -649,7 +649,7 @@
     function go2() { if (done) return; done = true; setTimeout(next, 340); }
     sheet('<div class="ask-box"><svg class="ask-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><h3>Включить уведомления?</h3>' +
       '<p class="small">Напомню про закупку, морозилку, маринад и готовку. Не чаще трёх раз в день, ночью молчу.</p>' +
-      (ps === 'install' ? '<p class="small">Сначала поставь «Кукинг» на экран «Домой» и открой оттуда — иначе айфон не даст.</p><button type="button" class="nav-btn primary" data-pk="x">Понятно</button>' :
+      (ps === 'install' ? '<p class="small">Сначала поставь «Жарко» на экран «Домой» и открой оттуда — иначе айфон не даст.</p><button type="button" class="nav-btn primary" data-pk="x">Понятно</button>' :
         '<button type="button" class="nav-btn primary" data-pu="on">Включить</button><button type="button" class="nav-btn" data-pk="x">Позже</button>') + '<p class="small ps-h" id="puMsg"></p></div>',
       function (e, m, shut) {
         var b = e.target.closest('[data-pu]'); if (!b) return;
@@ -664,7 +664,7 @@
     function seg(name, opts, cur) { return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-seg="' + name + '" data-v="' + o[0] + '" aria-checked="' + (String(cur) === String(o[0])) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
     var HINT = { frozen: 'Напомню убрать в морозилку после закупки и достать в холодильник вечером накануне.', fresh: 'Если мясо из морозилки — переключи, напомню про разморозку.' };
     function pushBlock() { var ps = Soc.pushState ? Soc.pushState() : 'nope';
-      return ps === 'on' ? '<p class="ps-on">Включены</p>' : ps === 'install' ? '<p class="small ps-h">Поставь «Кукинг» на экран «Домой» и открой оттуда — тогда включатся.</p>' : ps === 'denied' ? '<p class="small ps-h">Запрещены в настройках iPhone → Уведомления → Кукинг.</p>' : ps === 'nope' ? '<p class="small ps-h">Этот браузер не умеет.</p>' : '<button type="button" class="nav-btn" data-pushon="1">Включить уведомления</button>'; }
+      return ps === 'on' ? '<p class="ps-on">Включены</p>' : ps === 'install' ? '<p class="small ps-h">Поставь «Жарко» на экран «Домой» и открой оттуда — тогда включатся.</p>' : ps === 'denied' ? '<p class="small ps-h">Запрещены в настройках iPhone → Уведомления → Жарко.</p>' : ps === 'nope' ? '<p class="small ps-h">Этот браузер не умеет.</p>' : '<button type="button" class="nav-btn" data-pushon="1">Включить уведомления</button>'; }
     var m = sheet('<div class="pk-head"><b>' + (first ? 'Как ты закупаешься?' : 'Настройки плана') + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div>' +
       '<div class="ps"><label class="ps-l">Закупка</label>' + seg('shop', [['week', 'Раз в неделю'], ['day', 'В день готовки'], ['delivery', 'Доставка']], c.shop) +
       '<div class="ps-col' + (c.shop === 'week' ? ' open' : '') + '" id="psWeek"><div class="ps-col-in"><label class="ps-l">День и время закупки</label>' + seg('shopDay', [[1, 'Пн'], [2, 'Вт'], [3, 'Ср'], [4, 'Чт'], [5, 'Пт'], [6, 'Сб'], [0, 'Вс']], c.shopDay) + '<input class="ps-time" type="time" data-f="shopTime" value="' + esc(c.shopTime) + '"></div></div>' +

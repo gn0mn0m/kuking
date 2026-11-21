@@ -424,9 +424,9 @@
     var st = pushState(), h = '<div class="soc-push card"><h3 class="soc-form-h">🔔 Уведомления</h3>';
     if (st === 'on') h += '<p class="small">Включены.</p><button type="button" class="ghost-btn" data-a="ptest">Проверить пуш</button>';
     else if (st === 'install') h += '<p class="small">На iPhone пуши работают только из приложения на экране «Домой»: Safari → Поделиться → «На экран „Домой“», открой оттуда и включи тут.</p>';
-    else if (st === 'denied') h += '<p class="small">Уведомления запрещены. Включи: Настройки iPhone → Уведомления → Кукинг.</p>';
+    else if (st === 'denied') h += '<p class="small">Уведомления запрещены. Включи: Настройки iPhone → Уведомления → Жарко.</p>';
     else if (st === 'nope') h += '<p class="small">Этот браузер пуши не умеет.</p>';
-    else h += '<p class="small">Разреши «Кукингу» присылать уведомления. Без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
+    else h += '<p class="small">Разреши «Жарко» присылать уведомления. Без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
     if (after) h += '<button type="button" class="' + (st === 'off' ? 'ghost-btn' : 'nav-btn primary') + '" data-a="pdone">' + (st === 'off' ? 'Потом' : 'Дальше') + '</button>';
     return h + (msg ? '<p class="set-msg' + (/…$/.test(msg) ? ' busy' : '') + '">' + esc(msg) + '</p>' : '') + '</div>';
   }
@@ -628,8 +628,8 @@
 
   function invite() {
     var url = location.origin + location.pathname + '?invite=' + uid();
-    var text = 'Го в «Кукинг» — будем вместе жрать и ставить оценки. Я там ' + me.nick;
-    if (navigator.share) { navigator.share({ title: 'Кукинг', text: text, url: url }).catch(function () {}); return; }
+    var text = 'Го в «Жарко» — будем вместе жрать и ставить оценки. Я там ' + me.nick;
+    if (navigator.share) { navigator.share({ title: 'Жарко', text: text, url: url }).catch(function () {}); return; }
     (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast('Ссылка скопирована — кидай в чат'); })
       .catch(function () { msg = url; render(); });
   }

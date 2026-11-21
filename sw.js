@@ -1,5 +1,5 @@
-/* Service worker «Кукинга»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-6484996b6e';
+/* Service worker «Жарко»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
+var CACHE = 'kuking-8b96608b7e';
 var ASSETS = [
 "./",
 "icons/favicon-16.png",
@@ -67,7 +67,7 @@ self.addEventListener('fetch', function (e) {
 /* пуши: днюхи кентов и прочие малявы */
 self.addEventListener('push', function (e) {
   var d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Кукинг', {
+  e.waitUntil(self.registration.showNotification(d.title || 'Жарко', {
     body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: d.tag || 'kuking', data: { url: d.url || './' }
   }));
 });

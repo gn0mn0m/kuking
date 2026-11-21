@@ -5,7 +5,7 @@
   'use strict';
   var KEY = 'kuking:ai';
   var PRESETS = {
-    kuking: { label: 'Кукинг · GigaChat (бесплатно, без ключа)', kind: 'server', base: '' },
+    kuking: { label: 'Жарко · GigaChat (бесплатно, без ключа)', kind: 'server', base: '' },
     openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1' },
     openrouter: { label: 'OpenRouter', kind: 'openai', base: 'https://openrouter.ai/api/v1' },
     gemini: { label: 'Google Gemini', kind: 'gemini', base: 'https://generativelanguage.googleapis.com/v1beta' },

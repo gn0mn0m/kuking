@@ -1,4 +1,4 @@
-/* Service worker «Кукинга»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
+/* Service worker «Жарко»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
 var CACHE = 'kuking-__VERSION__';
 var ASSETS = __ASSETS__;
 /* ставим свежие файлы мимо HTTP-кэша (GitHub держит старьё 10 минут) и сразу становимся главными — без «закрой и открой» */
@@ -32,7 +32,7 @@ self.addEventListener('fetch', function (e) {
 /* пуши: днюхи кентов и прочие малявы */
 self.addEventListener('push', function (e) {
   var d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Кукинг', {
+  e.waitUntil(self.registration.showNotification(d.title || 'Жарко', {
     body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: d.tag || 'kuking', data: { url: d.url || './' }
   }));
 });

@@ -638,9 +638,11 @@
       return '<li class="chk' + (have[k] ? ' on' : '') + '" data-sh="' + esc(k) + '" role="checkbox" aria-checked="' + !!have[k] + '" tabindex="0"><span class="chk-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span><span class="chk-name">' + esc(v.name) + '</span><span class="chk-am">' + esc(q) + '</span></li>'; });
     var txt = order.map(function (k) { var v = sum[k]; return '• ' + v.name + (v.amount ? ' — ' + Math.round(v.amount * 10) / 10 + ' ' + v.unit : v.text ? ' — ' + v.text : ''); }).join('\n');
     sheet('<div class="pk-head"><b>' + esc(x.title) + '</b><button type="button" class="ghost-btn" data-pk="x">Готово</button></div><p class="small pk-sub">' + esc(x.sub) + ' · ' + x.ids.map(function (id) { return '«' + esc(byId(id).title) + '»'; }).join(', ') + '</p>' +
+      (window.KCart ? '<button type="button" class="nav-btn primary pk-cart" data-tocartall="1">🛒 Всю закупку — в корзину</button>' : '') +
       '<div class="pk-acts"><a class="nav-btn" href="https://t.me/share/url?url=' + encodeURIComponent(' ') + '&text=' + encodeURIComponent('Закупка:\n' + txt) + '" target="_blank" rel="noopener">Отправить в Telegram</a><button type="button" class="ghost-btn" data-copy="1">Скопировать</button></div>' +
       '<p class="small sh-prog" aria-live="polite">Куплено ' + order.filter(function (o) { return have[o]; }).length + ' из ' + order.length + '</p><ul class="chk-list">' + rows.join('') + '</ul><button type="button" class="ts-cal" data-ics="1">' + CAL + '<span>Закупку — в календарь iPhone</span></button>',
     function (e, m) {
+      if (e.target.closest('[data-tocartall]')) { x.ids.forEach(function (id) { KCart.addRecipe(id); }); if (window.kHaptic) window.kHaptic(12); var pm = e.target.closest('.pk, .sheet, [role=dialog]'); var cl = m.querySelector('[data-pk=x]'); if (cl) cl.click(); setTimeout(function () { KCart.open('cart'); }, 320); return; }
       if (e.target.closest('[data-ics]')) { addToCal(x, null); return; }
       if (e.target.closest('[data-copy]')) { try { navigator.clipboard.writeText('Закупка:\n' + txt); e.target.textContent = 'Скопировано'; } catch (x2) {} return; }
       var li = e.target.closest('[data-sh]'); if (!li) return;
@@ -785,7 +787,8 @@
   function detailHTML(r) {
     var on = active && r.id === active.id, ch = chefOf(r.id), adm = SOC().admin();
     var tot = (r.dishes || []).reduce(function (t, d) { if (d.kcal) { t.k += +d.kcal || 0; t.p += +d.p || 0; t.f += +d.f || 0; t.c += +d.c || 0; t.n++; } return t; }, { k: 0, p: 0, f: 0, c: 0, n: 0 });
-    var h = '<div class="tg-heroW m-' + esc(r.mode || 'self') + '"><button type="button" class="tg-backf" data-a="back" aria-label="Назад к рецептам"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
+    var dpk = window.KDish ? KDish.heroKey(r) : '', dps = window.KDish ? KDish.heroSrc(r) : null;
+    var h = '<div class="tg-heroW m-' + esc(r.mode || 'self') + (dps ? ' has-ph' : '') + '" data-dp-hero="' + esc(dpk) + '"' + (dps ? ' style="--ph:url(&quot;' + dps + '&quot;)"' : '') + '><button type="button" class="tg-backf" data-a="back" aria-label="Назад к рецептам"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<span class="tg-steam" aria-hidden="true"><i></i><i></i><i></i></span><span class="tg-emo" aria-hidden="true">' + emoji(r) + '</span></div>';
     h += '<div class="tg-dt"><h2 class="tg-title">' + esc(r.title) + '</h2>' +
       '<p class="tg-meta">' + [esc(String(r.totalTime || '').replace('≈ ', '')), MODE_NAME[r.mode] ? MODE_NAME[r.mode].toLowerCase() : '', r.baseGuests ? r.baseGuests + ' порц.' : '', r.ai ? 'от нейросети' : r.manual ? 'твой рецепт' : ''].filter(Boolean).join(' · ') + '</p>' +
@@ -795,6 +798,7 @@
       h += '<section class="tg-sec">' + KMeta.html(r) + '</section>';
       if (r.ai && !KMeta.get(r).tagged) KMeta.aiTag(r).then(function (m) { if (m && !ov.hidden && !typing()) keepY(render); });
     }
+    if (window.KDish) { var dpc = KDish.cardHTML(r); if (dpc) h += '<section class="tg-sec"><h3 class="tg-sec-h">Подача</h3>' + dpc + '</section>'; }
     if ((r.dishes || []).length > 1) h += '<section class="tg-sec"><h3 class="tg-sec-h">На тарелке</h3><ul class="tg-dishes">' + r.dishes.map(function (d) {
       return '<li><b>' + esc(d.name) + '</b>' + (d.kcal ? '<small>' + d.kcal + ' ккал · Б ' + d.p + ' · Ж ' + d.f + ' · У ' + d.c + '</small>' : '') + '</li>';
     }).join('') + '</ul></section>';

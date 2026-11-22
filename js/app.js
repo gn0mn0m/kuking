@@ -778,7 +778,7 @@
 
   function buildServe(s, el) {
     var k = 's' + state.idx;
-    el.innerHTML = '<p class="eyebrow">Подача</p><h2 class="step-title">' + E(k + '.title', s.title) + '</h2>';
+    el.innerHTML = '<p class="eyebrow">Подача</p><h2 class="step-title">' + E(k + '.title', s.title) + '</h2>' + (window.KDish ? KDish.serveHTML(M, state.idx) : '');
     var g = h('div', 'serve-grid');
     if (s.plate && window.KPlate) {
       var pr = window.KPlate.render(s.plate, M.id + state.idx);

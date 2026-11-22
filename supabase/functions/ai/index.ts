@@ -77,6 +77,36 @@ async function chat(body, model) {
   });
 }
 
+
+// картинка блюда: GigaChat сам вызывает встроенную text2image, отдаёт id файла в <img src>, файл качаем и возвращаем base64
+const FILES = 'https://gigachat.devices.sberbank.ru/api/v1/files/';
+async function image(prompt) {
+  let lastErr = '';
+  for (const m of ['GigaChat-2-Max', 'GigaChat-2-Pro', 'GigaChat']) {
+    const t = await getToken();
+    const r = await fetch(CHAT, {
+      method: 'POST', client,
+      headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ model: m, function_call: 'auto', messages: [
+        { role: 'system', content: 'Ты — профессиональный фуд-фотограф ресторанного уровня. Делаешь реалистичные фотографии готовых блюд: натуральный мягкий свет, малая глубина резкости, аппетитные текстуры, никакого текста, логотипов, людей и рук в кадре.' },
+        { role: 'user', content: 'Нарисуй фотографию: ' + String(prompt).slice(0, 1500) },
+      ] }),
+    });
+    const txt = await r.text();
+    if (!r.ok) { lastErr = txt; if (r.status === 401) token = null; if (r.status === 404 || /model/i.test(txt)) continue; break; }
+    const j = JSON.parse(txt);
+    const c = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+    const id = (/<img[^>]+src="([^"]+)"/.exec(c) || [])[1];
+    if (!id) { lastErr = 'нейросеть не нарисовала: ' + c.slice(0, 160); continue; }
+    const f = await fetch(FILES + id + '/content', { client, headers: { Authorization: 'Bearer ' + t, Accept: 'application/jpg' } });
+    if (!f.ok) { lastErr = 'файл не скачался: ' + (await f.text()).slice(0, 160); break; }
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return { image: 'data:image/jpeg;base64,' + btoa(bin) };
+  }
+  throw Object.assign(new Error('GigaChat: ' + lastErr.slice(0, 300)), { status: 502 });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
@@ -86,6 +116,10 @@ Deno.serve(async (req) => {
     if (!u.ok) return json({ error: { message: 'Войдите в аккаунт' } }, 401);
 
     const body = await req.json().catch(() => ({}));
+    if (body.action === 'image') {
+      if (!body.prompt) return json({ error: { message: 'Пустое описание' } }, 400);
+      return json(await image(body.prompt));
+    }
     if (!Array.isArray(body.messages) || !body.messages.length) return json({ error: { message: 'Пустой запрос' } }, 400);
 
     const list = body.model ? [body.model] : MODELS;

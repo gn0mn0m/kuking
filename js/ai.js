@@ -159,7 +159,17 @@
     set: function (c) { cfg = c || {}; save(cfg); },
     clear: function () { cfg = {}; try { localStorage.removeItem(KEY); } catch (e) {} },
     ready: ready,
-    test: function () { return wrapAbort(complete('Ответь одним словом: готов', { maxTokens: 20 })); }
+    test: function () { return wrapAbort(complete('Ответь одним словом: готов', { maxTokens: 20 })); },
+    /* фото блюда: рисует GigaChat на сервере «Жарко» (функция ai, action image) */
+    canImage: function () { return kind() === 'server' && ready(); },
+    image: function (prompt, signal) {
+      if (kind() !== 'server') return Promise.reject(err('provider_error', 'Фото рисует только нейросеть «Жарко» — выберите её в настройках нейросети'));
+      return S().token().then(function (t) {
+        return fetch(base(), { method: 'POST', signal: signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t, apikey: (window.KUKING_CONFIG || {}).supabaseAnonKey || '' }, body: JSON.stringify({ action: 'image', prompt: prompt }) });
+      }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok || !j.image) throw err(r.status === 401 ? 'not_granted' : 'provider_error', (j.error && j.error.message) || (r.status === 400 ? 'Сервер ещё не умеет рисовать — обновите функцию ai в Supabase' : 'Фото не получилось'));
+        return j.image; }); });
+    }
   };
 
   var prevUse = window.claude && window.claude.use;

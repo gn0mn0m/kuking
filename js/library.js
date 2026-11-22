@@ -800,6 +800,7 @@
     if (ch && adm) h += '<section class="tg-sec tg-chefrow">' + CROWN + '<span>Админ <b>' + esc(adm.nick) + '</b> поставил</span><b class="lib-score ' + scCls(ch) + '">' + ch + '<small>/10</small></b></section>';
     h += rateBlock(r);
     var thr = SOC().thread(r.id, reviews[r.id]); if (thr) h += '<section class="tg-sec">' + thr + '</section>';
+    if (window.KHub) { h += KHub.recipeHTML(r); KHub.load(r.id, function () { if (!ov.hidden && view === 'detail' && !typing()) keepY(render); }); }
     h += '<div class="tg-more">' + (window.KCart ? '<button type="button" class="ghost-btn' + (KCart.hasRecipe(r.id) ? ' on' : '') + '" data-a="tocart" data-id="' + esc(r.id) + '">🛒 ' + (KCart.hasRecipe(r.id) ? 'В корзине — убрать' : 'В корзину') + '</button><button type="button" class="ghost-btn" data-a="left" data-id="' + esc(r.id) + '">🥡 Осталось после готовки</button>' : '') + (window.KCat ? '<button type="button" class="ghost-btn" data-a="tocol" data-id="' + esc(r.id) + '">📁 ' + (KCat.inCols(r.id).length ? esc(KCat.inCols(r.id).join(', ')) : 'В коллекцию') + '</button>' : '') + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
       (r.ai && !r.manual ? '<button type="button" class="ghost-btn" data-a="upg" data-id="' + esc(r.id) + '">' + (r.upgraded ? 'Обновить ещё раз' : 'Обновить под новые правила') + '</button>' : '') +
       '<button type="button" class="ghost-btn tg-del" data-id="' + esc(r.id) + '">Убрать из книги</button></div>';
@@ -1343,7 +1344,8 @@
     resync: function () { syncTasks(); },
     show: function (id) { ov.hidden = false; go('detail', id); render(); },
     all: function () { return R.filter(function (r) { return !isHid(r.id); }); },
-    byId: byId, today: today,
+    byId: byId, today: today, emoji: emoji,
+    importRecipe: function (rec) { var c = JSON.parse(JSON.stringify(rec)); c.id = 'ai-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); c.ai = true; freshCtx.added(c); return c.id; },
     planDays: function () { return plan; },
     isDone: function (k) { return !!doneTasks[k]; },
     planAdd: function (k, id) { var a = plan[k] = plan[k] || []; if (a.indexOf(id) < 0) a.push(id); savePlan(); },
@@ -1369,7 +1371,7 @@
     var n = SOC().badge ? SOC().badge() : 0;
     bar.innerHTML = TABS.map(function (t) {
       return '<button type="button" data-tab="' + t[0] + '"' + (cur === t[0] ? ' aria-current="page"' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true">' + t[2] + '</svg><span>' + t[1] + '</span>' +
-        (t[0] === 'profile' && n ? '<em>' + n + '</em>' : '') + (t[0] === 'cart' && window.KCart && KCart.count() ? '<em class="cart-n">' + KCart.count() + '</em>' : '') + '</button>';
+        (t[0] === 'profile' && n ? '<em>' + n + '</em>' : '') + (t[0] === 'chats' && window.KHub && KHub.unread() ? '<em>' + KHub.unread() + '</em>' : '') + (t[0] === 'cart' && window.KCart && KCart.count() ? '<em class="cart-n">' + KCart.count() + '</em>' : '') + '</button>';
     }).join('');
     bar.classList.toggle('on', show);
     document.documentElement.classList.toggle('tabs-on', show);

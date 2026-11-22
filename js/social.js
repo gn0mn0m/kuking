@@ -54,6 +54,10 @@
   API.info = function (id) { return info[id]; };
   API.badge = function () { return links.filter(function (l) { return l.status === 'pending' && l.b === uid(); }).length; };
   API.reviewsOf = function (userId) { return reviewsBy[userId] || {}; };
+  API.circle = function () { var ids = friendIds(); if (admin && admin.id !== uid() && ids.indexOf(admin.id) < 0) ids.push(admin.id); return ids; };
+  API.avatarHTML = function (p) { return avatar(p); };
+  API.ago = function (iso) { return ago(iso); };
+  API.rerender = function () { if (!ov.hidden) render(); };
   /* все оценки и комментарии друзей — для нейросети: кто, сколько, что сказал, что ответили */
   API.feedback = function () {
     var out = [];
@@ -62,7 +66,7 @@
         out.push({ rid: rid, who: nm + (u === uid() ? ' (я)' : ''), score: v.score, comment: v.comment || '', replies: replies.filter(function (x) { return x.recipe_id === rid && x.review_owner === u; }).map(function (x) { var a = people[x.author] || {}; return ((info[x.author] && info[x.author].name) || a.nick || '?') + ': ' + x.body; }) }); }); });
     return out;
   };
-  /* кто ест: имя, любимое и что не жрёт — для нейросети */
+  /* кто ест: имя, любимое и что не ест — для нейросети */
   API.eaters = function () {
     var ids = [uid()].concat(friendIds()); if (admin && ids.indexOf(admin.id) < 0) ids.push(admin.id);
     return ids.map(function (id) { var i = info[id] || {}, p = people[id] || {}; if (!i.likes && !i.avoid && !i.allergy) return null;
@@ -165,10 +169,12 @@
   var chatQ = '';
   function chatsBody() {
     var m = uid(), fr = byActivity();
+    if (window.KHub && KHub.ready() && KHub.mode() === 'feed') return KHub.chatsTop() + KHub.feedHTML();
     var h = '<label class="tg-search soc-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
       '<input id="socChatQ" type="search" enterkeyhint="search" placeholder="Поиск по чатам" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(chatQ) + '" aria-label="Поиск по нику, имени и сообщениям"></label>';
     var rows = (admin && admin.id !== m ? row(admin, false, true) : '') + fr.map(function (p) { return row(p, false); }).join('');
-    if (!rows) return h + '<div class="soc-empty soc-empty-chats"><p>Чатов пока нет — ты один, как волк.</p><button type="button" class="nav-btn primary" data-a="tofriends">Найти друзей</button></div>';
+    if (!rows) return h + '<div class="soc-empty soc-empty-chats"><p>Чатов пока нет. Добавьте друзей — и здесь появится переписка.</p><button type="button" class="nav-btn primary" data-a="tofriends">Найти друзей</button></div>';
+    if (window.KHub && KHub.ready()) h = KHub.chatsTop() + h;
     return h + '<ul class="soc-list tgl" id="socChats">' + rows + '</ul><p class="small soc-pad soc-nores" id="socNoRes" hidden>Никого не нашёл.</p>';
   }
   function filterChats() {
@@ -176,7 +182,7 @@
     list.querySelectorAll('.soc-row').forEach(function (r) { var ok = !q || (r.getAttribute('data-q') || '').indexOf(q) >= 0; r.hidden = !ok; if (ok) n++; });
     var nr = ov.querySelector('#socNoRes'); if (nr) nr.hidden = n > 0;
   }
-  /* Друзья: найти человека и позвать — плюс заявки и кто уже в хате */
+  /* Друзья: найти человека и позвать — плюс заявки и друзья */
   function friendsBody() {
     var m = uid();
     var h = '<form class="tg-search soc-find" id="socFind" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
@@ -210,14 +216,16 @@
     var pi = info[p.id] || {}, rv = reviewsBy[p.id] || {}, lastId = null;
     Object.keys(rv).forEach(function (k) { if (rv[k].score && (!lastId || String(rv[k].at || '') > String(rv[lastId].at || ''))) lastId = k; });
     var lr = lastId && rv[lastId];
-    var sub = rel === 'sent' ? 'заявка ушла' : rel === 'incoming' ? 'стучится к тебе' : bdayToday(pi.bday) ? '🎂 Сегодня день рождения' :
+    var cs = tabMode() && window.KHub && KHub.ready() && (rel === 'friend' || p.is_admin) && p.id !== uid() ? (KHub.rowSub(p.id) || { text: 'Напишите первым', at: '', unread: 0 }) : null;
+    var sub = rel === 'sent' ? 'заявка ушла' : rel === 'incoming' ? 'хочет в друзья' : bdayToday(pi.bday) ? '🎂 Сегодня день рождения' :
       lr ? 'Оценил «' + titleOf(lastId, lr.title) + '» — ' + lr.score + '/10' : open ? 'ещё ничего не оценил' : (pi.name || '');
     var when = lr && rel !== 'sent' && rel !== 'incoming' && lr.at ? ago(lr.at) : '';
+    if (cs) { sub = cs.text; when = cs.at ? ago(cs.at) : ''; }
     var pin = pinned ? '<svg class="soc-pin" viewBox="0 0 24 24" aria-label="Закреплён"><path d="M14 3l7 7-3 1-4 4 1 4-2 2-4-5-5 5-1-1 5-5-5-4 2-2 4 1 4-4z"/></svg>' : '';
     return '<li class="soc-row' + (p.is_admin ? ' is-chef' : '') + '" data-q="' + esc([p.nick, pi.name, sub].join(' ').toLowerCase()) + '">' +
-      (open ? '<button type="button" class="soc-who" data-a="profile" data-id="' + p.id + '">' : '<div class="soc-who">') +
+      (cs ? '<button type="button" class="soc-who" data-hub="chat" data-id="' + p.id + '">' : open ? '<button type="button" class="soc-who" data-a="profile" data-id="' + p.id + '">' : '<div class="soc-who">') +
       avatar(p) + '<span class="soc-who-t"><span class="soc-l1">' + nickHTML(p) + (pi.name && rel !== 'sent' && rel !== 'incoming' ? '<span class="soc-real">' + esc(pi.name) + '</span>' : '') + '<span class="soc-when">' + esc(when) + '</span></span>' +
-      '<span class="soc-l2"><span class="small">' + esc(sub) + '</span>' + pin + '</span></span>' +
+      '<span class="soc-l2"><span class="small">' + esc(sub) + '</span>' + pin + (cs && cs.unread ? '<em class="hb-un">' + cs.unread + '</em>' : '') + '</span></span>' +
       (open ? '</button>' : '</div>') +
       (act ? '<span class="soc-act">' + act + '</span>' : '') + '</li>';
   }
@@ -436,12 +444,13 @@
     var p = people[id] || { id: id, nick: '…' }, rv = reviewsBy[id] || {}, mine = reviewsBy[uid()] || {};
     var ids = Object.keys(rv).filter(function (k) { return rv[k].score; }).sort(function (a, b) { return String(rv[b].at || '').localeCompare(String(rv[a].at || '')); });
     var pi = info[id] || {};
-    var h = head(p.nick, true) + '<div class="soc-prof">' + avatar(p, true) + '<div>' + nickHTML(p) + (pi.name ? '<p class="soc-name">' + esc(pi.name) + '</p>' : '') + '<p class="small">' + esc(stats(id) || 'Оценок пока нет') + '</p></div></div>';
+    var h = head(p.nick, true) + (window.KHub ? '' : '') + '<div class="soc-prof">' + avatar(p, true) + '<div>' + nickHTML(p) + (pi.name ? '<p class="soc-name">' + esc(pi.name) + '</p>' : '') + '<p class="small">' + esc(stats(id) || 'Оценок пока нет') + '</p></div></div>';
+    if (window.KHub) h += KHub.profileExtra(id);
     if (pi.bday || pi.likes || pi.avoid || pi.allergy) h += '<dl class="soc-facts">' +
-      (pi.bday ? '<div' + (bdayToday(pi.bday) ? ' class="today"' : '') + '><dt>Днюха</dt><dd>' + (bdayToday(pi.bday) ? 'Сегодня' : esc(bdayText(pi.bday))) + '</dd></div>' : '') +
+      (pi.bday ? '<div' + (bdayToday(pi.bday) ? ' class="today"' : '') + '><dt>День рождения</dt><dd>' + (bdayToday(pi.bday) ? 'Сегодня' : esc(bdayText(pi.bday))) + '</dd></div>' : '') +
       (pi.likes ? '<div><dt>Любит</dt><dd>' + esc(pi.likes) + '</dd></div>' : '') +
       (pi.avoid ? '<div><dt>Не ест</dt><dd>' + esc(pi.avoid) + '</dd></div>' : '') + (pi.allergy ? '<div><dt>Аллергия</dt><dd>' + esc(pi.allergy) + '</dd></div>' : '') + '</dl>';
-    if (!ids.length) h += '<p class="small soc-pad">Ещё ничего не оценил. Пни его — пусть пожрёт и отпишется.</p>';
+    if (!ids.length) h += '<p class="small soc-pad">Пока ничего не оценил.</p>';
     h += '<div class="soc-revs">' + ids.map(function (rid) {
       var d = rv[rid], my = mine[rid] && mine[rid].score, have = hasRecipe(rid);
       return '<article class="soc-rev card"><header class="soc-rev-h"><h3>' + esc(titleOf(rid, d.title)) + '</h3><b class="lib-score ' + scCls(d.score) + '">' + d.score + '<small>/10</small></b></header>' +
@@ -591,7 +600,7 @@
       var v = function (id) { return ov.querySelector(id).value.trim(); };
       var nick = v('#socNickIn'), first = !me;
       var bdIso = ruToIso(v('#socBday'));
-      if (bdIso === false) { setNickMsg('Днюха: число.месяц.год, например 05.03.1999', 'bad'); return; }
+      if (bdIso === false) { setNickMsg('День рождения: число.месяц.год, например 05.03.1999', 'bad'); return; }
       var data = { id: uid(), avatar: fd && fd.avatar != null ? (fd.avatar || null) : (info[uid()] || {}).avatar || null, name: v('#socName') || null, bday: bdIso, likes: v('#socLikes') || null, allergy: v('#socAllergy') || null, avoid: v('#socAvoid') || null, skill: +v('#socSkill') || 5, updated_at: new Date().toISOString() };
       try { localStorage.setItem('kuking:skill', String(data.skill)); } catch (e) {}
       if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { setNickMsg('Ник: 3–20 символов, буквы, цифры, _', 'bad'); return; }

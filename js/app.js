@@ -527,7 +527,7 @@
       } catch (e) { legacy(); }
     }
     var tg = el.querySelector('#sendTg');
-    var EMPTY = 'Всё отмечено — покупать нечего, хата затарена';
+    var EMPTY = 'Всё отмечено — покупать нечего, всё есть';
     /* сразу в приложение Telegram (tg://): обычная ссылка в новом окне, страницу саму не уводим — иначе белый экран */
     function tgHref() { var t = listText(); tg.href = t ? 'tg://msg?text=' + encodeURIComponent(t) : '#'; }
     tg.addEventListener('pointerdown', tgHref);

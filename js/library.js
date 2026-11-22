@@ -122,7 +122,7 @@
   function render() {
     autoPurge();
     if (view === 'detail' && (!byId(detailId) || isHid(detailId))) { view = SUB[TAB] ? 'list' : TAB || 'list'; } // рецепт удалён — не застреваем на пустой карточке без таб-бара
-    var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : view === 'plan' ? planHTML() : view === 'profile' ? profileHTML() : view === 'cart' ? bigHead('Корзина') + '<div class="ct-host"></div>' : listHTML();
+    var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : view === 'plan' ? planHTML() : view === 'profile' ? profileHTML() : view === 'cart' ? (cartFrom ? '<button type="button" class="tg-back cart-back" data-a="cartback"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' + ({ list: 'Рецепты', plan: 'План', profile: 'Профиль', detail: 'Рецепт' }[cartFrom] || 'Назад') + '</button>' : '') + bigHead('Корзина') + '<div class="ct-host"></div>' : listHTML();
     document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden);
     var old = ov.firstElementChild;
     if ((dir === 'fwd' || dir === 'back') && old && !ov.hidden && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
@@ -789,8 +789,11 @@
     var on = active && r.id === active.id, ch = chefOf(r.id), adm = SOC().admin();
     var tot = (r.dishes || []).reduce(function (t, d) { if (d.kcal) { t.k += +d.kcal || 0; t.p += +d.p || 0; t.f += +d.f || 0; t.c += +d.c || 0; t.n++; } return t; }, { k: 0, p: 0, f: 0, c: 0, n: 0 });
     var dpk = window.KDish ? KDish.heroKey(r) : '', dps = window.KDish ? KDish.heroSrc(r) : null;
-    var h = '<div class="tg-heroW m-' + esc(r.mode || 'self') + (dps ? ' has-ph' : '') + '" data-dp-hero="' + esc(dpk) + '"' + (dps ? ' style="--ph:url(&quot;' + dps + '&quot;)"' : '') + '><button type="button" class="tg-backf" data-a="back" aria-label="Назад к рецептам"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
-      '<span class="tg-steam" aria-hidden="true"><i></i><i></i><i></i></span><span class="tg-emo" aria-hidden="true">' + emoji(r) + '</span></div>';
+    if (window.KDish) KDish.auto(r);
+    var dst = window.KDish ? KDish.state(r) : 'none';
+    var h = '<div class="tg-heroW m-' + esc(r.mode || 'self') + (dps ? ' has-ph' : '') + (dst === 'busy' ? ' ph-wait' : '') + '" data-dp-hero="' + esc(dpk) + '"' + (dps ? ' style="--ph:url(&quot;' + dps + '&quot;)"' : '') + '><button type="button" class="tg-backf" data-a="back" aria-label="Назад к рецептам"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
+      '<span class="ph-shim" aria-hidden="true"></span><span class="ph-note">Рисую фото блюда…</span>' +
+      (window.KDish && KDish.can() ? '<button type="button" class="dp-re hero-re" data-dp="redo" data-dpk="' + esc(dpk) + '">' + (dps ? 'Другое фото' : 'Нарисовать фото') + '</button>' : '') + '</div>';
     h += '<div class="tg-dt"><h2 class="tg-title">' + esc(r.title) + '</h2>' +
       '<p class="tg-meta">' + [esc(String(r.totalTime || '').replace('≈ ', '')), MODE_NAME[r.mode] ? MODE_NAME[r.mode].toLowerCase() : '', r.baseGuests ? r.baseGuests + ' порц.' : '', r.ai ? 'от нейросети' : r.manual ? 'твой рецепт' : ''].filter(Boolean).join(' · ') + '</p>' +
       (tot.n ? '<div class="tg-kbju"><span><b>' + tot.k + '</b> ккал</span><span>Б <b>' + tot.p + '</b></span><span>Ж <b>' + tot.f + '</b></span><span>У <b>' + tot.c + '</b></span></div>' : '') +
@@ -799,7 +802,6 @@
       h += '<section class="tg-sec">' + KMeta.html(r) + '</section>';
       if (r.ai && !KMeta.get(r).tagged) KMeta.aiTag(r).then(function (m) { if (m && !ov.hidden && !typing()) keepY(render); });
     }
-    if (window.KDish) { KDish.auto(r); var dpc = KDish.cardHTML(r); if (dpc) h += '<section class="tg-sec"><h3 class="tg-sec-h">Подача</h3>' + dpc + '</section>'; }
     if ((r.dishes || []).length > 1) h += '<section class="tg-sec"><h3 class="tg-sec-h">На тарелке</h3><ul class="tg-dishes">' + r.dishes.map(function (d) {
       return '<li><b>' + esc(d.name) + '</b>' + (d.kcal ? '<small>' + d.kcal + ' ккал · Б ' + d.p + ' · Ж ' + d.f + ' · У ' + d.c + '</small>' : '') + '</li>';
     }).join('') + '</ul></section>';
@@ -1080,6 +1082,7 @@
     if (window.KCat && view === 'list') KCat.bind(ov, R.filter(function (r) { return !isHid(r.id); }), function () { keepY(render); }, function () { return query; });
     on('.kc-reset', function () { KCat.reset(); render(); });
     on('[data-a=cart]', function () { KCart.open('cart'); });
+    on('[data-a=cartback]', function () { var f = cartFrom; cartFrom = null; if (f === 'detail' && cartDetail) { TAB = 'list'; view = 'list'; go('detail', cartDetail, true); return; } window.__kGoTab(f || 'list'); });
     on('[data-a=week]', function () { KCart.weekMenu(); });
     on('[data-a=tocart]', function (b) { var id = b.getAttribute('data-id'); if (KCart.hasRecipe(id)) KCart.removeRecipe(id); else KCart.addRecipe(id); if (window.kHaptic) window.kHaptic(8); keepY(render); });
     on('[data-a=left]', function (b) { var r = byId(b.getAttribute('data-id')); if (r) KCart.leftovers(r); });
@@ -1370,6 +1373,8 @@
     byId: byId, today: today, emoji: emoji,
     importRecipe: function (rec) { var c = JSON.parse(JSON.stringify(rec)); c.id = 'ai-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); c.ai = true; freshCtx.added(c); return c.id; },
     planDays: function () { return plan; },
+    /* что уже отмечено купленным в закупках плана, где есть это блюдо */
+    shopChecked: function (id) { var out = {}; try { tasksAll().forEach(function (t) { if (t.kind === 'shop' && (t.ids || []).indexOf(id) >= 0) { var hv = shopHave[t.key] || {}; Object.keys(hv).forEach(function (k) { if (hv[k]) out[k] = 1; }); } }); } catch (e) {} return out; },
     isDone: function (k) { return !!doneTasks[k]; },
     planAdd: function (k, id) { var a = plan[k] = plan[k] || []; if (a.indexOf(id) < 0) a.push(id); savePlan(); },
     refresh: function () { if (!ov.hidden) keepY(render); }
@@ -1380,7 +1385,8 @@
   if (window.KukingSocial && window.KukingSocial.onChange) window.KukingSocial.onChange(function () { if (!ov.hidden && !typing()) keepY(render); });
 
   /* ---------- таб-бар снизу: Рецепты · План · Чаты · Профиль ---------- */
-  var SUB = { detail: 1, create: 1, edit: 1 }, TAB = 'list';
+  var SUB = { detail: 1, create: 1, edit: 1 }, TAB = 'list', cartFrom = null, cartOpening = false, cartDetail = null;
+  window.__kOpenCart = function () { cartFrom = view === 'detail' ? 'detail' : SUB[view] ? TAB : view; cartDetail = view === 'detail' ? detailId : null; if (cartFrom === 'cart') cartFrom = null; cartOpening = true; window.__kGoTab('cart'); cartOpening = false; };
   var TABS = [['list', 'Рецепты', '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/>'],
     ['plan', 'План', '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>'],
     ['cart', 'Корзина', '<path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H7"/><circle cx="9.5" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>'],
@@ -1402,6 +1408,7 @@
   bar.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]'); if (!b) return;
     var t = b.getAttribute('data-tab'), Soc = SOC();
+    if (t === 'cart' && !cartOpening) cartFrom = null;
     var Stg0 = window.KukingSettings; if (t !== 'profile' && Stg0 && Stg0.isOpen && Stg0.isOpen() && Stg0.close(function () { b.click(); }) === false) return;
     if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) { var fi = ['list', 'plan', 'cart', 'chats', 'profile'].indexOf(SUB[view] ? TAB : view); if (Soc.openTab) Soc.openTab(fi > 3 ? 'l' : 'r'); else Soc.open(); } else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
     var Stg = window.KukingSettings; if (Stg && Stg.isOpen && Stg.isOpen() && Stg.close(function () { b.click(); }) === false) return;

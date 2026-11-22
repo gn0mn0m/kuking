@@ -82,7 +82,7 @@
       var w = document.createElement('div'); w.innerHTML = block(k, cls); var n = w.firstChild;
       if (n) el.replaceWith(n); else el.remove();
     });
-    document.querySelectorAll('[data-dp-hero]').forEach(function (el) { var src = MEM[el.getAttribute('data-dp-hero')]; if (src && !el.classList.contains('has-ph')) { el.classList.add('has-ph'); el.style.setProperty('--ph', 'url("' + src + '")'); } });
+    document.querySelectorAll('[data-dp-hero]').forEach(function (el) { var k = el.getAttribute('data-dp-hero'), src = MEM[k]; el.classList.toggle('ph-wait', !!(BUSY[k] || queued[k])); if (src) { el.classList.add('has-ph'); el.style.setProperty('--ph', 'url("' + src + '")'); } var rb = el.querySelector('.hero-re'); if (rb) { rb.disabled = !!BUSY[k]; rb.textContent = BUSY[k] ? 'Рисую…' : src ? 'Другое фото' : 'Нарисовать фото'; } });
   }
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-dp]'); if (!b) return; e.stopPropagation();
@@ -110,5 +110,6 @@
       make(k, c.r, c.s, function () { delete queued[k]; pumping = false; refresh(); setTimeout(pump, 400); });
     });
   }
-  window.KDish = { auto: auto, serveHTML: serveHTML, cardHTML: cardHTML, heroSrc: heroSrc, heroKey: heroKey, prompt: prompt, refresh: refresh, forget: del };
+  function state(r) { var k = heroKey(r); var si = +k.split(':s')[1]; if (!ctxR[k] && r.slides && r.slides[si]) ctxR[k] = { r: r, s: r.slides[si] }; return MEM[k] ? 'ready' : (BUSY[k] || queued[k]) ? 'busy' : 'none'; }
+  window.KDish = { state: state, can: function () { return !!(window.KukingAI && KukingAI.canImage && KukingAI.canImage()); }, auto: auto, serveHTML: serveHTML, cardHTML: cardHTML, heroSrc: heroSrc, heroKey: heroKey, prompt: prompt, refresh: refresh, forget: del };
 })();

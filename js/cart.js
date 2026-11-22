@@ -73,7 +73,12 @@
       if (!sum[k]) { sum[k] = { key: k, name: clean(name), unit: unit || '', amount: 0, text: text || '', from: [] }; order.push(k); }
       if (amount) sum[k].amount += +amount; if (from && sum[k].from.indexOf(from) < 0) sum[k].from.push(from);
     }
-    sources().forEach(function (s) { (s.r.ingredients || []).forEach(function (i) { if (i && i.name) add(i.name, i.amount, i.unit, i.unitText, s.r.title); }); });
+    /* отмеченное где-то ещё (список в рецепте, закупка в плане) — уже куплено, в корзину не берём */
+    sources().forEach(function (s) {
+      var rh = {}; try { rh = JSON.parse(localStorage.getItem('kuking:' + s.r.id + ':have') || '{}') || {}; } catch (e) {}
+      var sh = L().shopChecked ? L().shopChecked(s.r.id) : {};
+      (s.r.ingredients || []).forEach(function (i) { if (!i || !i.name) return; if (rh[i.id]) return; if (sh[i.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() + '|' + (i.unit || '')]) return; add(i.name, i.amount, i.unit, i.unitText, s.r.title); });
+    });
     extraX.forEach(function (x) { add(x.name, x.amount, x.unit, x.text, 'своё'); });
     Object.keys(have).forEach(function (k) { if (!sum[k]) delete have[k]; }); Object.keys(hide).forEach(function (k) { if (!sum[k]) delete hide[k]; });
     return order.map(function (k) { var it = sum[k]; it.dept = dept(it.name); it.home = inPantry(it.name); it.got = !!have[k]; it.hidden = !!hide[k]; return it; }).filter(function (it) { return !it.hidden; });
@@ -174,7 +179,7 @@
   }
   function open(t) {
     tab = t || tab || 'cart';
-    if (window.__kGoTab) { window.__kGoTab('cart'); if (ov && ov.classList.contains('ct-page')) draw(); return; }
+    if (window.__kOpenCart || window.__kGoTab) { (window.__kOpenCart || function () { window.__kGoTab('cart'); })(); if (ov && ov.classList.contains('ct-page')) draw(); return; }
     if (ov) return;
     ov = document.createElement('div'); ov.className = 'ct'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Корзина');
     document.body.appendChild(ov); draw(); document.documentElement.classList.add('qz-lock');

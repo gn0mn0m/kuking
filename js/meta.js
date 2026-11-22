@@ -150,7 +150,7 @@
     if (m.equipment.length) {
       var miss = window.KPrefs ? m.equipment.filter(function (e) { return !KPrefs.has(e); }) : [];
       h += '<p class="mt-eq"><span class="mt-k">Техника</span> ' + m.equipment.map(function (e) { return miss.indexOf(e) >= 0 ? '<s class="mt-no">' + esc(e) + '</s>' : esc(e); }).join(' · ') + '</p>';
-      if (miss.length) h += '<p class="small mt-miss">У тебя нет: ' + esc(miss.join(', ').toLowerCase()) + '. Скоро тут будет кнопка «Переделать под мою технику».</p>';
+      if (miss.length) h += '<p class="small mt-miss">У вас нет: ' + esc(miss.join(', ').toLowerCase()) + '.</p><button type="button" class="nav-btn mt-rw" data-a="rwkit" data-id="' + esc(r.id) + '">Переделать под мою технику</button>';
     }
     return h + '</div>';
   }

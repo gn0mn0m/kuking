@@ -66,6 +66,7 @@
     h += '<div class="kc-row">' +
       '<button type="button" class="kc-btn' + (n ? ' on' : '') + '" data-kc="filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Фильтры' + (n ? ' · ' + n : '') + '</button>' +
       '<button type="button" class="kc-btn" data-kc="fridge"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M6 10h12M9 6.5v1.5M9 13v2.5"/></svg>Из того, что есть</button>' +
+      '<button type="button" class="kc-btn" data-a="create"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>Импорт рецепта</button>' +
       cols.map(function (c) { return '<button type="button" class="kc-btn kc-col" data-kcol="' + esc(c.id) + '" aria-pressed="' + (F.col === c.id) + '">📁 ' + esc(c.name) + ' · ' + c.ids.length + '</button>'; }).join('') +
       saved.map(function (s, i) { return '<button type="button" class="kc-btn kc-saved" data-ksaved="' + i + '">★ ' + esc(s.name) + '</button>'; }).join('') + '</div>';
     if (ai) h += '<div class="kc-ai"><div class="kc-ai-h"><span>Нейросеть по запросу «' + esc(ai.q) + '»</span><button type="button" class="kc-x" data-kc="aiclear" aria-label="Сбросить">×</button></div>' +

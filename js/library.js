@@ -161,6 +161,7 @@
     quiz: ['#e8590c', '<path d="M12 3c1.4 3 5 5 5 9.5a5 5 0 0 1-10 0c0-2.2 1.3-3.6 2.2-4.4 0 1.8.9 2.7 1.8 2.7-.4-2.7.9-5.3 1-7.8z"/>'],
     feedback: ['#e0a800', '<path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l9-7"/>'],
     about: ['#a0826d', '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1" class="f"/>'],
+    imp: ['#0ca678', '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 19h14"/>'],
     pen: ['#30b356', '<path d="M5 19h4L19 9l-4-4L5 15z"/><path d="M13.5 6.5l4 4"/>']
   };
   function icoSq(k) { var x = I[k]; return '<span class="pf-ico" style="background:' + x[0] + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + x[1] + '</svg></span>'; }
@@ -801,7 +802,8 @@
     h += rateBlock(r);
     var thr = SOC().thread(r.id, reviews[r.id]); if (thr) h += '<section class="tg-sec">' + thr + '</section>';
     if (window.KHub) { h += KHub.recipeHTML(r); KHub.load(r.id, function () { if (!ov.hidden && view === 'detail' && !typing()) keepY(render); }); }
-    h += '<div class="tg-more">' + (window.KCart ? '<button type="button" class="ghost-btn' + (KCart.hasRecipe(r.id) ? ' on' : '') + '" data-a="tocart" data-id="' + esc(r.id) + '">🛒 ' + (KCart.hasRecipe(r.id) ? 'В корзине — убрать' : 'В корзину') + '</button><button type="button" class="ghost-btn" data-a="left" data-id="' + esc(r.id) + '">🥡 Осталось после готовки</button>' : '') + (window.KCat ? '<button type="button" class="ghost-btn" data-a="tocol" data-id="' + esc(r.id) + '">📁 ' + (KCat.inCols(r.id).length ? esc(KCat.inCols(r.id).join(', ')) : 'В коллекцию') + '</button>' : '') + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
+    var hasAir = window.KPrefs ? KPrefs.has('Аэрогриль') : true;
+    h += '<div class="tg-more">' + (window.Fresh && window.KukingAI && KukingAI.ready() && hasAir && !/аэрогрил/i.test(r.title) ? '<button type="button" class="ghost-btn" data-a="rwair" data-id="' + esc(r.id) + '">♨️ Переделать под аэрогриль</button>' : '') + (window.KCart ? '<button type="button" class="ghost-btn' + (KCart.hasRecipe(r.id) ? ' on' : '') + '" data-a="tocart" data-id="' + esc(r.id) + '">🛒 ' + (KCart.hasRecipe(r.id) ? 'В корзине — убрать' : 'В корзину') + '</button><button type="button" class="ghost-btn" data-a="left" data-id="' + esc(r.id) + '">🥡 Осталось после готовки</button>' : '') + (window.KCat ? '<button type="button" class="ghost-btn" data-a="tocol" data-id="' + esc(r.id) + '">📁 ' + (KCat.inCols(r.id).length ? esc(KCat.inCols(r.id).join(', ')) : 'В коллекцию') + '</button>' : '') + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
       (r.ai && !r.manual ? '<button type="button" class="ghost-btn" data-a="upg" data-id="' + esc(r.id) + '">' + (r.upgraded ? 'Обновить ещё раз' : 'Обновить под новые правила') + '</button>' : '') +
       '<button type="button" class="ghost-btn tg-del" data-id="' + esc(r.id) + '">Убрать из книги</button></div>';
     h += '<div class="tg-cta"><button type="button" class="nav-btn primary lib-go" data-id="' + esc(r.id) + '">' + (on ? 'Продолжить готовку →' : 'Готовим это') + '</button></div>';
@@ -809,7 +811,7 @@
   }
 
   /* создание */
-  var idea = '', ideaMode = 'self';
+  var idea = '', ideaMode = 'self', impText = '', impLink = '', impHelp = false;
   function createHTML() {
     var ai = window.KukingAI && window.KukingAI.ready();
     var h = '<header class="tg-head tg-head-sub"><button type="button" class="tg-back" data-a="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Рецепты</button><span class="tg-head-t">Новый рецепт</span></header>';
@@ -818,6 +820,12 @@
       '<div class="tg-chips">' + [['self', 'Для себя'], ['romance', 'Романтика'], ['friends', 'Друзья']].map(function (m) { return '<button type="button" class="tg-chip m-' + m[0] + '" data-im="' + m[0] + '" aria-pressed="' + (ideaMode === m[0]) + '">' + m[1] + '</button>'; }).join('') + '</div>' +
       '<button type="submit" class="nav-btn primary">Сгенерировать</button></form>' +
       (ai ? '' : '<p class="small">Нужен ключ к нейросети — <button type="button" class="lib-link" data-a="setup">подключить</button>.</p>') + '</section>';
+    h += '<section class="tg-sec tg-make"><h3 class="tg-mk-h">' + icoSq('imp') + 'Импорт рецепта</h3><p class="small">Вставьте текст из TikTok, Reels, YouTube, сайта или заметок — нейросеть переложит его в слайд-шоу под вашу технику и цель. Режим и порции — как выбрано выше.</p>' +
+      '<form id="libImp" class="tg-imp"><textarea id="libImpT" rows="5" maxlength="7000" placeholder="Описание рецепта: продукты, граммовки, шаги…" aria-label="Текст рецепта">' + esc(impText) + '</textarea>' +
+      '<input id="libImpL" type="url" inputmode="url" placeholder="Ссылка на источник — необязательно" value="' + esc(impLink) + '" aria-label="Ссылка">' +
+      '<div class="tg-imp-r"><button type="button" class="nav-btn" data-a="imppaste">Вставить из буфера</button><button type="button" class="nav-btn" data-a="imphelp" aria-expanded="' + impHelp + '">Со скриншота</button></div>' +
+      (impHelp ? '<ol class="small tg-imp-help"><li>Откройте скриншот в «Фото».</li><li>Удержите палец на тексте — iPhone выделит его.</li><li>«Выбрать все» → «Скопировать».</li><li>Вернитесь сюда и нажмите «Вставить из буфера».</li></ol>' : '') +
+      '<button type="submit" class="nav-btn primary"' + (ai ? '' : ' disabled') + '>Переложить рецепт</button></form></section>';
     h += '<section class="tg-sec tg-make"><h3 class="tg-mk-h">' + icoSq('dice') + '10 идей под твой вкус</h3>' +
       (themesOpen ? themesBlock() : '<p class="small">Нейросеть посмотрит оценки, комменты и анкеты и предложит 10 блюд.</p><button type="button" class="nav-btn lib-themes">Показать идеи</button>') + '</section>';
     h += '<section class="tg-sec tg-make"><h3 class="tg-mk-h">' + icoSq('pen') + 'Написать самому</h3><p class="small">Продукты, посуда, шаги с таймерами и подача — соберётся такое же слайд-шоу.</p>' +
@@ -1097,6 +1105,15 @@
     on('.lib-themes', function () { themesOpen = true; if (window.Fresh.stale(freshCtx)) loadThemes(); else render(); });
     on('.lib-themes-re', loadThemes);
     on('.th-go', function (b) { window.Fresh.spin(freshCtx, +b.getAttribute('data-i')); });
+    var it = ov.querySelector('#libImpT'), il = ov.querySelector('#libImpL');
+    if (it) it.addEventListener('input', function () { impText = it.value; });
+    if (il) il.addEventListener('input', function () { impLink = il.value; });
+    on('[data-a=imphelp]', function () { impHelp = !impHelp; keepY(render); });
+    on('[data-a=imppaste]', function (b) { if (!navigator.clipboard || !navigator.clipboard.readText) { b.textContent = 'Вставьте вручную'; return; } navigator.clipboard.readText().then(function (t) { if (!t) { b.textContent = 'Буфер пустой'; return; } if (/^https?:\/\/\S+$/.test(t.trim())) impLink = t.trim(); else impText = (impText ? impText + '\n' : '') + t; keepY(render); }).catch(function () { b.textContent = 'Нет доступа — вставьте вручную'; }); });
+    var fimp = ov.querySelector('#libImp');
+    if (fimp) fimp.addEventListener('submit', function (e) { e.preventDefault(); impText = it.value.trim(); impLink = il.value.trim(); if (impText.length < 40) { it.focus(); it.setAttribute('placeholder', 'Нужно хотя бы несколько строк: продукты и шаги'); return; } window.Fresh.rework(freshCtx, { kind: 'import', text: impText, link: impLink, mode: ideaMode }); impText = ''; impLink = ''; });
+    on('[data-a=rwair]', function (b) { var r = byId(b.getAttribute('data-id')); if (r) window.Fresh.rework(freshCtx, { kind: 'airfryer', base: r }); });
+    on('[data-a=rwkit]', function (b) { var r = byId(b.getAttribute('data-id')); if (r) window.Fresh.rework(freshCtx, { kind: 'kit', base: r }); });
     on('[data-im]', function (b) { idea = ov.querySelector('#libIdeaIn').value; ideaMode = b.getAttribute('data-im'); render(); });
     var fi = ov.querySelector('#libIdea');
     if (fi) fi.addEventListener('submit', function (e) {

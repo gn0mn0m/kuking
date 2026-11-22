@@ -688,5 +688,70 @@
       btns.innerHTML = '<p class="small" style="flex-basis:100%;margin:0 0 6px">' + esc(aiMsg(e)) + '. Старый рецепт на месте, ничего не потерялось.</p><button type="button" class="nav-btn" data-u="close">Закрыть</button>';
     });
   }
-  window.Fresh = { upgrade: upgrade, custom: custom, manual: manual, spin: spin, merge: merge, toDoc: toDoc, forget: forget, themes: THEMES, stale: stale, refresh: refreshIdeas, setIdeas: setIdeas };
+
+  /* переделка: импорт чужого рецепта и варианты под технику. Новый рецепт рядом со старым, старый не трогаем.
+     o = {kind:'import'|'airfryer'|'kit', base:рецепт|null, text, link, mode, guests} */
+  function rework(ctx, o) {
+    ctxRef = ctx;
+    var base = o.base, keep = GEN, mode = MODE_RU[o.mode] ? o.mode : base && MODE_RU[base.mode] ? base.mode : 'self';
+    GEN = { mode: mode, guests: o.guests || (base && base.baseGuests) || DEF[mode] || 2 };
+    var LBL = { import: 'Перекладываю рецепт', airfryer: 'Переделываю под аэрогриль', kit: 'Переделываю под вашу технику' };
+    var m = document.createElement('div'); m.className = 'rl-ov'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', LBL[o.kind]);
+    m.innerHTML = '<div class="rl-box"><button type="button" class="rl-x">✕ Выйти</button><p class="eyebrow rl-k">' + LBL[o.kind] + '</p><div class="rl-res">' + esc(base ? base.title : 'Новый рецепт') + '</div>' +
+      '<div class="fr-gen"><div class="fr-pot" aria-hidden="true"><i></i><i></i><i></i></div><p class="fr-msg">Шеф думает…</p><p class="small fr-sub">Обычно 1–3 минуты. Можно свернуть — рецепт сохранится сам.</p></div>' +
+      '<div class="rl-btns"><button type="button" class="nav-btn" data-u="stop">Отменить</button></div></div>';
+    document.body.appendChild(m);
+    var msg = m.querySelector('.fr-msg'), sub = m.querySelector('.fr-sub'), btns = m.querySelector('.rl-btns'), gen = m.querySelector('.fr-gen'), k = m.querySelector('.rl-k'), res = m.querySelector('.rl-res');
+    var stopTick = window.KFun ? window.KFun.ticker(msg, 'gen') : function () {}, ctl = new AbortController(), newId = null;
+    function shut() { stopTick(); ctl.abort(); GEN = keep; m.remove(); }
+    m.querySelector('.rl-x').addEventListener('click', shut);
+    btns.addEventListener('click', function (e) { var b = e.target.closest('[data-u]'); if (!b) return; var a = b.getAttribute('data-u');
+      if (a === 'stop' || a === 'close') shut(); else if (a === 'open') { shut(); if (ctx.open) ctx.open(newId); } else if (a === 'cook') { shut(); ctx.choose(newId); } });
+    var extra, theme;
+    if (o.kind === 'import') {
+      theme = ['', 'импорт рецепта из внешнего источника', '', mode];
+      extra = '\n# ИМПОРТ РЕЦЕПТА\nЧеловек прислал рецепт из соцсети, сайта или заметки. Переложи его в формат «Жарко» целиком: те же блюдо и идея, те же главные продукты и техника автора. ' +
+        'Название дай своё по-русски, 2–5 слов, если в тексте его нет. Подстрой под цель, технику и предпочтения повара (см. выше), граммовки посчитай на ' + GEN.guests + ' порц. ' +
+        'Если в тексте чего-то не хватает (граммовок, времени, температуры) — дострой по-шефски сам, не выдумывая другое блюдо.' +
+        (o.link ? '\nИсточник: ' + o.link : '') + '\nТЕКСТ ИСТОЧНИКА:\n' + String(o.text || '').slice(0, 7000);
+    } else {
+      var brief = [base.tagline, (base.dishes || []).map(function (d) { return d.name; }).join(', ')].filter(Boolean).join(' — ');
+      theme = [base.title, brief, '', mode];
+      extra = o.kind === 'airfryer'
+        ? '\n# ПЕРЕДЕЛКА ПОД АЭРОГРИЛЬ\nТо же блюдо «' + base.title + '», но всё, что можно, готовится в аэрогриле (корзина ≈ 4–6 л): жарка, запекание, хрустящие корочки, разогрев. ' +
+          'Для каждого шага в аэрогриле — температура (°C), время, когда встряхнуть или перевернуть, сколько класть за раз (не перегружать корзину). Соусы и то, что требует воды или сковороды, оставь на плите. В посуде укажи «Аэрогриль».'
+        : '\n# ПЕРЕДЕЛКА ПОД ТЕХНИКУ ПОВАРА\nТо же блюдо «' + base.title + '», но без техники, которой у человека нет (см. «НЕТ» в предпочтениях). Замени её тем, что есть: сковороды, кастрюли и отмеченная техника. ' +
+          'Сохрани вкус и текстуру насколько возможно, честно поменяй время и шаги.';
+      extra += '\nИСХОДНИК (для справки):\n' + JSON.stringify({ ingredients: base.ingredients, dishes: base.dishes, totalTime: base.totalTime, steps: (base.slides || []).filter(function (s) { return s.type === 'step'; }).map(function (s) { return s.title; }) }).slice(0, 6000);
+    }
+    var existing = (window.RECIPES || []).map(function (x) { return '«' + x.title + '»'; });
+    Promise.resolve(window.claude && window.claude.use ? window.claude.use('sample') : null).then(function (sample) {
+      if (!sample) throw { code: 'not_granted' };
+      function attempt(note) {
+        return sample.json(buildPrompt(theme, ctx.reviews(), existing, note, extra), { modelTier: 'complex', cache: false, signal: ctl.signal, temperature: 0.5,
+          onText: function (u) { sub.textContent = (note ? 'Переписываю начисто · ' : '') + 'Написано ' + Math.round(u.text.length / 1000) + ' тыс. знаков'; } })
+          .then(function (json) {
+            var r = fix(json, base ? base.title : str(json && json.title, 'Рецепт'), GEN.mode), pr = window.KRecipe ? window.KRecipe.problems(r) : [];
+            if (pr.length && !note) throw new Error('рецепт не прошёл сверку: ' + pr.join('; '));
+            return window.KRecipe ? window.KRecipe.fix(r) : r;
+          });
+      }
+      return attempt().catch(function (e) { if (e && (e.code === 'cancelled' || e.code === 'not_granted' || e.code === 'bad_key' || e.code === 'network')) throw e; return attempt(e && e.message ? e.message : 'кривой JSON'); });
+    }).then(function (r) {
+      stopTick();
+      r.id = 'ai-' + Date.now().toString(36);
+      if (o.kind === 'airfryer') r.title = base.title + ' в аэрогриле';
+      if (o.kind === 'kit') r.title = base.title + ' без лишней техники';
+      if (o.kind === 'import') { r.source = o.link || 'текст'; r.imported = true; } else { r.from = base.id; if (!r.icon && base.icon) r.icon = base.icon; }
+      newId = r.id; cache[r.id] = r; saveCache(); window.RECIPES.push(r); ctx.added(r, false);
+      GEN = keep; gen.hidden = true; k.textContent = 'Готово'; res.textContent = r.title;
+      btns.innerHTML = '<button type="button" class="nav-btn" data-u="open">Посмотреть</button><button type="button" class="nav-btn primary" data-u="cook">Готовим это</button>';
+      if (window.Confetti) try { window.Confetti.fire({ anchor: res }); } catch (e) {}
+    }).catch(function (e) {
+      stopTick(); GEN = keep; if (e && e.code === 'cancelled') return;
+      gen.hidden = true; k.textContent = 'Не вышло';
+      btns.innerHTML = '<p class="small" style="flex-basis:100%;margin:0 0 6px">' + esc(aiMsg(e)) + '.</p><button type="button" class="nav-btn" data-u="close">Закрыть</button>';
+    });
+  }
+  window.Fresh = { upgrade: upgrade, rework: rework, custom: custom, manual: manual, spin: spin, merge: merge, toDoc: toDoc, forget: forget, themes: THEMES, stale: stale, refresh: refreshIdeas, setIdeas: setIdeas };
 })();

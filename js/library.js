@@ -362,6 +362,7 @@
   }
   function tIco(k) { var x = TK[k]; return '<span class="pf-ico" style="background:' + x[0] + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + x[1] + '</svg></span>'; }
   var CAL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
+  var CARTI = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H7"/><circle cx="9.5" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/></svg>';
   var GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>';
   /* время — прямо в строке: тапнул, крутанул барабан, план пересобрался */
   function timeIn(x) { return '<label class="ag-time ag-tin"><input type="time" data-tin="' + esc(x.key) + '" value="' + esc(x.time || '') + '" aria-label="Время: ' + esc(x.title) + '"><span>' + esc(x.time || '—') + '</span></label>'; }
@@ -429,7 +430,7 @@
       '<button type="button" class="nav-btn primary pl-start" data-a="planStart">Начать</button>' +
       '<ol class="pl-steps"><li><b>Скажи, как закупаешься</b><span>раз в неделю, в день готовки или доставкой</span></li><li><b>Добавь блюда в дни</b><span>из своей книги, в пару тапов</span></li><li><b>Лови напоминания</b><span>закупка, морозилка, маринад, готовка</span></li></ol>' +
       '</div>';
-    var td = today(), all = tasksAll().filter(function (x) { return x.kind !== 'empty' || x.day === td; }), head = bigHead('План', '<button type="button" class="tg-ic pl-calbtn" data-a="calToggle" aria-expanded="' + calOpen + '" aria-label="Календарь на месяц">' + CAL + '</button><button type="button" class="tg-ic" data-a="planCfg" aria-label="Настройки плана">' + GEAR + '</button>');
+    var td = today(), all = tasksAll().filter(function (x) { return x.kind !== 'empty' || x.day === td; }), head = bigHead('План', (window.KCart ? '<button type="button" class="tg-ic pl-cart" data-a="cart" aria-label="Корзина">' + CARTI + (KCart.count() ? '<b class="pl-cnt">' + KCart.count() + '</b>' : '') + '</button>' : '') + '<button type="button" class="tg-ic pl-calbtn" data-a="calToggle" aria-expanded="' + calOpen + '" aria-label="Календарь на месяц">' + CAL + '</button><button type="button" class="tg-ic" data-a="planCfg" aria-label="Настройки плана">' + GEAR + '</button>');
     var t0 = dParse(td); t0.setDate(t0.getDate() - ((t0.getDay() + 6) % 7));
     var strip = '<div class="pl-strip" role="tablist" aria-label="Дни">';
     for (var i = 0; i < 21; i++) { var d = new Date(t0); d.setDate(t0.getDate() + i); var k = dKey(d), n = (plan[k] || []).filter(byId).length, tk = all.filter(function (x) { return x.day === k && x.kind !== 'cook'; }).length;
@@ -437,6 +438,7 @@
     strip += '</div>';
     strip = '<div class="pl-stripw"><button type="button" class="pl-arr" data-sarr="-1" aria-label="Неделя назад"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>' + strip + '<button type="button" class="pl-arr" data-sarr="1" aria-label="Неделя вперёд"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>';
     var h = head + strip + '<div class="pl-cal' + (calOpen ? ' open' : '') + '" id="plCal"><div class="pl-cal-in"><div class="pl-month">' + monthHTML() + '</div><div class="pd' + (calSel ? ' open' : '') + '" id="plDay"><div class="pd-in">' + (calSel ? dayPanel(calSel) : '') + '</div></div></div></div><div class="ag">';
+    if (window.KCart) h += '<div class="pl-quick"><button type="button" class="kc-btn" data-a="week">✦ Меню на неделю</button><button type="button" class="kc-btn" data-a="cart">🛒 Корзина' + (KCart.count() ? ' · ' + KCart.count() : '') + '</button></div>';
     var keys = []; for (var j0 = 0; j0 < 14; j0++) keys.push(addDays(td, j0));
     Object.keys(plan).sort().forEach(function (k3) { if (k3 > keys[13] && (plan[k3] || []).filter(byId).length) keys.push(k3); });
     for (var j = 0; j < keys.length; j++) {
@@ -798,7 +800,7 @@
     if (ch && adm) h += '<section class="tg-sec tg-chefrow">' + CROWN + '<span>Админ <b>' + esc(adm.nick) + '</b> поставил</span><b class="lib-score ' + scCls(ch) + '">' + ch + '<small>/10</small></b></section>';
     h += rateBlock(r);
     var thr = SOC().thread(r.id, reviews[r.id]); if (thr) h += '<section class="tg-sec">' + thr + '</section>';
-    h += '<div class="tg-more">' + (window.KCat ? '<button type="button" class="ghost-btn" data-a="tocol" data-id="' + esc(r.id) + '">📁 ' + (KCat.inCols(r.id).length ? esc(KCat.inCols(r.id).join(', ')) : 'В коллекцию') + '</button>' : '') + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
+    h += '<div class="tg-more">' + (window.KCart ? '<button type="button" class="ghost-btn' + (KCart.hasRecipe(r.id) ? ' on' : '') + '" data-a="tocart" data-id="' + esc(r.id) + '">🛒 ' + (KCart.hasRecipe(r.id) ? 'В корзине — убрать' : 'В корзину') + '</button><button type="button" class="ghost-btn" data-a="left" data-id="' + esc(r.id) + '">🥡 Осталось после готовки</button>' : '') + (window.KCat ? '<button type="button" class="ghost-btn" data-a="tocol" data-id="' + esc(r.id) + '">📁 ' + (KCat.inCols(r.id).length ? esc(KCat.inCols(r.id).join(', ')) : 'В коллекцию') + '</button>' : '') + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
       (r.ai && !r.manual ? '<button type="button" class="ghost-btn" data-a="upg" data-id="' + esc(r.id) + '">' + (r.upgraded ? 'Обновить ещё раз' : 'Обновить под новые правила') + '</button>' : '') +
       '<button type="button" class="ghost-btn tg-del" data-id="' + esc(r.id) + '">Убрать из книги</button></div>';
     h += '<div class="tg-cta"><button type="button" class="nav-btn primary lib-go" data-id="' + esc(r.id) + '">' + (on ? 'Продолжить готовку →' : 'Готовим это') + '</button></div>';
@@ -1063,6 +1065,10 @@
     if (q) q.addEventListener('input', function () { query = q.value; var aw = ov.querySelector('.kc-askw'); if (aw && window.KCat) { aw.innerHTML = KCat.askHTML(query); var ab = aw.querySelector('[data-kc=ask]'); if (ab) ab.addEventListener('click', function () { KCat.bind(ov, R.filter(function (r) { return !isHid(r.id); }), function () { keepY(render); }, function () { return query; }, ab); }); } var l = ov.querySelector('.tg-lists'); if (!l) { render(); return; } l.innerHTML = listsHTML(visible()); on('.tg-lists [data-open]', openTap); gestures(); });
     if (window.KCat && view === 'list') KCat.bind(ov, R.filter(function (r) { return !isHid(r.id); }), function () { keepY(render); }, function () { return query; });
     on('.kc-reset', function () { KCat.reset(); render(); });
+    on('[data-a=cart]', function () { KCart.open('cart'); });
+    on('[data-a=week]', function () { KCart.weekMenu(); });
+    on('[data-a=tocart]', function (b) { var id = b.getAttribute('data-id'); if (KCart.hasRecipe(id)) KCart.removeRecipe(id); else KCart.addRecipe(id); if (window.kHaptic) window.kHaptic(8); keepY(render); });
+    on('[data-a=left]', function (b) { var r = byId(b.getAttribute('data-id')); if (r) KCart.leftovers(r); });
     on('[data-a=tocol]', function (b) { KCat.openCols(b.getAttribute('data-id'), function () { keepY(render); }); });
     on('[data-for]', function (b) { forMode = b.getAttribute('data-for'); lset('kuking:for', forMode); render(); });
     on('.tg-sort', function () { sortOpen = !sortOpen; render(); });
@@ -1335,7 +1341,13 @@
     },
     open: open,
     resync: function () { syncTasks(); },
-    show: function (id) { ov.hidden = false; go('detail', id); render(); }
+    show: function (id) { ov.hidden = false; go('detail', id); render(); },
+    all: function () { return R.filter(function (r) { return !isHid(r.id); }); },
+    byId: byId, today: today,
+    planDays: function () { return plan; },
+    isDone: function (k) { return !!doneTasks[k]; },
+    planAdd: function (k, id) { var a = plan[k] = plan[k] || []; if (a.indexOf(id) < 0) a.push(id); savePlan(); },
+    refresh: function () { if (!ov.hidden) keepY(render); }
   };
   /* после знакомства: на главную и сразу собрать 10 идей под человека */
   window.__kCustom = function (idea, mode) { window.Fresh.custom(freshCtx, idea, mode || 'self'); };

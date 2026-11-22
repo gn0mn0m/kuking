@@ -260,5 +260,6 @@
     confirmSheet('Удалить фильтр?', '«' + s.name + '»', 'Удалить', function () { saved.splice(i, 1); saveSaved(); rerender(); }); }
   function clearAI() { ai = null; }
 
-  window.KCat = { pass: pass, order: order, barHTML: barHTML, askHTML: askHTML, rowBadges: rowBadges, forYou: forYou, bind: bind, openCols: openCols, inCols: inCols, clearAI: clearAI, aiOn: function () { return !!(ai && ai.ids && !ai.busy); }, active: function () { return !!(F.cat || count() || F.col || ai); }, reset: function () { F = Object.assign({}, EMPTY, { diets: [], cuisine: [], main: [] }); ai = null; save(); } };
+  window.KCat = { pass: pass, order: order, barHTML: barHTML, askHTML: askHTML, rowBadges: rowBadges, forYou: forYou, bind: bind, openCols: openCols, inCols: inCols, clearAI: clearAI, fridge: function (names) { fridge = { sel: [], txt: names.join(', ') }; lset('kuking:fridge', fridge); openFridge(window.KukingLib && KukingLib.all ? KukingLib.all() : []); },
+    aiOn: function () { return !!(ai && ai.ids && !ai.busy); }, active: function () { return !!(F.cat || count() || F.col || ai); }, reset: function () { F = Object.assign({}, EMPTY, { diets: [], cuisine: [], main: [] }); ai = null; save(); } };
 })();

@@ -1,5 +1,5 @@
 /* Service worker «Жарко»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-f57c9d12d2';
+var CACHE = 'kuking-0789e7f0f9';
 var ASSETS = [
 "./",
 "icons/favicon-16.png",
@@ -82,7 +82,8 @@ self.addEventListener('notificationclick', function (e) {
   e.notification.close();
   var url = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href;
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
-    for (var i = 0; i < cs.length; i++) { if (cs[i].url.indexOf(self.registration.scope) === 0 && 'focus' in cs[i]) return cs[i].focus(); }
+    var chat = /[?&]chat=([\w-]+)/.exec(url);
+    for (var i = 0; i < cs.length; i++) { if (cs[i].url.indexOf(self.registration.scope) === 0 && 'focus' in cs[i]) { if (chat) cs[i].postMessage({ chat: chat[1] }); return cs[i].focus(); } }
     return self.clients.openWindow(url);
   }));
 });

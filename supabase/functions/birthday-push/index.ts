@@ -2,7 +2,8 @@
 // action "init" — отдать публичный ключ пушей (создаёт ключи при первом вызове);
 // action "run"  — раз в день по расписанию: поздравить с днём рождения (только самого именинника);
 // action "tasks" — каждые 10 минут: напоминания плана, которым пора;
-// action "test" — пробное уведомление себе (нужен вход).
+// action "test" — пробное уведомление себе (нужен вход);
+// action "msg"  — пуш о новом личном сообщении (вызывает отправитель сразу после отправки).
 import webpush from 'npm:web-push@3.6.7';
 import postgres from 'npm:postgres@3.4.4';
 
@@ -58,6 +59,25 @@ Deno.serve(async (req) => {
       const me = await u.json();
       await keys();
       const n = await send([me.id], { title: '🔥 Жарко на связи', body: 'Уведомления подключены и работают.' });
+      return json({ sent: n });
+    }
+
+    if (action === 'msg') { // новое личное сообщение — пуш получателю (только отправитель и только свежее)
+      const auth = req.headers.get('authorization') || '';
+      const u = await fetch(Deno.env.get('SUPABASE_URL') + '/auth/v1/user', { headers: { authorization: auth, apikey: req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY') || '' } });
+      if (!u.ok) return json({ error: 'Войдите в аккаунт' }, 401);
+      const me = await u.json();
+      const id = +body.id || 0;
+      const rows = await sql`select m.sender, m.receiver, m.body, m.recipe_title, p.nick from public.messages m join public.profiles p on p.id = m.sender
+        where m.id = ${id} and m.sender = ${me.id} and m.created_at > now() - interval '5 minutes'`;
+      if (!rows.length) return json({ sent: 0 });
+      const m = rows[0];
+      const pref = await sql`select data from public.docs where collection = 'meta' and id = 'prefs' and user_id = ${m.receiver} limit 1`;
+      const off = pref.length && pref[0].data && pref[0].data.prefs && pref[0].data.prefs.notif && pref[0].data.prefs.notif.msg === false;
+      if (off) return json({ sent: 0 });
+      await keys();
+      const text = m.recipe_title ? '📖 Рецепт: ' + m.recipe_title + (m.body ? ' — ' + m.body : '') : m.body;
+      const n = await send([m.receiver], { title: '💬 ' + m.nick, body: String(text).slice(0, 140), url: './?chat=' + m.sender, tag: 'msg-' + m.sender });
       return json({ sent: n });
     }
 

@@ -336,7 +336,7 @@
     var tmp = { id: 'tmp' + Date.now(), sender: me(), receiver: chatWith, body: x.body || '', recipe_title: x.recipe ? x.recipe.title : null, created_at: new Date().toISOString(), pending: true };
     MS.list.push(tmp); drawChat(true); hap(6);
     var row = { sender: me(), receiver: chatWith, body: x.body || '' }; if (x.recipe) { row.recipe = x.recipe; row.recipe_title = String(x.recipe.title).slice(0, 120); }
-    req('POST', 'messages', row, 'return=representation').then(function (rows) { var i = MS.list.indexOf(tmp); if (i >= 0 && rows && rows[0]) MS.list[i] = rows[0]; drawChat(false); })
+    req('POST', 'messages', row, 'return=representation').then(function (rows) { var i = MS.list.indexOf(tmp); if (i >= 0 && rows && rows[0]) MS.list[i] = rows[0]; drawChat(false); if (rows && rows[0] && Soc().notify) Soc().notify('msg', { id: rows[0].id }); })
       .catch(function (e) { MS.list = MS.list.filter(function (y) { return y !== tmp; }); drawChat(false); toast(/row-level|403/.test(String(e && e.message)) ? 'Писать можно только друзьям' : 'Не отправилось — проверьте интернет'); });
   }
   function onChatClick(e) {
@@ -374,6 +374,10 @@
   setInterval(function () { if (!document.hidden && ready() && !chatEl) loadMsgs(function () { if (Soc().isOpen && Soc().isOpen() && Soc().rerender) Soc().rerender(); }); }, 45000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden && ready()) loadMsgs(); });
   setTimeout(function () { if (ready()) loadMsgs(); }, 2500);
+  /* тап по пушу о сообщении — сразу в чат */
+  function openFrom(id) { if (!id) return; var tries = 0; (function t() { if (ready() && Soc().person && Soc().person(id)) { if (!chatEl || chatWith !== id) { if (chatEl) closeChat(); setTimeout(function () { openChat(id); }, chatEl ? 320 : 0); } } else if (tries++ < 20) setTimeout(t, 500); })(); }
+  var qc = /[?&]chat=([\w-]+)/.exec(location.search); if (qc) { openFrom(qc[1]); try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+  if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.chat) openFrom(e.data.chat); });
 
   /* ---------- вкладка «Чаты»: переключатель Чаты / Лента ---------- */
   function chatsTop() {

@@ -2213,6 +2213,31 @@ html.qz-lock,html.qz-lock body{overflow:hidden}
 .hero-re{position:absolute;right:14px;bottom:14px;z-index:2}
 .tg-heroW.ph-wait:not(.has-ph) .hero-re{display:none}
 .cart-back{margin:calc(env(safe-area-inset-top,0px) + 6px) 0 -6px}
+.qz-pok{margin:0;padding:12px 14px;border-radius:14px;background:color-mix(in srgb,var(--green) 13%,transparent);color:var(--green);font-weight:600;font-size:.92rem}
+.qz-perr{color:var(--alarm,#d62828)}
+
+/* 4.12 кладовка */
+.pt-soon{padding:12px;border-radius:18px;background:color-mix(in srgb,var(--alarm,#d62828) 7%,var(--surface));border:1px solid color-mix(in srgb,var(--alarm,#d62828) 25%,transparent);display:grid;gap:8px}
+.pt-soon>b{font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--alarm,#d62828)}
+.pt-it{display:flex;align-items:center;gap:8px;padding:10px 4px 10px 12px;background:var(--surface)}
+.pt-it+.pt-it{border-top:1px solid var(--line)}
+.pt-main{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.pt-main b{font-weight:600;font-size:.95rem}
+.pt-exp{border:0;background:var(--surface-2);color:var(--muted);font:inherit;font-size:.74rem;font-weight:600;padding:2px 8px;border-radius:8px}
+.pt-exp.ask{color:var(--orange);background:color-mix(in srgb,var(--orange) 10%,transparent)}
+.pt-it.soon .pt-exp{color:#c2410c;background:color-mix(in srgb,#f59f00 18%,transparent)}
+.pt-it.bad .pt-exp{color:#fff;background:var(--alarm,#d62828)}
+.pt-qty{display:flex;align-items:center;background:var(--surface-2);border-radius:12px;padding:2px}
+.pt-qty button{border:0;background:none;color:var(--fg);font:inherit;font-weight:600;min-width:32px;height:32px;border-radius:10px}
+.pt-qty .pt-v{min-width:64px;font-size:.85rem;font-variant-numeric:tabular-nums}
+.pt-always{border:0;background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green);font:inherit;font-size:.8rem;font-weight:600;padding:6px 10px;border-radius:10px}
+.pt-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pt-row input{flex:1;min-width:110px;font:inherit;font-size:16px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.pt-date{font:inherit;font-size:16px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;width:100%;min-height:44px}
+.lo-list{display:grid;gap:10px;margin-top:6px}
+.lo-it{display:grid;gap:6px;padding:10px 12px;border-radius:14px;background:var(--surface-2)}
+.lo-u{color:var(--muted);font-size:.85rem}
+.ct-swept{margin:0 0 6px}
 </style>
 
 <div id="app">

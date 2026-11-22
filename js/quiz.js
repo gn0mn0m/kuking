@@ -110,7 +110,7 @@
   }
   function notifHTML(p) {
     var Soc = window.KukingSocial, st = Soc && Soc.pushState ? Soc.pushState() : 'nope';
-    var h = '<div class="qz-push">' + (st === 'on' ? '<p class="small">Уведомления на этом телефоне включены.</p>' :
+    var h = '<div class="qz-push">' + (st === 'on' ? '<p class="qz-pok">✓ Уведомления на этом телефоне включены.</p>' :
       st === 'install' ? '<p class="small">На iPhone уведомления работают, когда «Жарко» добавлен на экран «Домой».</p>' :
       st === 'denied' ? '<p class="small">Уведомления запрещены в настройках iPhone: Настройки → Уведомления → Жарко.</p>' :
       st === 'nope' ? '<p class="small">Этот браузер не умеет уведомления.</p>' :
@@ -135,7 +135,9 @@
         b.setAttribute('aria-pressed', q); p.equip = (p.equip || []).filter(function (x) { return x !== k; }); if (q) p.equip.push(k); }
       else if (b.hasAttribute('data-notif')) { var t = b.getAttribute('data-notif'), o = b.getAttribute('aria-checked') !== 'true';
         b.setAttribute('aria-checked', o); p.notif[t] = o; if (window.KukingLib && window.KukingLib.resync) window.KukingLib.resync(); }
-      else if (b.getAttribute('data-a') === 'push') { var Soc = window.KukingSocial; if (Soc && Soc.enablePush) Promise.resolve(Soc.enablePush()).then(function () { var w = b.closest('.qz-push'); if (w) w.innerHTML = '<p class="small">Уведомления включены.</p>'; }).catch(function () {}); return; }
+      else if (b.getAttribute('data-a') === 'push') { var Soc = window.KukingSocial, w = b.closest('.qz-push'); lset('kuking:pushAsked', '1'); if (!Soc || !Soc.enablePush) return; b.disabled = true; b.textContent = 'Включаю…';
+        Promise.resolve(Soc.enablePush()).then(function () { if (w) w.innerHTML = '<p class="qz-pok">✓ Уведомления включены — напоминания и сообщения придут на этот телефон.</p>'; hap(12); })
+          .catch(function (x) { b.disabled = false; b.textContent = 'Включить уведомления'; if (w && !w.querySelector('.qz-perr')) w.insertAdjacentHTML('beforeend', '<p class="small qz-perr">Не включились: ' + esc(x && x.message || 'iPhone не дал разрешение') + '. Можно позже: Профиль → Уведомления.</p>'); }); return; }
       hap(6); set(p); if (onChange) onChange();
     });
     root.addEventListener('input', function (e) {
@@ -187,7 +189,7 @@
     if (s === 'kit') return tiles(p.equip || []);
     if (s === 'cook') return '<span class="qz-l">Уровень: <b id="qzSkV">' + skill() + ' — ' + SKL[skill()] + '</b></span><input id="qzSkill" class="qz-range" type="range" min="1" max="10" value="' + skill() + '">' +
       '<span class="qz-l">Как часто готовите</span>' + seg('freq', [['r1', '1–2 в нед.'], ['r3', '3–4'], ['r5', '5–6'], ['r7', 'Каждый день']], b.freq) + timeHTML(p);
-    if (s === 'notif') return notifHTML(p);
+    if (s === 'notif') { lset('kuking:pushAsked', '1'); return notifHTML(p); }
     if (s === 'done') return '<div class="qz-hi"><div class="qz-done" aria-hidden="true">✓</div><h2 class="qz-h1">Всё готово' + (p.name ? ', ' + esc(p.name) : '') + '</h2>' +
       '<p class="qz-lead">' + summary() + '</p><p class="small qz-note">Изменить можно в профиле: «Предпочтения», «Моя техника», «Уведомления».</p></div>';
     return h;

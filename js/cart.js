@@ -51,6 +51,21 @@
   var DNAME = {}; DEPT.forEach(function (d) { DNAME[d[0]] = d[1]; }); DNAME.other = 'Прочее';
   var DORDER = ['veg', 'meat', 'dairy', 'bread', 'groc', 'spice', 'frozen', 'drink', 'other'];
   function dept(name) { var s = nk(name); for (var i = 0; i < DEPT.length; i++) if (DEPT[i][2].test(s)) return DEPT[i][0]; return 'other'; }
+  function nu(a, u) { u = (u || '').toLowerCase(); a = +a || 0; return u === 'кг' ? [a * 1000, 'г'] : u === 'л' ? [a * 1000, 'мл'] : [a, u]; }
+  function today0() { var d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+  function daysLeft(p) { if (!p.exp) return null; return Math.round((new Date(p.exp + 'T00:00:00') - today0()) / 864e5); }
+  function pFind(name) { var s0 = nk(name); for (var i = 0; i < pantry.length; i++) { var q = nk(pantry[i].name); if (q && (s0 === q || s0.indexOf(q) === 0 || q.indexOf(s0) === 0)) return pantry[i]; } return null; }
+  /* кладовка считает количество: хватает — не покупаем, не хватает — докупаем разницу; просроченное не считаем */
+  function withPantry(it) {
+    var p = pFind(it.name); it.home = false; it.note = '';
+    if (!p) return; var dl = daysLeft(p); if (dl != null && dl < 0) return;
+    if (p.amount == null || p.amount === '') { it.home = true; return; }
+    var pa = nu(p.amount, p.unit), need = nu(it.amount, it.unit);
+    if (!it.amount || pa[1] !== need[1]) { it.note = 'дома есть ' + fmt(pa[0]) + ' ' + pa[1]; return; }
+    if (pa[0] >= need[0]) { it.home = true; it.note = 'дома ' + fmt(pa[0]) + ' ' + pa[1]; return; }
+    it.amount = need[0] - pa[0]; it.unit = need[1]; it.note = 'дома ' + fmt(pa[0]) + ' ' + pa[1] + ', докупить разницу';
+  }
+  function perish(name) { var d = dept(name); return d === 'meat' || d === 'veg' || d === 'dairy' || d === 'bread' || /соус|бульон|готов|тесто|фарш/i.test(name); }
   function inPantry(name) { var s = nk(name); return pantry.some(function (p) { var q = nk(p.name); return q && (s === q || s.indexOf(q) === 0 || q.indexOf(s) === 0); }); }
 
   /* ---------- сбор корзины ---------- */
@@ -65,23 +80,24 @@
     extraR.forEach(function (id) { var r = lib.byId && lib.byId(id); if (r && !out.some(function (s) { return s.r.id === id; })) out.push({ r: r, why: 'добавлен' }); });
     return out;
   }
-  function build() {
+  function build(withHidden) {
     var sum = {}, order = [];
-    function add(name, amount, unit, text, from) {
+    function add(name, amount, unit, text, from, rid) {
       if (!name || /^вода\b/i.test(clean(name))) return;
       var k = nk(name) + '|' + (unit || '');
-      if (!sum[k]) { sum[k] = { key: k, name: clean(name), unit: unit || '', amount: 0, text: text || '', from: [] }; order.push(k); }
+      if (!sum[k]) { sum[k] = { key: k, name: clean(name), unit: unit || '', amount: 0, text: text || '', from: [], rids: [] }; order.push(k); }
+      if (rid && sum[k].rids.indexOf(rid) < 0) sum[k].rids.push(rid);
       if (amount) sum[k].amount += +amount; if (from && sum[k].from.indexOf(from) < 0) sum[k].from.push(from);
     }
     /* отмеченное где-то ещё (список в рецепте, закупка в плане) — уже куплено, в корзину не берём */
     sources().forEach(function (s) {
       var rh = {}; try { rh = JSON.parse(localStorage.getItem('kuking:' + s.r.id + ':have') || '{}') || {}; } catch (e) {}
       var sh = L().shopChecked ? L().shopChecked(s.r.id) : {};
-      (s.r.ingredients || []).forEach(function (i) { if (!i || !i.name) return; if (rh[i.id]) return; if (sh[i.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() + '|' + (i.unit || '')]) return; add(i.name, i.amount, i.unit, i.unitText, s.r.title); });
+      (s.r.ingredients || []).forEach(function (i) { if (!i || !i.name) return; if (rh[i.id]) return; if (sh[i.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim() + '|' + (i.unit || '')]) return; add(i.name, i.amount, i.unit, i.unitText, s.r.title, s.r.id); });
     });
     extraX.forEach(function (x) { add(x.name, x.amount, x.unit, x.text, 'своё'); });
     Object.keys(have).forEach(function (k) { if (!sum[k]) delete have[k]; }); Object.keys(hide).forEach(function (k) { if (!sum[k]) delete hide[k]; });
-    return order.map(function (k) { var it = sum[k]; it.dept = dept(it.name); it.home = inPantry(it.name); it.got = !!have[k]; it.hidden = !!hide[k]; return it; }).filter(function (it) { return !it.hidden; });
+    return order.map(function (k) { var it = sum[k]; it.dept = dept(it.name); it.got = !!have[k]; it.hidden = !!hide[k]; withPantry(it); return it; }).filter(function (it) { return withHidden || !it.hidden; });
   }
   function qty(it) { return it.amount ? fmt(it.amount) + ' ' + it.unit : it.text || ''; }
   function fmt(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
@@ -128,14 +144,26 @@
     var p = price(it), mine = prices[pk(it)] && prices[pk(it)].src === 'me';
     return '<li class="ct-it' + (it.got ? ' got' : '') + '" data-ck="' + esc(it.key) + '">' +
       '<button type="button" class="ct-main" data-ct="tog" role="checkbox" aria-checked="' + it.got + '"><span class="ct-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg></span>' +
-      '<span class="ct-t"><b>' + esc(it.name) + '</b><small>' + esc([qty(it), it.from.length ? it.from.slice(0, 2).join(', ') + (it.from.length > 2 ? ' +' + (it.from.length - 2) : '') : ''].filter(Boolean).join(' · ')) + '</small></span></button>' +
+      '<span class="ct-t"><b>' + esc(it.name) + '</b><small>' + esc([qty(it), it.note, it.from.length ? it.from.slice(0, 2).join(', ') + (it.from.length > 2 ? ' +' + (it.from.length - 2) : '') : ''].filter(Boolean).join(' · ')) + '</small></span></button>' +
       '<button type="button" class="ct-pr' + (mine ? ' me' : '') + '" data-ct="price" aria-label="Цена">' + (p ? '≈ ' + p + ' ₽' : pricing ? '…' : '— ₽') + '</button>' +
       '<button type="button" class="ct-more" data-ct="more" aria-label="Ещё">⋯</button></li>';
   }
+  var swept = [];
+  function sweepDone() {
+    var all = build(true), src = sources(), out = [];
+    src.forEach(function (sx) {
+      var mine = all.filter(function (i) { return i.rids && i.rids.indexOf(sx.r.id) >= 0 && !i.home; });
+      if (mine.length && mine.every(function (i) { return i.got || i.hidden; })) out.push(sx.r);
+    });
+    out.forEach(function (r) { removeRecipe(r.id); });
+    if (out.length) { swept = out.map(function (r) { return r.title; }); hap(14); }
+  }
   function cartHTML() {
+    sweepDone();
     var items = build(), buy = items.filter(function (i) { return !i.home; }), home = items.filter(function (i) { return i.home; });
     var left = buy.filter(function (i) { return !i.got; }), got = buy.filter(function (i) { return i.got; }), src = sources(), tt = total(items);
-    if (!items.length && !src.length) return '<div class="ct-empty"><p class="ct-big">Корзина пустая</p><p class="small">Добавьте блюда в план или нажмите «В корзину» в карточке рецепта. Своё можно вписать ниже.</p></div>' + addHTML();
+    var sw = swept.length ? '<p class="ct-allgot ct-swept">✓ Всё куплено: ' + esc(swept.join(', ')) + ' — убрал из корзины</p>' : ''; swept = [];
+    if (!items.length && !src.length) return sw + '<div class="ct-empty"><p class="ct-big">Корзина пустая</p><p class="small">Добавьте блюда в план или нажмите «В корзину» в карточке рецепта. Своё можно вписать ниже.</p></div>' + addHTML();
     var h = '<div class="ct-sum"><div><span class="ct-k">Осталось купить</span><b class="ct-big">' + left.length + ' из ' + buy.length + '</b></div>' +
       '<div class="ct-tot"><span class="ct-k">Примерно</span><b class="ct-big">' + (tt.t ? '≈ ' + tt.t.toLocaleString('ru-RU') + ' ₽' : '—') + '</b>' + (tt.miss && tt.n ? '<small>без ' + tt.miss + ' поз.</small>' : '') + '</div></div>' +
       '<div class="ct-prog" aria-hidden="true"><i style="width:' + (buy.length ? Math.round(got.length / buy.length * 100) : 0) + '%"></i></div>' +
@@ -159,11 +187,77 @@
   function addHTML() { return '<form class="ct-add" data-ct-form><input id="ctAdd" maxlength="60" placeholder="Добавить своё: хлеб, 2 шт" autocomplete="off"><button type="submit" class="nav-btn">Добавить</button></form>'; }
   function plural(n, a, b, c) { n = Math.abs(n) % 100; var m = n % 10; return n > 10 && n < 20 ? c : m > 1 && m < 5 ? b : m === 1 ? a : c; }
 
+  var PSTEP = { 'г': 50, 'мл': 50, 'шт': 1 };
+  function expLabel(p) { var d = daysLeft(p); if (d == null) return ''; var dt = new Date(p.exp + 'T00:00:00'); var t = dt.getDate() + ' ' + ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'][dt.getMonth()];
+    return d < 0 ? 'испортилось ' + t : d === 0 ? 'съесть сегодня' : d === 1 ? 'до завтра' : 'до ' + t + ' · ' + d + ' ' + plural(d, 'день', 'дня', 'дней'); }
+  function pRow(p, i) {
+    var d = daysLeft(p), cls = d == null ? '' : d < 0 ? ' bad' : d <= 2 ? ' soon' : '';
+    return '<li class="pt-it' + cls + '" data-pi="' + i + '"><div class="pt-main"><b>' + esc(p.name) + '</b>' +
+      (p.exp ? '<button type="button" class="pt-exp" data-pa="exp">' + esc(expLabel(p)) + '</button>' : perish(p.name) ? '<button type="button" class="pt-exp ask" data-pa="exp">Срок годности?</button>' : '') + '</div>' +
+      (p.amount == null || p.amount === '' ? '<button type="button" class="pt-always" data-pa="qty">всегда есть</button>' :
+        '<div class="pt-qty"><button type="button" data-pa="minus" aria-label="Меньше">−</button><button type="button" class="pt-v" data-pa="qty">' + fmt(p.amount) + ' ' + esc(p.unit || '') + '</button><button type="button" data-pa="plus" aria-label="Больше">+</button></div>') +
+      '<button type="button" class="ct-more" data-pa="del" aria-label="Убрать">×</button></li>';
+  }
   function pantryHTML() {
-    return '<p class="small">Что есть дома всегда или осталось после готовки. Эти продукты не попадают в корзину.</p>' +
-      '<ul class="ct-list">' + pantry.map(function (p, i) { return '<li class="ct-it home"><span class="ct-t"><b>' + esc(p.name) + '</b>' + (p.note ? '<small>' + esc(p.note) + '</small>' : '') + '</span><button type="button" class="ct-more" data-pdel="' + i + '" aria-label="Убрать">×</button></li>'; }).join('') + '</ul>' +
-      '<form class="ct-add" data-pt-form><input id="ptAdd" maxlength="60" placeholder="Например: рис, оливковое масло" autocomplete="off"><button type="submit" class="nav-btn">Добавить</button></form>' +
-      '<button type="button" class="nav-btn primary ct-cook" data-ct="cookPantry"' + (pantry.length > 2 ? '' : ' disabled') + '>Что приготовить из кладовки</button>';
+    var idx = pantry.map(function (p, i) { return i; });
+    var soon = idx.filter(function (i) { var d = daysLeft(pantry[i]); return d != null && d <= 2; }).sort(function (a, b) { return daysLeft(pantry[a]) - daysLeft(pantry[b]); });
+    var h = '<p class="small ct-src">Сколько чего есть дома. Корзина вычитает это из покупок, а после готовки потраченное списывается само.</p>';
+    if (soon.length) h += '<div class="pt-soon"><b>Скоро испортится</b><ul class="ct-list">' + soon.map(function (i) { return pRow(pantry[i], i); }).join('') + '</ul>' +
+      '<button type="button" class="nav-btn primary ct-cook" data-ct="cookSoon">Что приготовить из этого</button></div>';
+    DORDER.forEach(function (dd) {
+      var g = idx.filter(function (i) { return soon.indexOf(i) < 0 && dept(pantry[i].name) === dd; }); if (!g.length) return;
+      h += '<h3 class="ct-dept">' + DNAME[dd] + '<span>' + g.length + '</span></h3><ul class="ct-list">' + g.map(function (i) { return pRow(pantry[i], i); }).join('') + '</ul>';
+    });
+    if (!pantry.length) h += '<div class="ct-empty"><p class="ct-big">Кладовка пустая</p><p class="small">Добавьте, что есть дома, — корзина не будет звать покупать лишнее.</p></div>';
+    return h + '<button type="button" class="nav-btn ct-cook" data-ct="padd">+ Добавить продукт</button>' +
+      (pantry.length > 2 ? '<button type="button" class="nav-btn primary ct-cook" data-ct="cookPantry">Что приготовить из кладовки</button>' : '');
+  }
+  /* добавить или поправить продукт: количество и срок — чтобы считать на следующий рецепт */
+  function pSheet(p0, onSave) {
+    var p = p0 ? JSON.parse(JSON.stringify(p0)) : { name: '', amount: '', unit: 'г', exp: null };
+    var always = p.amount == null || p.amount === '';
+    if (!p0) always = false;
+    function body() {
+      var per = perish(p.name || '');
+      return '<label class="set-f qz-f"><span>Продукт</span><input id="psN" maxlength="40" value="' + esc(p.name) + '" placeholder="Например, куриное бедро"' + (p0 ? ' readonly' : '') + '></label>' +
+        '<span class="qz-l">Сколько осталось</span><div class="pt-row"><input id="psA" type="number" inputmode="decimal" min="0" step="any" value="' + (always ? '' : esc(p.amount)) + '" placeholder="Количество"' + (always ? ' disabled' : '') + '>' +
+        '<div class="seg qz-seg">' + ['г', 'мл', 'шт'].map(function (u) { return '<button type="button" role="radio" data-pu="' + u + '" aria-checked="' + (!always && p.unit === u) + '">' + u + '</button>'; }).join('') +
+        '<button type="button" role="radio" data-pu="" aria-checked="' + always + '">Всегда есть</button></div></div>' +
+        '<span class="qz-l">Годен до' + (per ? ' — продукт портится' : '') + '</span><div class="qz-chips">' + [[0, 'Сегодня'], [1, 'Завтра'], [3, '3 дня'], [7, 'Неделя'], [14, '2 недели'], [30, 'Месяц'], [-1, 'Не портится']].map(function (x) {
+          var on = x[0] === -1 ? !p.exp : p.exp === addD(x[0]); return '<button type="button" class="qz-chip" data-pe="' + x[0] + '" aria-pressed="' + on + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+        '<input id="psE" type="date" class="pt-date" value="' + (p.exp || '') + '">' +
+        '<button type="button" class="nav-btn primary ct-cook" data-ps="ok">Сохранить</button>';
+    }
+    var m = mini(p0 ? p0.name : 'В кладовку', body(), function (e, mm, shut) {
+      var u = e.target.closest('[data-pu]'), ex = e.target.closest('[data-pe]');
+      p.name = (mm.querySelector('#psN') || {}).value || p.name; var av = (mm.querySelector('#psA') || {}).value; if (!always) p.amount = av;
+      if (u) { var v = u.getAttribute('data-pu'); always = v === ''; if (!always) p.unit = v; redraw(); return; }
+      if (ex) { var n = +ex.getAttribute('data-pe'); p.exp = n < 0 ? null : addD(n); redraw(); return; }
+      if (e.target.closest('[data-ps]')) {
+        p.name = String(p.name || '').trim(); if (!p.name) { mm.querySelector('#psN').focus(); return; }
+        var dv = mm.querySelector('#psE').value; if (dv) p.exp = dv;
+        var a = always ? null : +String(av).replace(',', '.'); if (!always && !(a > 0)) { mm.querySelector('#psA').focus(); return; }
+        var out = { name: p.name.slice(0, 40), amount: a, unit: always ? '' : p.unit, exp: p.exp || null, at: Date.now() };
+        if (out.unit === 'кг') { out.amount *= 1000; out.unit = 'г'; }
+        shut(); onSave(out);
+      }
+      function redraw() { var bd = mm.querySelector('.ks-body'); bd.innerHTML = body(); }
+    });
+    m.addEventListener('input', function (e) { if (e.target.id === 'psE') p.exp = e.target.value || null; });
+    if (!p0) setTimeout(function () { var i = m.querySelector('#psN'); if (i) i.focus(); }, 300);
+  }
+  function addD(n) { var d = today0(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function pPut(x) { var ex = pFind(x.name); if (ex && nk(ex.name) === nk(x.name)) { var i = pantry.indexOf(ex); pantry[i] = x; } else pantry.push(x); saveAll(); }
+  /* приготовил по плану — списываем потраченное из кладовки */
+  function consume(r) {
+    if (!r) return; var ch = false;
+    (r.ingredients || []).forEach(function (i) {
+      if (!i || !i.name || !i.amount) return; var p = pFind(i.name); if (!p || p.amount == null || p.amount === '') return;
+      var pa = nu(p.amount, p.unit), need = nu(i.amount, i.unit); if (pa[1] !== need[1]) return;
+      var left = pa[0] - need[0]; ch = true;
+      if (left <= 0) pantry.splice(pantry.indexOf(p), 1); else { p.amount = Math.round(left * 10) / 10; p.unit = pa[1]; }
+    });
+    if (ch) saveAll();
   }
   function draw() {
     if (!ov) return; var y = ov.querySelector('.ct-body') ? ov.querySelector('.ct-body').scrollTop : 0, page = ov.classList.contains('ct-page');
@@ -201,7 +295,11 @@
   function onClick(e) {
     var t = e.target.closest('[data-ctab]'); if (t) { tab = t.getAttribute('data-ctab'); hap(); draw(); return; }
     var rr = e.target.closest('[data-rrm]'); if (rr) { removeRecipe(rr.getAttribute('data-rrm')); hap(10); draw(); return; }
-    var pd = e.target.closest('[data-pdel]'); if (pd) { pantry.splice(+pd.getAttribute('data-pdel'), 1); hap(); saveAll(); draw(); return; }
+    var pa = e.target.closest('[data-pa]');
+    if (pa) { var li = pa.closest('[data-pi]'), pi = +li.getAttribute('data-pi'), pp = pantry[pi], act = pa.getAttribute('data-pa'); if (!pp) return;
+      if (act === 'del') { pantry.splice(pi, 1); hap(); saveAll(); draw(); return; }
+      if (act === 'minus' || act === 'plus') { var st = PSTEP[pp.unit] || 1; pp.amount = Math.max(0, Math.round(((+pp.amount || 0) + (act === 'plus' ? st : -st)) * 10) / 10); if (!pp.amount) pantry.splice(pi, 1); hap(6); saveAll(); draw(); return; }
+      pSheet(pp, function (x) { pantry[pi] = x; saveAll(); draw(); }); return; }
     var b = e.target.closest('[data-ct]'); if (!b) return;
     var a = b.getAttribute('data-ct'), li = b.closest('[data-ck]'), key = li && li.getAttribute('data-ck');
     if (a === 'close') return close();
@@ -213,7 +311,9 @@
     if (a === 'unskip') { skip = {}; saveAll(); draw(); return; }
     if (a === 'days') { days = days === 7 ? 3 : days === 3 ? 14 : 7; hap(); saveAll(); draw(); return; }
     if (a === 'tg') { var txt = tgText(); window.open('https://t.me/share/url?url=' + encodeURIComponent(' ') + '&text=' + encodeURIComponent(txt), '_blank'); return; }
-    if (a === 'cookPantry') { close(); setTimeout(function () { if (window.KCat && KCat.fridge) KCat.fridge(pantry.map(function (p) { return p.name; })); }, 320); return; }
+    if (a === 'padd') { pSheet(null, function (x) { pPut(x); draw(); }); return; }
+    if (a === 'cookSoon') { var names = pantry.filter(function (p) { var d = daysLeft(p); return d != null && d <= 2 && d >= 0; }).map(function (p) { return p.name; }); setTimeout(function () { if (window.KCat && KCat.fridge) KCat.fridge(names); }, 50); return; }
+    if (a === 'cookPantry') { close(); setTimeout(function () { if (window.KCat && KCat.fridge) KCat.fridge(pantry.slice().sort(function (x, y) { var a = daysLeft(x), b = daysLeft(y); return (a == null ? 999 : a) - (b == null ? 999 : b); }).map(function (p) { var d = daysLeft(p); return p.name + (d != null && d <= 2 ? ' (срочно съесть)' : ''); })); }, 320); return; }
     if (a === 'price') { var it = find(key); if (it) priceSheet(it); return; }
     if (a === 'more') { var it2 = find(key); if (it2) moreSheet(it2); return; }
   }
@@ -265,7 +365,7 @@
       function (e, mm, shut) { var b = e.target.closest('[data-mo]'); if (!b) return; var a = b.getAttribute('data-mo');
         if (a === 'store') { try { navigator.clipboard.writeText(b.getAttribute('data-nm')); } catch (x) {} setTimeout(shut, 100); return; }
         shut();
-        if (a === 'home') { pantry.push({ name: it.name }); saveAll(); draw(); }
+        if (a === 'home') setTimeout(function () { pSheet({ name: it.name, amount: it.amount || '', unit: /^(г|мл|шт)$/.test(it.unit) ? it.unit : 'шт', exp: null }, function (x) { pPut(x); draw(); }); }, 280);
         if (a === 'price') setTimeout(function () { priceSheet(it); }, 280);
         if (a === 'hide') { hide[it.key] = Date.now(); var xi = -1; extraX.forEach(function (x, i) { if (nk(x.name) + '|' + (x.unit || '') === it.key) xi = i; }); if (xi >= 0) { extraX.splice(xi, 1); delete hide[it.key]; } saveAll(); draw(); }
       });
@@ -280,12 +380,21 @@
   /* остатки после готовки → кладовка */
   function leftovers(r) {
     var ing = (r.ingredients || []).filter(function (i) { return i && i.name && !/соль|вода|перец черн/i.test(i.name); }), sel = {};
-    mini('Что осталось?', '<p class="small">Отметьте продукты, которые остались после «' + esc(r.title) + '». Они уйдут в кладовку, и нейросеть предложит, как их доесть.</p><div class="qz-chips">' +
-      ing.map(function (i, k) { return '<button type="button" class="qz-chip" data-lo="' + k + '" aria-pressed="false">' + esc(clean(i.name)) + '</button>'; }).join('') + '</div>' +
+    function rowL(i, k) { var u = /^(г|мл|шт)$/.test(i.unit) ? i.unit : 'шт';
+      return '<div class="lo-it" data-lo-row="' + k + '"><b>' + esc(clean(i.name)) + '</b><div class="pt-row"><input type="number" inputmode="decimal" min="0" step="any" data-lo-a="' + k + '" placeholder="Сколько, ' + u + '"><span class="lo-u">' + u + '</span></div>' +
+        (perish(i.name) ? '<div class="qz-chips">' + [[1, 'До завтра'], [3, '3 дня'], [5, '5 дней'], [7, 'Неделя']].map(function (x) { return '<button type="button" class="qz-chip" data-lo-e="' + k + ':' + x[0] + '" aria-pressed="false">' + x[1] + '</button>'; }).join('') + '</div>' : '') + '</div>'; }
+    mini('Что осталось?', '<p class="small">Отметьте, что осталось, и сколько. Если продукт портится — когда его надо съесть.</p><div class="qz-chips">' +
+      ing.map(function (i, k) { return '<button type="button" class="qz-chip" data-lo="' + k + '" aria-pressed="false">' + esc(clean(i.name)) + '</button>'; }).join('') + '</div><div class="lo-list"></div>' +
       '<button type="button" class="nav-btn primary ct-cook" data-lo-ok>В кладовку</button>',
       function (e, mm, shut) {
-        var c = e.target.closest('[data-lo]'); if (c) { var k = c.getAttribute('data-lo'), on = !sel[k]; if (on) sel[k] = 1; else delete sel[k]; c.setAttribute('aria-pressed', on); hap(); return; }
-        if (e.target.closest('[data-lo-ok]')) { Object.keys(sel).forEach(function (k) { var n = clean(ing[k].name); if (!inPantry(n)) pantry.push({ name: n, note: 'осталось от «' + r.title + '»', at: Date.now() }); }); saveAll(); shut(); if (Object.keys(sel).length) setTimeout(function () { open('pantry'); }, 300); }
+        var c = e.target.closest('[data-lo]'); if (c) { var k = c.getAttribute('data-lo'), on = !sel[k]; if (on) sel[k] = { exp: null }; else delete sel[k]; c.setAttribute('aria-pressed', on); hap();
+          var list = mm.querySelector('.lo-list'), ex = list.querySelector('[data-lo-row="' + k + '"]'); if (on && !ex) list.insertAdjacentHTML('beforeend', rowL(ing[k], k)); if (!on && ex) ex.remove(); return; }
+        var ce = e.target.closest('[data-lo-e]'); if (ce) { var pr = ce.getAttribute('data-lo-e').split(':'); sel[pr[0]].exp = addD(+pr[1]); ce.parentNode.querySelectorAll('.qz-chip').forEach(function (x) { x.setAttribute('aria-pressed', x === ce); }); return; }
+        if (e.target.closest('[data-lo-ok]')) {
+          Object.keys(sel).forEach(function (k) { var i = ing[k], inp = mm.querySelector('[data-lo-a="' + k + '"]'), a = inp ? +String(inp.value).replace(',', '.') : 0, u = /^(г|мл|шт)$/.test(i.unit) ? i.unit : 'шт';
+            pPut({ name: clean(i.name), amount: a > 0 ? a : null, unit: a > 0 ? u : '', exp: sel[k].exp, at: Date.now() }); });
+          shut(); if (Object.keys(sel).length) setTimeout(function () { open('pantry'); }, 300);
+        }
       });
   }
 
@@ -321,5 +430,5 @@
   }
 
   function count() { try { return build().filter(function (i) { return !i.home && !i.got; }).length; } catch (e) { return 0; } }
-  window.KCart = { open: open, mount: mount, addRecipe: addRecipe, removeRecipe: removeRecipe, hasRecipe: hasRecipe, leftovers: leftovers, weekMenu: weekMenu, count: count, pantry: function () { return pantry; } };
+  window.KCart = { consume: consume, open: open, mount: mount, addRecipe: addRecipe, removeRecipe: removeRecipe, hasRecipe: hasRecipe, leftovers: leftovers, weekMenu: weekMenu, count: count, pantry: function () { return pantry; } };
 })();

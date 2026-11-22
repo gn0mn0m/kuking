@@ -1,5 +1,5 @@
 /* Service worker «Жарко»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-0789e7f0f9';
+var CACHE = 'kuking-8aab07a1c9';
 var ASSETS = [
 "./",
 "icons/favicon-16.png",

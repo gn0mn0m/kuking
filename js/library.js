@@ -556,7 +556,7 @@
     if (!mine.length) mine = all.filter(function (x) { return x.day <= addDays(td, 2); }).slice(0, 1); // приготовил раньше плана
     if (!mine.length) return;
     mine.forEach(function (c) {
-      doneTasks[c.key] = Date.now();
+      doneTasks[c.key] = Date.now(); if (window.KCart && KCart.consume) KCart.consume(byId(id));
       tasksAll().forEach(function (x) { if (x.kind !== 'cook' && x.kind !== 'empty' && x.ids && x.ids.length === 1 && x.ids[0] === id && x.day <= c.day && !doneTasks[x.key]) doneTasks[x.key] = Date.now(); });
     });
     saveDone();
@@ -572,6 +572,7 @@
   /* отметка «сделано» — на месте, без перерисовки */
   function setDone(k, on) {
     if (on) doneTasks[k] = Date.now(); else delete doneTasks[k];
+    if (on && k.indexOf('cook:') === 0 && window.KCart && KCart.consume) KCart.consume(byId(k.split(':')[2]));
     saveDone();
     var li = ov.querySelector('.ag-it[data-k="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]');
     if (li) { li.classList.toggle('done', on); var c = li.querySelector('.ag-chk'); if (c) { c.classList.toggle('on', on); c.setAttribute('aria-checked', String(on)); } }
@@ -658,7 +659,8 @@
   /* сразу на старте плана: включить уведомления? */
   function askPush(next) {
     var Soc = SOC(), ps = Soc.pushState ? Soc.pushState() : 'nope';
-    if (ps === 'on' || ps === 'nope' || ps === 'denied') { next(); return; }
+    if (ps === 'on' || ps === 'nope' || ps === 'denied' || lget('kuking:pushAsked') === '1') { next(); return; }
+    lset('kuking:pushAsked', '1');
     var done = false;
     function go2() { if (done) return; done = true; setTimeout(next, 340); }
     sheet('<div class="ask-box"><svg class="ask-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><h3>Включить уведомления?</h3>' +

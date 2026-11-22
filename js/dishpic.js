@@ -24,8 +24,10 @@
         S.req('GET', 'docs?select=data&collection=eq.img&id=eq.' + encodeURIComponent(k) + '&user_id=eq.' + S.user().id).then(function (x) { var v = x && x[0] && x[0].data && x[0].data.src; if (v) { put(k, v); refresh(); } }).catch(function () {}); });
     }).catch(function () {});
   }, 5000);
-  function save(k, v) {
+  function builtin(k) { return !/^(ai|my)-/.test(k); }
+  function save(k, v, gen) {
     put(k, v);
+    var S0 = window.KukingStore; if (gen && builtin(k) && S0 && S0.user && S0.user() && S0.req) S0.req('POST', 'docs', [{ collection: 'imgpub', id: k, user_id: null, data: { src: v, at: new Date().toISOString() } }], 'return=minimal').catch(function () {});
     var S = window.KukingStore; if (S && S.user && S.user() && S.req) S.req('POST', 'docs?on_conflict=collection,id,user_id', [{ collection: 'img', id: k, user_id: S.user().id, data: { src: v, at: new Date().toISOString() }, updated_at: new Date().toISOString() }], 'resolution=merge-duplicates,return=minimal').catch(function () {});
   }
   function shrink(src, max, q) {
@@ -39,18 +41,27 @@
   function clean(t) { return String(t || '').replace(/\{[^}]+\}/g, '').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim(); }
   function serveOf(r, idx) { var s = (r.slides || []).filter(function (x) { return x.type === 'serve'; }); return idx != null ? (r.slides || [])[idx] : s[0]; }
   function vibe(r) { return r.mode === 'romance' ? 'тёплый приглушённый вечерний свет, свеча на заднем плане в боке, бокал вина на краю кадра' : r.mode === 'friends' ? 'дружеский стол, рядом другие тарелки и напитки в мягком боке, живой естественный свет' : 'дневной свет из окна, деревянный стол, уютная домашняя кухня'; }
+  function mains(r) { // самое весомое из продуктов — чтобы на фото было то, что реально в рецепте
+    return (r.ingredients || []).filter(function (i) { return i && i.name && !/соль|перец мол|вода|масло|сахар|специ|сунели|паприк|кориандр мол|куркум|масала|лавров/i.test(i.name); })
+      .map(function (i) { var w = i.unit === 'кг' ? i.amount * 1000 : i.unit === 'г' || i.unit === 'мл' ? i.amount : i.unit === 'шт' ? i.amount * 100 : 30; return { n: clean(i.name).toLowerCase(), w: +w || 0 }; })
+      .sort(function (a, b) { return b.w - a.w; }).slice(0, 7).map(function (x) { return x.n; });
+  }
   function prompt(r, s) {
     s = s || serveOf(r) || {};
     var layers = s.plate && s.plate.layers ? s.plate.layers.map(function (l) { return clean(l.what); }).filter(Boolean) : [];
+    var dishes = (r.dishes || []).map(function (d) { return clean(d.name); }).filter(Boolean);
     var parts = [
-      'Реалистичная ресторанная фуд-фотография готового блюда «' + r.title + '»' + (r.tagline ? ' (' + clean(r.tagline).slice(0, 160) + ')' : '') + '.',
+      'Фотография для меню ресторана со звездой Мишлен: «' + r.title + '».',
+      dishes.length > 1 ? 'В кадре накрытый стол: ' + dishes.join(', ') + ' — каждое блюдо в своей посуде, рядом друг с другом.' : (dishes[0] ? 'Блюдо: ' + dishes[0] + '.' : ''),
+      'Реально в рецепте: ' + mains(r).join(', ') + '. Покажи именно эти продукты, ничего чужого.',
       s.photo ? clean(s.photo) : '',
       (s.dishes || []).length ? 'Посуда: ' + s.dishes.map(clean).join(', ') + '.' : '',
-      layers.length ? 'На тарелке, как разложено: ' + layers.join('; ') + '.' : '',
-      (s.points || []).length ? 'Подача: ' + s.points.slice(0, 5).map(clean).join(' ') : '',
-      'Ракурс сверху под 45°, блюдо в центре кадра, малая глубина резкости, ' + vibe(r) + '. Аппетитные текстуры, лёгкий блеск соуса, пар от горячего. Без текста, надписей, людей и рук.'
+      layers.length ? 'Раскладка: ' + layers.join('; ') + '.' : '',
+      (s.points || []).length ? 'Подача: ' + s.points.slice(0, 4).map(clean).join(' ') : '',
+      'Подача шефа уровня Мишлен — чистые борта тарелки, выверенная композиция, глянец соуса, свежая зелень, — но порция большая и щедрая, сытная, как настоящий ужин, а не дегустационный сет.',
+      'Ракурс 45°, блюдо в центре, мягкий направленный свет сбоку, малая глубина резкости, ' + vibe(r) + '. Очень аппетитно: корочка, сочность, пар от горячего. Фотореализм, без текста, надписей, людей и рук.'
     ];
-    return parts.filter(Boolean).join(' ').slice(0, 1500);
+    return parts.filter(Boolean).join(' ').slice(0, 1800);
   }
 
   /* ---------- рисуем ---------- */
@@ -59,7 +70,7 @@
     if (BUSY[k]) return done(); if (!(window.KukingAI && KukingAI.image)) return done();
     BUSY[k] = 1; delete ERR[k]; refresh();
     KukingAI.image(prompt(r, s)).then(function (src) { return shrink(src, 1080, 0.82); })
-      .then(function (src) { delete BUSY[k]; save(k, src); refresh(); if (window.kHaptic) window.kHaptic(12); done(); })
+      .then(function (src) { delete BUSY[k]; save(k, src, true); refresh(); if (window.kHaptic) window.kHaptic(12); done(); })
       .catch(function (e) { delete BUSY[k]; ERR[k] = e && e.message || 'Фото не получилось'; refresh(); done(); });
   }
   /* блок фото: на слайде подачи и в карточке */
@@ -103,7 +114,8 @@
     var k = Q.shift(); if (MEM[k]) { delete queued[k]; return pump(); }
     pumping = true;
     var S = window.KukingStore, u = S && S.user && S.user();
-    var check = u && S.req ? S.req('GET', 'docs?select=data&collection=eq.img&id=eq.' + encodeURIComponent(k) + '&user_id=eq.' + u.id).then(function (x) { return x && x[0] && x[0].data && x[0].data.src; }).catch(function () { return null; }) : Promise.resolve(null);
+    var get1 = function (q) { return S.req('GET', 'docs?select=data&' + q + '&limit=1').then(function (x) { return x && x[0] && x[0].data && x[0].data.src; }).catch(function () { return null; }); };
+    var check = u && S.req ? get1('collection=eq.img&id=eq.' + encodeURIComponent(k) + '&user_id=eq.' + u.id).then(function (src) { return src || (builtin(k) ? get1('collection=eq.imgpub&id=eq.' + encodeURIComponent(k) + '&user_id=is.null') : null); }) : Promise.resolve(null);
     check.then(function (src) {
       if (src) { delete queued[k]; put(k, src); refresh(); pumping = false; return pump(); }
       var c = ctxR[k]; if (!c) { delete queued[k]; pumping = false; return pump(); }
@@ -111,5 +123,10 @@
     });
   }
   function state(r) { var k = heroKey(r); var si = +k.split(':s')[1]; if (!ctxR[k] && r.slides && r.slides[si]) ctxR[k] = { r: r, s: r.slides[si] }; return MEM[k] ? 'ready' : (BUSY[k] || queued[k]) ? 'busy' : 'none'; }
+  /* фото готовы заранее: после запуска по очереди дорисовываем всю книгу */
+  setTimeout(function bg() {
+    var L = window.KukingLib; if (!L || !L.all) return setTimeout(bg, 3000);
+    L.all().forEach(function (r) { auto(r); });
+  }, 7000);
   window.KDish = { state: state, can: function () { return !!(window.KukingAI && KukingAI.canImage && KukingAI.canImage()); }, auto: auto, serveHTML: serveHTML, cardHTML: cardHTML, heroSrc: heroSrc, heroKey: heroKey, prompt: prompt, refresh: refresh, forget: del };
 })();

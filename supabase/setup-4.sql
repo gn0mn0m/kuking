@@ -94,3 +94,8 @@ alter table public.messages add column if not exists recipe_title text check (ch
 
 -- 4.10: комментарии к рецепту без оценки (kind = 'c'), вопросы — 'q'
 alter table public.qa add column if not exists kind text not null default 'q' check (kind in ('q', 'c'));
+
+-- 4.12: общие фото для встроенных рецептов — кто первым нарисовал, тот поделился со всеми (читать могут все вошедшие)
+drop policy if exists "imgpub add" on public.docs;
+create policy "imgpub add" on public.docs for insert to authenticated
+  with check (collection = 'imgpub' and user_id is null and pg_column_size(data) < 400000);

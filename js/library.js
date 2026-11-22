@@ -122,7 +122,7 @@
   function render() {
     autoPurge();
     if (view === 'detail' && (!byId(detailId) || isHid(detailId))) { view = SUB[TAB] ? 'list' : TAB || 'list'; } // рецепт удалён — не застреваем на пустой карточке без таб-бара
-    var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : view === 'plan' ? planHTML() : view === 'profile' ? profileHTML() : listHTML();
+    var html = view === 'detail' && byId(detailId) ? detailHTML(byId(detailId)) : view === 'create' ? createHTML() : view === 'edit' ? editHTML() : view === 'plan' ? planHTML() : view === 'profile' ? profileHTML() : view === 'cart' ? bigHead('Корзина') + '<div class="ct-host"></div>' : listHTML();
     document.documentElement.classList.toggle('hero-on', view === 'detail' && !ov.hidden);
     var old = ov.firstElementChild;
     if ((dir === 'fwd' || dir === 'back') && old && !ov.hidden && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
@@ -140,6 +140,7 @@
     dir = ''; stagger = false;
     ov.querySelectorAll('.tg-li').forEach(function (li, i) { if (i < 12) li.style.setProperty('--i', i); });
     bind(); syncTabs();
+    if (view === 'cart' && window.KCart) { var ch = ov.querySelector('.ct-host'); if (ch) KCart.mount(ch); }
   }
   var PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   var DICE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="9" cy="9" r="1.3" class="f"/><circle cx="15" cy="15" r="1.3" class="f"/><circle cx="15" cy="9" r="1.3" class="f"/><circle cx="9" cy="15" r="1.3" class="f"/></svg>';
@@ -1400,13 +1401,12 @@
   bar.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]'); if (!b) return;
     var t = b.getAttribute('data-tab'), Soc = SOC();
-    if (t === 'cart') { if (window.KCart) KCart.open('cart'); return; }
     var Stg0 = window.KukingSettings; if (t !== 'profile' && Stg0 && Stg0.isOpen && Stg0.isOpen() && Stg0.close(function () { b.click(); }) === false) return;
-    if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) { var fi = ['list', 'plan', 'chats', 'profile'].indexOf(SUB[view] ? TAB : view); if (Soc.openTab) Soc.openTab(fi > 2 ? 'l' : 'r'); else Soc.open(); } else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
+    if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) { var fi = ['list', 'plan', 'cart', 'chats', 'profile'].indexOf(SUB[view] ? TAB : view); if (Soc.openTab) Soc.openTab(fi > 3 ? 'l' : 'r'); else Soc.open(); } else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
     var Stg = window.KukingSettings; if (Stg && Stg.isOpen && Stg.isOpen() && Stg.close(function () { b.click(); }) === false) return;
     if (Soc.isOpen && Soc.isOpen() && Soc.close(function () { b.click(); }) === false) return;
     if (t === view) { ov.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    var ORD = ['list', 'plan', 'chats', 'profile'], from = ORD.indexOf(SUB[view] ? TAB : view);
+    var ORD = ['list', 'plan', 'cart', 'chats', 'profile'], from = ORD.indexOf(SUB[view] ? TAB : view);
     TAB = t; dir = from < 0 || from === ORD.indexOf(t) ? 'tab' : from < ORD.indexOf(t) ? 'tab-r' : 'tab-l'; view = t; stagger = t === 'list' || t === 'plan'; render(); ov.scrollTop = 0;
   });
   if (window.KukingSocial && window.KukingSocial.onClose) window.KukingSocial.onClose(function () { syncTabs(); });

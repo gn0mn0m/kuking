@@ -161,14 +161,21 @@
       '<button type="button" class="nav-btn primary ct-cook" data-ct="cookPantry"' + (pantry.length > 2 ? '' : ' disabled') + '>Что приготовить из кладовки</button>';
   }
   function draw() {
-    if (!ov) return; var y = ov.querySelector('.ct-body') ? ov.querySelector('.ct-body').scrollTop : 0;
-    ov.innerHTML = '<div class="ct-head"><button type="button" class="qz-tx" data-ct="close">‹ Назад</button><div class="seg ct-tabs" role="tablist">' +
+    if (!ov) return; var y = ov.querySelector('.ct-body') ? ov.querySelector('.ct-body').scrollTop : 0, page = ov.classList.contains('ct-page');
+    ov.innerHTML = '<div class="ct-head">' + (page ? '' : '<button type="button" class="qz-tx" data-ct="close">‹ Назад</button>') + '<div class="seg ct-tabs" role="tablist">' +
       '<button type="button" role="tab" data-ctab="cart" aria-selected="' + (tab === 'cart') + '">Корзина</button><button type="button" role="tab" data-ctab="pantry" aria-selected="' + (tab === 'pantry') + '">Кладовка · ' + pantry.length + '</button></div><span></span></div>' +
       '<div class="ct-body">' + (tab === 'cart' ? cartHTML() : pantryHTML()) + '</div>';
     ov.querySelector('.ct-body').scrollTop = y;
   }
+  /* корзина — вкладка приложения: рисуемся прямо в странице, панель снизу остаётся */
+  function mount(host) {
+    ov = host; host.classList.add('ct-page'); draw();
+    if (!host.__ctb) { host.__ctb = 1; host.addEventListener('click', onClick); host.addEventListener('submit', onSubmit); }
+  }
   function open(t) {
-    if (ov) return; tab = t || 'cart';
+    tab = t || tab || 'cart';
+    if (window.__kGoTab) { window.__kGoTab('cart'); if (ov && ov.classList.contains('ct-page')) draw(); return; }
+    if (ov) return;
     ov = document.createElement('div'); ov.className = 'ct'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Корзина');
     document.body.appendChild(ov); draw(); document.documentElement.classList.add('qz-lock');
     requestAnimationFrame(function () { requestAnimationFrame(function () { ov.classList.add('on'); }); });
@@ -176,7 +183,7 @@
     var x0 = null; ov.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX < 28 ? e.touches[0].clientX : null; }, { passive: true });
     ov.addEventListener('touchend', function (e) { if (x0 != null && e.changedTouches[0].clientX - x0 > 80) close(); x0 = null; }, { passive: true });
   }
-  function close() { if (!ov) return; var o = ov; ov = null; o.classList.remove('on'); document.documentElement.classList.remove('qz-lock'); setTimeout(function () { o.remove(); }, 300); if (L().refresh) L().refresh(); }
+  function close() { if (!ov || ov.classList.contains('ct-page')) return; var o = ov; ov = null; o.classList.remove('on'); document.documentElement.classList.remove('qz-lock'); setTimeout(function () { o.remove(); }, 300); if (L().refresh) L().refresh(); }
   function find(key) { return build().filter(function (i) { return i.key === key; })[0]; }
   function onSubmit(e) {
     e.preventDefault();
@@ -309,5 +316,5 @@
   }
 
   function count() { try { return build().filter(function (i) { return !i.home && !i.got; }).length; } catch (e) { return 0; } }
-  window.KCart = { open: open, addRecipe: addRecipe, removeRecipe: removeRecipe, hasRecipe: hasRecipe, leftovers: leftovers, weekMenu: weekMenu, count: count, pantry: function () { return pantry; } };
+  window.KCart = { open: open, mount: mount, addRecipe: addRecipe, removeRecipe: removeRecipe, hasRecipe: hasRecipe, leftovers: leftovers, weekMenu: weekMenu, count: count, pantry: function () { return pantry; } };
 })();

@@ -799,7 +799,7 @@
       h += '<section class="tg-sec">' + KMeta.html(r) + '</section>';
       if (r.ai && !KMeta.get(r).tagged) KMeta.aiTag(r).then(function (m) { if (m && !ov.hidden && !typing()) keepY(render); });
     }
-    if (window.KDish) { var dpc = KDish.cardHTML(r); if (dpc) h += '<section class="tg-sec"><h3 class="tg-sec-h">Подача</h3>' + dpc + '</section>'; }
+    if (window.KDish) { KDish.auto(r); var dpc = KDish.cardHTML(r); if (dpc) h += '<section class="tg-sec"><h3 class="tg-sec-h">Подача</h3>' + dpc + '</section>'; }
     if ((r.dishes || []).length > 1) h += '<section class="tg-sec"><h3 class="tg-sec-h">На тарелке</h3><ul class="tg-dishes">' + r.dishes.map(function (d) {
       return '<li><b>' + esc(d.name) + '</b>' + (d.kcal ? '<small>' + d.kcal + ' ккал · Б ' + d.p + ' · Ж ' + d.f + ' · У ' + d.c + '</small>' : '') + '</li>';
     }).join('') + '</ul></section>';
@@ -1300,6 +1300,7 @@
     reviews: function () { var o = {}; Object.keys(reviews).forEach(function (id) { o[id] = { score: reviews[id].score, comment: reviews[id].comment, title: titleOf(id) }; }); return o; },
     feedback: function () { var S = SOC(); return (S.feedback ? S.feedback() : []).map(function (f) { f.title = titleOf(f.rid); return f; }); },
     added: function (r, replaced) {
+      if (window.KDish) setTimeout(function () { KDish.auto(r); }, 50);
       if (replaced) R = R.map(function (x) { return x.id === r.id ? r : x; }); else R.push(r);
       if (!ov.hidden) keepY(render);
       if (db) db.collection('fresh').doc(r.id).set(window.Fresh.toDoc(r)).catch(function () {});

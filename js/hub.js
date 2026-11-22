@@ -31,7 +31,7 @@
     Promise.all([
       req('GET', 'photos?select=id,recipe_id,author,thumb,caption,created_at&recipe_id=eq.' + q(rid) + '&order=created_at.desc&limit=60'),
       req('GET', 'review_likes?select=recipe_id,review_owner,liker&recipe_id=eq.' + q(rid)),
-      req('GET', 'qa?select=id,recipe_id,parent,author,body,by_ai,created_at&recipe_id=eq.' + q(rid) + '&order=created_at.asc&limit=200')
+      req('GET', 'qa?select=id,recipe_id,parent,author,body,by_ai,kind,created_at&recipe_id=eq.' + q(rid) + '&order=created_at.asc&limit=200')
     ]).then(function (r) {
       R[rid] = { photos: r[0] || [], likes: r[1] || [], qa: r[2] || [], at: Date.now() };
       if (rer) rer();
@@ -121,7 +121,17 @@
     }
     /* вопросы */
     if (m && !off) {
-      var qs = c.qa.filter(function (x) { return !x.parent; }).reverse();
+      var cm = c.qa.filter(function (x) { return !x.parent && x.kind === 'c'; });
+      h += '<section class="tg-sec hb-sec"><h3 class="tg-sec-h">Комментарии' + (cm.length ? ' · ' + cm.length : '') + '</h3>' +
+        cm.map(function (x) {
+          var ans = c.qa.filter(function (y) { return y.parent === x.id; });
+          return '<div class="hb-q hb-c"><div class="hb-q-h">' + av(x.author) + '<p><b>' + (x.author === m ? 'Вы' : esc(nick(x.author))) + '</b> <small class="hb-mut">' + esc(ago(x.created_at)) + '</small><br>' + esc(x.body) + '</p>' + (x.author === m ? '<button type="button" class="hb-del" data-hub="cdel" data-id="' + x.id + '" data-rid="' + esc(rid) + '" aria-label="Удалить">×</button>' : '') + '</div>' +
+            ans.map(function (a) { return '<div class="hb-a"><b>' + (a.author === m ? 'Вы' : esc(nick(a.author))) + '</b><p>' + esc(a.body) + '</p></div>'; }).join('') +
+            '<button type="button" class="hb-rep" data-hub="rep">Ответить' + (ans.length ? '' : '') + '</button><form class="hb-qf sm" data-hub-ans="' + x.id + '" data-rid="' + esc(rid) + '"><input maxlength="1000" placeholder="Ответить" aria-label="Ответ"><button type="submit" class="soc-send" aria-label="Отправить"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-6z"/></svg></button></form></div>';
+        }).join('') +
+        '<form class="hb-qf" data-hub-cmt="' + esc(rid) + '"><input maxlength="1000" placeholder="Написать комментарий" aria-label="Комментарий"><button type="submit" class="soc-send" aria-label="Отправить"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-6z"/></svg></button></form>' +
+        (cm.length ? '' : '<p class="small hb-mut">Оценка не обязательна — просто напишите, что думаете. Увидят друзья.</p>') + '</section>';
+      var qs = c.qa.filter(function (x) { return !x.parent && x.kind !== 'c'; }).reverse();
       h += '<section class="tg-sec hb-sec"><h3 class="tg-sec-h">Вопросы' + (qs.length ? ' · ' + qs.length : '') + '</h3>' +
         qs.map(function (x) {
           var ans = c.qa.filter(function (y) { return y.parent === x.id; });
@@ -220,7 +230,7 @@
     feed.busy = true;
     Promise.all([
       req('GET', 'photos?select=id,recipe_id,recipe_title,author,thumb,created_at&order=created_at.desc&limit=40'),
-      req('GET', 'qa?select=id,recipe_id,recipe_title,parent,author,body,by_ai,created_at&parent=is.null&order=created_at.desc&limit=30')
+      req('GET', 'qa?select=id,recipe_id,recipe_title,parent,author,body,by_ai,kind,created_at&parent=is.null&order=created_at.desc&limit=30')
     ]).then(function (r) { feed = { photos: r[0] || [], qa: r[1] || [], at: Date.now(), busy: false }; if (rerender) rerender(); })
       .catch(function (e) { feed.busy = false; feed.at = Date.now(); try { fail(e); } catch (x) {} if (rerender) rerender(); });
   }
@@ -249,15 +259,15 @@
     var items = [];
     circle().forEach(function (u) { var rv = Soc().reviewsOf ? Soc().reviewsOf(u) : {}; Object.keys(rv).forEach(function (rid) { var v = rv[rid]; if (v && v.score && v.at) items.push({ t: v.at, k: 'rev', u: u, rid: rid, v: v, title: v.title }); }); });
     feed.photos.forEach(function (p) { items.push({ t: p.created_at, k: 'ph', u: p.author, rid: p.recipe_id, p: p, title: p.recipe_title }); });
-    feed.qa.forEach(function (x) { items.push({ t: x.created_at, k: 'q', u: x.author, rid: x.recipe_id, x: x, title: x.recipe_title }); });
+    feed.qa.forEach(function (x) { items.push({ t: x.created_at, k: x.kind === 'c' ? 'c' : 'q', u: x.author, rid: x.recipe_id, x: x, title: x.recipe_title }); });
     items.sort(function (a, b) { return String(b.t).localeCompare(String(a.t)); });
     var byId = Lib().byId, h = challenge();
     if (!items.length) return h + '<p class="small soc-pad">Здесь появятся оценки, фото и вопросы друзей.</p>';
     return h + '<ul class="hb-feed">' + items.slice(0, 60).map(function (it) {
       var r = byId && byId(it.rid), title = (r && r.title) || it.title || 'рецепт', who = it.u === me() ? 'Вы' : esc(nick(it.u));
-      var act = it.k === 'rev' ? 'оценил' + (it.u === me() ? 'и' : '') + ' на <b class="hb-sc">' + it.v.score + '/10</b>' : it.k === 'ph' ? 'выложил' + (it.u === me() ? 'и' : '') + ' фото' : 'спросил' + (it.u === me() ? 'и' : '');
+      var act = it.k === 'rev' ? 'оценил' + (it.u === me() ? 'и' : '') + ' на <b class="hb-sc">' + it.v.score + '/10</b>' : it.k === 'ph' ? 'выложил' + (it.u === me() ? 'и' : '') + ' фото' : it.k === 'c' ? 'прокомментировал' + (it.u === me() ? 'и' : '') : 'спросил' + (it.u === me() ? 'и' : '');
       return '<li class="hb-fi">' + av(it.u) + '<div class="hb-fi-b"><p><b>' + who + '</b> ' + act + ' · <button type="button" class="hb-lnk" data-hub="open" data-rid="' + esc(it.rid) + '"' + (r ? '' : ' disabled') + '>' + esc(title) + '</button></p>' +
-        (it.k === 'rev' && it.v.comment ? '<p class="hb-fq">' + esc(it.v.comment) + '</p>' : '') + (it.k === 'q' ? '<p class="hb-fq">' + esc(it.x.body) + '</p>' : '') +
+        (it.k === 'rev' && it.v.comment ? '<p class="hb-fq">' + esc(it.v.comment) + '</p>' : '') + ((it.k === 'q' || it.k === 'c') ? '<p class="hb-fq">' + esc(it.x.body) + '</p>' : '') +
         (it.k === 'ph' ? '<button type="button" class="hb-fph" data-hub="fview" data-id="' + it.p.id + '"><img src="' + it.p.thumb + '" alt="" loading="lazy"></button>' : '') +
         '<small>' + esc(ago(it.t)) + '</small></div></li>';
     }).join('') + '</ul>';
@@ -376,6 +386,8 @@
     var b = e.target.closest('[data-hub]'); if (!b) return; var a = b.getAttribute('data-hub');
     if (a === 'view') { var c = C(b.getAttribute('data-rid')); viewer(c.photos, +b.getAttribute('data-i')); }
     if (a === 'fview') { var id = b.getAttribute('data-id'), i = feed.photos.findIndex ? feed.photos.findIndex(function (p) { return String(p.id) === id; }) : 0; viewer(feed.photos, Math.max(0, i)); }
+    if (a === 'rep') { var cc2 = b.closest('.hb-c'); cc2.classList.add('rep'); var ii = cc2.querySelector('.hb-qf input'); if (ii) ii.focus(); return; }
+    if (a === 'cdel') { var did = b.getAttribute('data-id'), drid = b.getAttribute('data-rid'); req('DELETE', 'qa?id=eq.' + did).then(function () { C(drid).qa = C(drid).qa.filter(function (x) { return String(x.id) !== did && String(x.parent) !== did; }); if (rer) rer(); }).catch(function () { toast('Не удалилось'); }); return; }
     if (a === 'sort') { sortBy = b.getAttribute('data-v'); hap(); if (rer) rer(); }
     if (a === 'open') { var rid = b.getAttribute('data-rid'); if (Lib().byId && Lib().byId(rid)) { if (Soc().isOpen && Soc().isOpen() && Soc().close) Soc().close(); Lib().show(rid); } }
     if (a === 'card') { var r = Lib().byId(b.getAttribute('data-rid')); if (r) { b.classList.add('busy-c'); card(r); setTimeout(function () { b.classList.remove('busy-c'); }, 1200); } }
@@ -396,12 +408,14 @@
     f.value = '';
   });
   document.addEventListener('submit', function (e) {
-    var f = e.target.closest('[data-hub-ask],[data-hub-ans]'); if (!f) return; e.preventDefault();
+    var f = e.target.closest('[data-hub-ask],[data-hub-ans],[data-hub-cmt]'); if (!f) return; e.preventDefault();
     var i = f.querySelector('input'), v = i.value.trim(); if (!v || !ready()) return; i.value = ''; i.disabled = true;
-    var p = f.hasAttribute('data-hub-ask') ? ask(f.getAttribute('data-hub-ask'), v) :
+    var cr = f.getAttribute('data-hub-cmt'), crr = cr && Lib().byId && Lib().byId(cr);
+    var p = cr ? req('POST', 'qa', { recipe_id: cr, recipe_title: crr ? String(crr.title).slice(0, 120) : null, author: me(), body: v, kind: 'c' }, 'return=representation').then(function (rows) { if (rows && rows[0]) { C(cr).qa.push(rows[0]); R[cr] = C(cr); } feed.at = 0; if (rer) rer(); }) :
+      f.hasAttribute('data-hub-ask') ? ask(f.getAttribute('data-hub-ask'), v) :
       req('POST', 'qa', { recipe_id: f.getAttribute('data-rid'), parent: +f.getAttribute('data-hub-ans'), author: me(), body: v }, 'return=representation').then(function (rows) { if (rows && rows[0]) C(f.getAttribute('data-rid')).qa.push(rows[0]); if (rer) rer(); });
     p.catch(function () { toast('Не отправилось'); i.value = v; }).then(function () { i.disabled = false; });
   });
 
-  window.KHub = { load: load, recipeHTML: recipeHTML, feedHTML: feedHTML, loadFeed: loadFeed, chatsTop: chatsTop, mode: function () { return chatMode; }, profileExtra: profileExtra, openChat: openChat, unread: unread, rowSub: rowSub, ready: ready };
+  window.KHub = { addPhoto: addPhoto, load: load, recipeHTML: recipeHTML, feedHTML: feedHTML, loadFeed: loadFeed, chatsTop: chatsTop, mode: function () { return chatMode; }, profileExtra: profileExtra, openChat: openChat, unread: unread, rowSub: rowSub, ready: ready };
 })();

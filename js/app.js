@@ -773,6 +773,7 @@
       });
     }
     el.appendChild(lanes);
+    if (window.KTech) { var tc = KTech.html(s); if (tc) el.insertAdjacentHTML('beforeend', tc); }
     if (s.joke) el.appendChild(h('p', 'joke', '<span class="joke-k">к слову</span>' + E(k + '.joke', s.joke)));
   }
 
@@ -805,9 +806,15 @@
       '<p class="eyebrow">' + esc(f.top) + '</p>' +
       '<h2 class="final-title">' + linesHtml(f.title) + '</h2>' +
       '<p class="final-sub">' + esc(f.sub) + '</p>' +
-      '<div class="final-btns"><button type="button" class="nav-btn primary" id="again">Ещё салют</button><button type="button" class="nav-btn" id="toStart">К меню</button></div></div>';
+      '<div class="final-btns"><button type="button" class="nav-btn primary" id="again">Ещё салют</button><button type="button" class="nav-btn" id="toStart">К меню</button></div>' +
+      (window.KHub && KHub.ready() ? '<label class="final-ph"><input type="file" accept="image/*" capture="environment" hidden id="finPh"><span class="dp-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><span><b>Сфоткай, что вышло</b><small>Фото попадёт в карточку рецепта и в ленту друзей</small></span></label>' : '') +
+      '</div>';
     el.querySelector('#again').addEventListener('click', function () { window.Confetti.fire({ anchor: el.querySelector('.final-title') }); });
     el.querySelector('#toStart').addEventListener('click', function () { go(0); });
+    var fp = el.querySelector('#finPh');
+    if (fp) fp.addEventListener('change', function () { if (!fp.files || !fp.files[0]) return; var lb = fp.closest('.final-ph'); lb.classList.add('busy-c'); lb.querySelector('b').textContent = 'Загружаю…';
+      KHub.addPhoto(M, fp.files[0]).then(function () { lb.classList.remove('busy-c'); lb.classList.add('done'); lb.querySelector('b').textContent = 'Фото в карточке и в ленте ✓'; window.Confetti && window.Confetti.fire({ anchor: lb }); })
+        .catch(function (x) { lb.classList.remove('busy-c'); lb.querySelector('b').textContent = 'Не загрузилось — попробуйте ещё'; }); fp.value = ''; });
   }
 
   /* ---------- навигация ---------- */
@@ -894,6 +901,7 @@
       c.querySelector('.dock-stop').addEventListener('click', function () { window.RingTimer.stop(t.id); });
       dock.appendChild(c);
     });
+    if (window.KTech && M.slides[state.idx] && M.slides[state.idx].type === 'step') { var ad = h('button', 'dock-add', '+ Таймер'); ad.type = 'button'; ad.addEventListener('click', function () { KTech.timerSheet(); }); dock.appendChild(ad); }
     tickDock();
   }
   function tickDock() {

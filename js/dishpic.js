@@ -2,7 +2,7 @@
    Рисуется по кнопке (это дорого), хранится в телефоне (IndexedDB) и в облаке (docs/img) — второй раз не рисуем. */
 (function () {
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  var MEM = {}, BUSY = {}, ERR = {}, dbp = null;
+  var MEM = {}, BUSY = {}, ERR = {}, dbp = null, loaded = false, Q = [], queued = {};
   function idb() {
     if (dbp) return dbp;
     dbp = new Promise(function (ok, no) {
@@ -11,12 +11,12 @@
     return dbp;
   }
   function put(k, v) { MEM[k] = v; idb().then(function (d) { d.transaction('img', 'readwrite').objectStore('img').put(v, k); }).catch(function () {}); }
-  function del(k) { delete MEM[k]; idb().then(function (d) { d.transaction('img', 'readwrite').objectStore('img').delete(k); }).catch(function () {}); var S = window.KukingStore; if (S && S.user && S.user()) S.collection('img').doc(k.replace(/[^\w:-]/g, '_')).delete().catch(function () {}); }
+  function del(k) { delete MEM[k]; idb().then(function (d) { d.transaction('img', 'readwrite').objectStore('img').delete(k); }).catch(function () {}); var S = window.KukingStore; if (S && S.user && S.user() && S.req) S.req('DELETE', 'docs?collection=eq.img&id=eq.' + encodeURIComponent(k) + '&user_id=eq.' + S.user().id).catch(function () {}); }
   /* при старте поднимаем всё из телефона, потом добираем из облака то, чего нет */
   idb().then(function (d) {
     var st = d.transaction('img').objectStore('img'), rq = st.openCursor();
-    rq.onsuccess = function () { var c = rq.result; if (c) { MEM[c.key] = c.value; c.continue(); } else refresh(); };
-  }).catch(function () {});
+    rq.onsuccess = function () { var c = rq.result; if (c) { MEM[c.key] = c.value; c.continue(); } else { loaded = true; refresh(); pump(); } };
+  }).catch(function () { loaded = true; pump(); });
   setTimeout(function () {
     var S = window.KukingStore; if (!S || !S.user || !S.user() || !S.req) return;
     S.req('GET', 'docs?select=id&collection=eq.img&user_id=eq.' + S.user().id).then(function (rows) {
@@ -26,7 +26,7 @@
   }, 5000);
   function save(k, v) {
     put(k, v);
-    var S = window.KukingStore; if (S && S.user && S.user() && S.collection) S.collection('img').doc(k).set({ src: v, at: new Date().toISOString() }).catch(function () {});
+    var S = window.KukingStore; if (S && S.user && S.user() && S.req) S.req('POST', 'docs?on_conflict=collection,id,user_id', [{ collection: 'img', id: k, user_id: S.user().id, data: { src: v, at: new Date().toISOString() }, updated_at: new Date().toISOString() }], 'resolution=merge-duplicates,return=minimal').catch(function () {});
   }
   function shrink(src, max, q) {
     return new Promise(function (ok) {
@@ -54,16 +54,17 @@
   }
 
   /* ---------- рисуем ---------- */
-  function make(k, r, s) {
-    if (BUSY[k]) return; if (!(window.KukingAI && KukingAI.image)) return;
+  function make(k, r, s, done) {
+    done = done || function () {};
+    if (BUSY[k]) return done(); if (!(window.KukingAI && KukingAI.image)) return done();
     BUSY[k] = 1; delete ERR[k]; refresh();
     KukingAI.image(prompt(r, s)).then(function (src) { return shrink(src, 1080, 0.82); })
-      .then(function (src) { delete BUSY[k]; save(k, src); refresh(); if (window.kHaptic) window.kHaptic(12); })
-      .catch(function (e) { delete BUSY[k]; ERR[k] = e && e.message || 'Фото не получилось'; refresh(); });
+      .then(function (src) { delete BUSY[k]; save(k, src); refresh(); if (window.kHaptic) window.kHaptic(12); done(); })
+      .catch(function (e) { delete BUSY[k]; ERR[k] = e && e.message || 'Фото не получилось'; refresh(); done(); });
   }
   /* блок фото: на слайде подачи и в карточке */
   function block(k, cls) {
-    var v = MEM[k], b = BUSY[k], e = ERR[k], can = window.KukingAI && KukingAI.canImage && KukingAI.canImage();
+    var v = MEM[k], b = BUSY[k] || queued[k], e = ERR[k], can = window.KukingAI && KukingAI.canImage && KukingAI.canImage();
     if (v) return '<figure class="dp ' + (cls || '') + '" data-dpk="' + esc(k) + '"><img src="' + v + '" alt="Фото подачи" loading="lazy"><figcaption><span>✦ Так это выглядит</span><button type="button" class="dp-re" data-dp="redo" data-dpk="' + esc(k) + '"' + (b ? ' disabled' : '') + '>' + (b ? 'Перерисовываю…' : 'Другое фото') + '</button></figcaption></figure>';
     if (b) return '<div class="dp dp-wait ' + (cls || '') + '" data-dpk="' + esc(k) + '"><div class="dp-shim"></div><p>Фотограф снимает подачу… обычно 20–60 секунд</p></div>';
     if (!can) return '';
@@ -86,8 +87,28 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-dp]'); if (!b) return; e.stopPropagation();
     var k = b.getAttribute('data-dpk'), c = ctxR[k]; if (!c) return;
-    make(k, c.r, c.s);
+    delete ERR[k]; make(k, c.r, c.s);
   }, true);
 
-  window.KDish = { serveHTML: serveHTML, cardHTML: cardHTML, heroSrc: heroSrc, heroKey: heroKey, prompt: prompt, refresh: refresh, forget: del };
+  /* фото — основная часть рецепта: рисуем само, как только рецепт появился или открылся без фото. По одному за раз. */
+  function auto(r) {
+    if (!r || !r.id) return; var i = (r.slides || []).map(function (x) { return x.type; }).indexOf('serve'); if (i < 0) return;
+    var k = r.id + ':s' + i; if (MEM[k] || BUSY[k] || queued[k] || ERR[k]) return;
+    if (!(window.KukingAI && KukingAI.canImage && KukingAI.canImage())) return;
+    ctxR[k] = { r: r, s: r.slides[i] }; queued[k] = 1; Q.push(k); pump();
+  }
+  var pumping = false;
+  function pump() {
+    if (!loaded || pumping || !Q.length) return;
+    var k = Q.shift(); if (MEM[k]) { delete queued[k]; return pump(); }
+    pumping = true;
+    var S = window.KukingStore, u = S && S.user && S.user();
+    var check = u && S.req ? S.req('GET', 'docs?select=data&collection=eq.img&id=eq.' + encodeURIComponent(k) + '&user_id=eq.' + u.id).then(function (x) { return x && x[0] && x[0].data && x[0].data.src; }).catch(function () { return null; }) : Promise.resolve(null);
+    check.then(function (src) {
+      if (src) { delete queued[k]; put(k, src); refresh(); pumping = false; return pump(); }
+      var c = ctxR[k]; if (!c) { delete queued[k]; pumping = false; return pump(); }
+      make(k, c.r, c.s, function () { delete queued[k]; pumping = false; refresh(); setTimeout(pump, 400); });
+    });
+  }
+  window.KDish = { auto: auto, serveHTML: serveHTML, cardHTML: cardHTML, heroSrc: heroSrc, heroKey: heroKey, prompt: prompt, refresh: refresh, forget: del };
 })();

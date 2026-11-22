@@ -1,5 +1,5 @@
 /* Service worker «Жарко»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-b49ade1103';
+var CACHE = 'kuking-e4ec933f4a';
 var ASSETS = [
 "./",
 "icons/favicon-16.png",
@@ -40,6 +40,7 @@ var ASSETS = [
 "js/slide-transition.js",
 "js/social.js",
 "js/store.js",
+"js/tech.js",
 "manifest.webmanifest"
 ];
 /* ставим свежие файлы мимо HTTP-кэша (GitHub держит старьё 10 минут) и сразу становимся главными — без «закрой и открой» */

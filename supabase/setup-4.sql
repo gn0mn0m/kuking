@@ -91,3 +91,6 @@ create policy "msg del" on public.messages for delete to authenticated using (se
 
 -- на случай, если таблица уже была создана без заголовка рецепта
 alter table public.messages add column if not exists recipe_title text check (char_length(recipe_title) <= 120);
+
+-- 4.10: комментарии к рецепту без оценки (kind = 'c'), вопросы — 'q'
+alter table public.qa add column if not exists kind text not null default 'q' check (kind in ('q', 'c'));

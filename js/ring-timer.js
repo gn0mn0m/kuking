@@ -70,6 +70,7 @@ window.RingTimer = (function () {
 
   var api = {
     get: function (id) { return T[id]; },
+    create: function (c) { return ensure(c); },
     all: function () { return Object.keys(T).map(function (k) { return T[k]; }); },
     left: left,
     start: function (id) {

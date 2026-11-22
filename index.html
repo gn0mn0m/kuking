@@ -2132,6 +2132,77 @@ html.qz-lock,html.qz-lock body{overflow:hidden}
 .ct-page .ct-tabs{justify-self:stretch}
 .ct-page .ct-tabs button{flex:1}
 .ct-page .ct-body{overflow:visible;padding:4px 0 calc(env(safe-area-inset-bottom,0px) + 110px)}
+
+/* 4.10 режим готовки+ и комментарии */
+.tc-wrap{display:grid;gap:8px;margin:12px 0 4px}
+.tc{border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}
+.tc summary{list-style:none;display:flex;align-items:center;gap:10px;padding:11px 14px;font-weight:600;font-size:.92rem;cursor:pointer}
+.tc summary::-webkit-details-marker{display:none}
+.tc-play{width:26px;height:26px;border-radius:50%;background:var(--orange);color:var(--orange-ink,#fff);display:grid;place-items:center;font-size:.7rem;flex:none}
+.tc[open] .tc-play{background:var(--green)}
+.tc-body{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center;padding:0 14px 12px}
+.tc-body ul{margin:0;padding-left:18px;font-size:.86rem;line-height:1.4;display:grid;gap:4px}
+.tc-art{width:120px;height:92px;color:var(--fg)}
+.tc-art .tc-board{fill:color-mix(in srgb,#b07a48 55%,var(--surface))}
+.tc-art .tc-food{fill:#e8a04a}.tc-art .tc-cubes rect,.tc-art .tc-slices rect{fill:#e8a04a}
+.tc-art .tc-blade{fill:color-mix(in srgb,var(--fg) 18%,var(--surface));stroke:var(--fg);stroke-width:1.5}
+.tc-art .tc-handle{fill:#5a3a24}
+.tc-art .tc-meat{fill:#b5543a}.tc-art .tc-spoon{fill:color-mix(in srgb,var(--fg) 25%,var(--surface))}
+.tc-art .tc-scoop{fill:#f3e3c8}
+.tc-art .tc-bits circle,.tc-art .tc-bub circle,.tc-art .tc-foam circle{fill:#e8a04a}
+.tc-art .tc-sizzle path,.tc-art .tc-steam path{fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round}
+.tc-art .tc-flame path{fill:#f08a2c}
+.tc-art *{transform-box:fill-box}
+.tc[open] .tc-dice .tc-knife,.tc[open] .tc-slice .tc-knife{animation:tcChop .7s ease-in-out infinite;transform-origin:50% 0}
+@keyframes tcChop{0%,100%{transform:translateY(-10px)}45%{transform:translateY(8px)}}
+.tc[open] .tc-saw{animation:tcSaw .9s ease-in-out infinite}
+@keyframes tcSaw{0%,100%{transform:translate(-4px,-8px)}50%{transform:translate(6px,8px)}}
+.tc[open] .tc-cubes rect,.tc[open] .tc-slices rect{animation:tcPop .7s ease-out infinite}
+@keyframes tcPop{0%{opacity:0;transform:translateX(6px)}40%,100%{opacity:1;transform:none}}
+.tc[open] .tc-sizzle path,.tc[open] .tc-steam path{animation:tcRise 1.4s ease-in-out infinite}
+.tc[open] .tc-sizzle path:nth-child(2),.tc[open] .tc-steam path:nth-child(2){animation-delay:.3s}
+.tc[open] .tc-sizzle path:nth-child(3),.tc[open] .tc-steam path:nth-child(3){animation-delay:.6s}
+@keyframes tcRise{0%{opacity:0;transform:translateY(6px)}50%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+.tc[open] .tc-flame path{animation:tcFl .5s ease-in-out infinite alternate;transform-origin:50% 100%}
+@keyframes tcFl{to{transform:scaleY(1.25)}}
+.tc[open] .tc-steak{animation:tcSear 2.4s ease-in-out infinite}
+@keyframes tcSear{0%,40%{transform:none}50%{transform:translateY(-14px) rotate(180deg)}60%,100%{transform:rotate(180deg)}}
+.tc[open] .tc-tosspan{animation:tcToss 1s ease-in-out infinite;transform-origin:100% 50%}
+@keyframes tcToss{0%,100%{transform:none}30%{transform:translateX(-6px) rotate(-6deg)}}
+.tc[open] .tc-bits circle{animation:tcFly 1s ease-in-out infinite}
+.tc[open] .tc-bits circle:nth-child(2){animation-delay:.08s}.tc[open] .tc-bits circle:nth-child(3){animation-delay:.16s}
+@keyframes tcFly{0%,20%,100%{transform:none}50%{transform:translateY(-30px)}}
+.tc[open] .tc-whisk{animation:tcWh .45s ease-in-out infinite alternate;transform-origin:50% 0}
+@keyframes tcWh{from{transform:translateX(-12px) rotate(-8deg)}to{transform:translateX(12px) rotate(8deg)}}
+.tc[open] .tc-foam circle{animation:tcPop 1s ease-out infinite}
+.tc[open] .tc-spoonL{animation:tcQ 1.6s ease-in-out infinite;transform-origin:0 100%}
+@keyframes tcQ{0%,100%{transform:none}50%{transform:rotate(-14deg) translateY(-4px)}}
+.tc[open] .tc-mallet{animation:tcHit .55s cubic-bezier(.5,0,.8,.4) infinite;transform-origin:100% 0}
+@keyframes tcHit{0%,100%{transform:translateY(-12px) rotate(-10deg)}55%{transform:translateY(12px)}}
+.tc[open] .tc-flat{animation:tcFlat .55s ease-out infinite;transform-origin:50% 100%}
+@keyframes tcFlat{55%{transform:scaleY(.8) scaleX(1.06)}}
+.tc[open] .tc-bub circle{animation:tcRise 1.8s ease-in-out infinite}
+.tc[open] .tc-spat{animation:tcFold 1.6s ease-in-out infinite;transform-origin:50% 0}
+@keyframes tcFold{0%,100%{transform:translateX(-16px) rotate(-10deg)}50%{transform:translateX(16px) rotate(14deg) translateY(6px)}}
+@media (prefers-reduced-motion:reduce){.tc[open] .tc-art *{animation:none!important}}
+.dock-add{border:1px dashed color-mix(in srgb,var(--orange) 50%,var(--line));background:var(--surface);color:var(--orange);font:inherit;font-weight:700;font-size:.85rem;padding:8px 14px;border-radius:999px}
+.ut-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ut-b{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;font-weight:600;font-size:.9rem;padding:12px 0;border-radius:14px}
+.ut-b:active{transform:scale(.95)}
+.ut-own{display:flex;gap:8px;margin-top:6px}
+.ut-own input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+.final-ph{display:flex;align-items:center;gap:12px;margin:18px auto 0;max-width:380px;text-align:left;padding:14px 16px;border-radius:18px;border:1.5px dashed color-mix(in srgb,var(--orange) 45%,var(--line));background:color-mix(in srgb,var(--orange) 6%,var(--surface));cursor:pointer}
+.final-ph span:last-child{display:flex;flex-direction:column}
+.final-ph small{color:var(--muted);font-size:.8rem}
+.final-ph.busy-c{opacity:.6;pointer-events:none}
+.final-ph.done{border-style:solid;border-color:var(--green)}
+.hb-c .hb-q-h{position:relative}
+.hb-c .hb-q-h p{flex:1}
+.hb-del{border:0;background:none;color:var(--muted);font-size:1.2rem;padding:0 4px}
+.hb-c .hb-qf.sm{display:none}
+.hb-c.rep .hb-qf.sm{display:flex}
+.hb-c.rep .hb-rep{display:none}
+.hb-rep{margin:4px 0 0 40px;border:0;background:none;color:var(--orange);font:inherit;font-size:.82rem;font-weight:600;padding:2px 0}
 </style>
 
 <div id="app">
@@ -2173,7 +2244,7 @@ html.qz-lock,html.qz-lock body{overflow:hidden}
 
 
 <!-- Книга рецептов: каждый рецепт — отдельный файл в js/recipes/ -->
-<script>/* скрипты грузим после первого кадра: заставка успевает загореться без рывков */(function(){var L=["js/haptic.js", "js/meta.js", "js/fun.js", "js/ask.js", "js/plate.js", "js/recipes/smash-night.js", "js/recipes/chashushuli-pasta.js", "js/recipes/tikka-masala.js", "js/recipes/sichuan-beef.js", "js/recipes/shawarma-bowl.js", "js/recipes/stroganoff.js", "js/recipes/taco-night.js", "js/config.js", "js/store.js", "js/ai.js", "js/fresh.js", "js/social.js", "js/quiz.js", "js/catalog.js", "js/cart.js", "js/hub.js", "js/dishpic.js", "js/library.js", "js/settings.js", "js/progress-bar.js", "js/slide-transition.js", "js/ring-timer.js", "js/confetti.js", "js/cuts.js", "js/app.js"];function go(){L.forEach(function(s){var e=document.createElement('script');e.src=s;e.async=false;document.body.appendChild(e)})}var c=document.getElementById('curtain');if(c&&c.classList.contains('anim')&&window.requestAnimationFrame)requestAnimationFrame(function(){requestAnimationFrame(function(){setTimeout(go,20)})});else go()})();</script>
+<script>/* скрипты грузим после первого кадра: заставка успевает загореться без рывков */(function(){var L=["js/haptic.js", "js/meta.js", "js/fun.js", "js/ask.js", "js/plate.js", "js/recipes/smash-night.js", "js/recipes/chashushuli-pasta.js", "js/recipes/tikka-masala.js", "js/recipes/sichuan-beef.js", "js/recipes/shawarma-bowl.js", "js/recipes/stroganoff.js", "js/recipes/taco-night.js", "js/config.js", "js/store.js", "js/ai.js", "js/fresh.js", "js/social.js", "js/quiz.js", "js/catalog.js", "js/cart.js", "js/hub.js", "js/dishpic.js", "js/library.js", "js/settings.js", "js/progress-bar.js", "js/slide-transition.js", "js/ring-timer.js", "js/confetti.js", "js/cuts.js", "js/tech.js", "js/app.js"];function go(){L.forEach(function(s){var e=document.createElement('script');e.src=s;e.async=false;document.body.appendChild(e)})}var c=document.getElementById('curtain');if(c&&c.classList.contains('anim')&&window.requestAnimationFrame)requestAnimationFrame(function(){requestAnimationFrame(function(){setTimeout(go,20)})});else go()})();</script>
 <script>
 /* обновления: проверяем при запуске, при возврате в приложение и раз в 20 минут.
    Новая версия ставится сама; если ты не в процессе готовки — тихо перезагружаемся за шторкой, иначе — плашка. */

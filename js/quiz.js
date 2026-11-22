@@ -206,7 +206,9 @@
     var segs = STEPS.map(function (x, i) { return '<i class="' + (i < idx ? 'done' : i === idx ? 'cur' : '') + '"></i>'; }).join('');
     var top = '<div class="qz-top"><div class="qz-prog" aria-hidden="true">' + segs + '</div><div class="qz-bar">' +
       (idx > 0 && !last ? '<button type="button" class="qz-tx" data-q="back" aria-label="Назад">‹ Назад</button>' : '<span></span>') +
-      (!last ? '<button type="button" class="qz-tx" data-q="' + (idx === 0 ? 'later' : 'skip') + '">' + (idx === 0 ? 'Позже' : 'Пропустить') + '</button>' : '<span></span>') + '</div></div>';
+      '<span class="qz-r">' + (!last && idx > 0 ? '<button type="button" class="qz-tx" data-q="skip">Пропустить</button>' : '') +
+      '<button type="button" class="qz-x" data-q="later" aria-label="Закрыть — всё сохранится">' + (seen() ? 'Закрыть' : idx === 0 ? 'Позже' : '×') + '</button></span></div></div>';
+    if (!seen()) lset('kuking:quizStep', String(idx));
     var mid = '<div class="qz-body"><div class="qz-step' + (anim ? ' in' + (dir > 0 ? 'R' : 'L') : '') + '">' + (TITLE[s] ? '<h2 class="qz-h">' + TITLE[s] + '</h2>' + (SUB[s] ? '<p class="small qz-sub">' + SUB[s] + '</p>' : '') : '') + stepHTML(s) + '</div></div>';
     var bot = '<div class="qz-foot"><button type="button" class="nav-btn primary qz-next" data-q="next">' + (idx === 0 ? 'Начать' : last ? 'Собрать мою подборку' : 'Дальше') + '</button>' +
       (last ? '<button type="button" class="qz-tx qz-later" data-q="finish">Просто открыть приложение</button>' : '') + '</div>';
@@ -243,7 +245,7 @@
   function open(force) {
     if (ov) return;
     try { invited = !!localStorage.getItem('kuking:invite'); } catch (e) {}
-    idx = 0; dir = 1;
+    idx = seen() ? 0 : Math.min(STEPS.length - 1, +lget('kuking:quizStep') || 0); dir = 1;
     ov = document.createElement('div'); ov.className = 'qz'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Знакомство');
     document.body.appendChild(ov); render(false);
     document.documentElement.classList.add('qz-lock');

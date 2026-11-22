@@ -1358,6 +1358,7 @@
   var SUB = { detail: 1, create: 1, edit: 1 }, TAB = 'list';
   var TABS = [['list', 'Рецепты', '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/>'],
     ['plan', 'План', '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>'],
+    ['cart', 'Корзина', '<path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H7"/><circle cx="9.5" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>'],
     ['chats', 'Чаты', '<path d="M4 5h16v11H9l-5 4z"/>'],
     ['profile', 'Профиль', '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>']];
   var bar = document.createElement('nav'); bar.className = 'tg-tabs'; bar.setAttribute('aria-label', 'Разделы'); document.body.appendChild(bar);
@@ -1368,7 +1369,7 @@
     var n = SOC().badge ? SOC().badge() : 0;
     bar.innerHTML = TABS.map(function (t) {
       return '<button type="button" data-tab="' + t[0] + '"' + (cur === t[0] ? ' aria-current="page"' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true">' + t[2] + '</svg><span>' + t[1] + '</span>' +
-        (t[0] === 'profile' && n ? '<em>' + n + '</em>' : '') + '</button>';
+        (t[0] === 'profile' && n ? '<em>' + n + '</em>' : '') + (t[0] === 'cart' && window.KCart && KCart.count() ? '<em class="cart-n">' + KCart.count() + '</em>' : '') + '</button>';
     }).join('');
     bar.classList.toggle('on', show);
     document.documentElement.classList.toggle('tabs-on', show);
@@ -1376,6 +1377,7 @@
   bar.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]'); if (!b) return;
     var t = b.getAttribute('data-tab'), Soc = SOC();
+    if (t === 'cart') { if (window.KCart) KCart.open('cart'); return; }
     var Stg0 = window.KukingSettings; if (t !== 'profile' && Stg0 && Stg0.isOpen && Stg0.isOpen() && Stg0.close(function () { b.click(); }) === false) return;
     if (t === 'chats') { if (Soc.enabled && window.KukingStore && window.KukingStore.user()) { var fi = ['list', 'plan', 'chats', 'profile'].indexOf(SUB[view] ? TAB : view); if (Soc.openTab) Soc.openTab(fi > 2 ? 'l' : 'r'); else Soc.open(); } else if (window.KukingSettings) window.KukingSettings.open('account'); syncTabs(); return; }
     var Stg = window.KukingSettings; if (Stg && Stg.isOpen && Stg.isOpen() && Stg.close(function () { b.click(); }) === false) return;

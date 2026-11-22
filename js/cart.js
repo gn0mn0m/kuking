@@ -11,14 +11,14 @@
   /* где искать продукт. Адреса поиска магазинов не проверены — если откроется не поиск, поправим тут */
   var STORES = [['Самокат', 'https://samokat.ru/search?value='], ['Лавка', 'https://lavka.yandex.ru/search?text=']];
 
-  var have = lget('kuking:cartHave', {}), hide = lget('kuking:cartHide', {}), extraR = lget('kuking:cartR', []), extraX = lget('kuking:cartX', []);
+  var have = lget('kuking:cartHave', {}), hide = lget('kuking:cartHide', {}), extraR = lget('kuking:cartR', []), extraX = lget('kuking:cartX', []), skip = lget('kuking:cartSkip', {});
   var pantry = lget('kuking:pantry', null) || [{ name: 'Соль' }, { name: 'Перец чёрный молотый' }];
   var prices = lget('kuking:prices', {}), days = lget('kuking:cartDays', 7);
   function saveAll() {
-    lset('kuking:cartHave', have); lset('kuking:cartHide', hide); lset('kuking:cartR', extraR); lset('kuking:cartX', extraX); lset('kuking:pantry', pantry); lset('kuking:prices', prices); lset('kuking:cartDays', days);
+    lset('kuking:cartHave', have); lset('kuking:cartHide', hide); lset('kuking:cartSkip', skip); if (window.__kSyncTabs) setTimeout(window.__kSyncTabs, 0); lset('kuking:cartR', extraR); lset('kuking:cartX', extraX); lset('kuking:pantry', pantry); lset('kuking:prices', prices); lset('kuking:cartDays', days);
     clearTimeout(syncT); syncT = setTimeout(function () {
       var S = window.KukingStore; if (!S || !S.user || !S.user() || !S.collection) return;
-      S.collection('meta').doc('cart').set({ have: have, hide: hide, extraR: extraR, extraX: extraX, pantry: pantry, prices: prices, updatedAt: new Date().toISOString() }).catch(function () {});
+      S.collection('meta').doc('cart').set({ have: have, hide: hide, skip: skip, extraR: extraR, extraX: extraX, pantry: pantry, prices: prices, updatedAt: new Date().toISOString() }).catch(function () {});
     }, 900);
   }
   var syncT = null;
@@ -59,10 +59,10 @@
     if (lib.planDays) {
       var pd = lib.planDays(); Object.keys(pd).sort().forEach(function (k) {
         if (k < td) return; var dd = (new Date(k) - new Date(td)) / 864e5; if (dd >= days) return;
-        pd[k].forEach(function (id) { if (lib.isDone && lib.isDone('cook:' + k + ':' + id)) return; var r = lib.byId && lib.byId(id); if (r) out.push({ r: r, why: 'план' }); });
+        pd[k].forEach(function (id) { if (skip[id] || (lib.isDone && lib.isDone('cook:' + k + ':' + id))) return; var r = lib.byId && lib.byId(id); if (r) out.push({ r: r, why: 'план', day: k }); });
       });
     }
-    extraR.forEach(function (id) { var r = lib.byId && lib.byId(id); if (r) out.push({ r: r, why: 'добавлен' }); });
+    extraR.forEach(function (id) { var r = lib.byId && lib.byId(id); if (r && !out.some(function (s) { return s.r.id === id; })) out.push({ r: r, why: 'добавлен' }); });
     return out;
   }
   function build() {
@@ -75,6 +75,7 @@
     }
     sources().forEach(function (s) { (s.r.ingredients || []).forEach(function (i) { if (i && i.name) add(i.name, i.amount, i.unit, i.unitText, s.r.title); }); });
     extraX.forEach(function (x) { add(x.name, x.amount, x.unit, x.text, 'своё'); });
+    Object.keys(have).forEach(function (k) { if (!sum[k]) delete have[k]; }); Object.keys(hide).forEach(function (k) { if (!sum[k]) delete hide[k]; });
     return order.map(function (k) { var it = sum[k]; it.dept = dept(it.name); it.home = inPantry(it.name); it.got = !!have[k]; it.hidden = !!hide[k]; return it; }).filter(function (it) { return !it.hidden; });
   }
   function qty(it) { return it.amount ? fmt(it.amount) + ' ' + it.unit : it.text || ''; }
@@ -129,12 +130,14 @@
   function cartHTML() {
     var items = build(), buy = items.filter(function (i) { return !i.home; }), home = items.filter(function (i) { return i.home; });
     var left = buy.filter(function (i) { return !i.got; }), got = buy.filter(function (i) { return i.got; }), src = sources(), tt = total(items);
-    if (!items.length) return '<div class="ct-empty"><p class="ct-big">Корзина пустая</p><p class="small">Добавьте блюда в план или нажмите «В корзину» в карточке рецепта. Своё можно вписать ниже.</p></div>' + addHTML();
+    if (!items.length && !src.length) return '<div class="ct-empty"><p class="ct-big">Корзина пустая</p><p class="small">Добавьте блюда в план или нажмите «В корзину» в карточке рецепта. Своё можно вписать ниже.</p></div>' + addHTML();
     var h = '<div class="ct-sum"><div><span class="ct-k">Осталось купить</span><b class="ct-big">' + left.length + ' из ' + buy.length + '</b></div>' +
       '<div class="ct-tot"><span class="ct-k">Примерно</span><b class="ct-big">' + (tt.t ? '≈ ' + tt.t.toLocaleString('ru-RU') + ' ₽' : '—') + '</b>' + (tt.miss && tt.n ? '<small>без ' + tt.miss + ' поз.</small>' : '') + '</div></div>' +
       '<div class="ct-prog" aria-hidden="true"><i style="width:' + (buy.length ? Math.round(got.length / buy.length * 100) : 0) + '%"></i></div>' +
-      '<p class="small ct-src">' + src.length + ' ' + plural(src.length, 'блюдо', 'блюда', 'блюд') + ': ' + esc(src.slice(0, 4).map(function (s) { return s.r.title; }).join(', ')) + (src.length > 4 ? '…' : '') +
-      ' · план на <button type="button" class="ct-days" data-ct="days">' + days + ' ' + plural(days, 'день', 'дня', 'дней') + '</button></p>' +
+      (!left.length ? '<p class="ct-allgot">Всё куплено ✓</p>' : '') +
+      '<h3 class="ct-dept">Блюда в корзине<span>' + src.length + '</span></h3><ul class="ct-list ct-rec">' + src.map(function (s) { return '<li class="ct-it"><span class="ct-t"><b>' + esc(s.r.title) + '</b><small>' + (s.day ? 'из плана · ' + dlab(s.day) : 'добавлено вручную') + '</small></span><button type="button" class="ct-rm" data-rrm="' + esc(s.r.id) + '" aria-label="Убрать из корзины">Убрать</button></li>'; }).join('') + '</ul>' +
+      '<p class="small ct-src">Блюда из плана на <button type="button" class="ct-days" data-ct="days">' + days + ' ' + plural(days, 'день', 'дня', 'дней') + '</button>' + (Object.keys(skip).length ? ' · <button type="button" class="ct-days" data-ct="unskip">вернуть убранные (' + Object.keys(skip).length + ')</button>' : '') + '</p>' +
+      '<div class="ct-acts ct-top"><button type="button" class="nav-btn" data-ct="all">' + (left.length ? 'Отметить всё' : 'Снять все отметки') + '</button>' + (got.length ? '<button type="button" class="nav-btn" data-ct="sweep">Убрать купленное</button>' : '') + '</div>' +
       (priceErr ? '<p class="small ct-err">' + esc(priceErr) + '</p>' : '');
     DORDER.forEach(function (d) {
       var g = left.filter(function (i) { return i.dept === d; }); if (!g.length) return;
@@ -144,7 +147,7 @@
     if (home.length) h += '<button type="button" class="ct-dept ct-homeh" data-ct="homeToggle" aria-expanded="' + openHome + '">Есть дома<span>' + home.length + '</span><i>' + (openHome ? '−' : '+') + '</i></button>' +
       (openHome ? '<ul class="ct-list ct-home">' + home.map(function (it) { return '<li class="ct-it home" data-ck="' + esc(it.key) + '"><span class="ct-t"><b>' + esc(it.name) + '</b><small>' + esc(qty(it)) + '</small></span><button type="button" class="ct-more" data-ct="unhome">Купить</button></li>'; }).join('') + '</ul>' : '');
     h += addHTML();
-    h += '<div class="ct-acts"><button type="button" class="nav-btn" data-ct="tg">Отправить в Telegram</button>' + (got.length ? '<button type="button" class="nav-btn" data-ct="clear">Снять отметки</button>' : '') + '</div>';
+    h += '<div class="ct-acts"><button type="button" class="nav-btn" data-ct="tg">Отправить в Telegram</button></div>';
     estimate(items);
     return h;
   }
@@ -185,6 +188,7 @@
   }
   function onClick(e) {
     var t = e.target.closest('[data-ctab]'); if (t) { tab = t.getAttribute('data-ctab'); hap(); draw(); return; }
+    var rr = e.target.closest('[data-rrm]'); if (rr) { removeRecipe(rr.getAttribute('data-rrm')); hap(10); draw(); return; }
     var pd = e.target.closest('[data-pdel]'); if (pd) { pantry.splice(+pd.getAttribute('data-pdel'), 1); hap(); saveAll(); draw(); return; }
     var b = e.target.closest('[data-ct]'); if (!b) return;
     var a = b.getAttribute('data-ct'), li = b.closest('[data-ck]'), key = li && li.getAttribute('data-ck');
@@ -192,7 +196,9 @@
     if (a === 'tog') { if (have[key]) delete have[key]; else have[key] = Date.now(); hap(8); saveAll(); flip(key); return; }
     if (a === 'homeToggle') { openHome = !openHome; draw(); return; }
     if (a === 'unhome') { var it0 = find(key); if (it0) pantry = pantry.filter(function (p) { var q = nk(p.name), s = nk(it0.name); return !(s === q || s.indexOf(q) === 0 || q.indexOf(s) === 0); }); saveAll(); draw(); return; }
-    if (a === 'clear') { build().forEach(function (i) { delete have[i.key]; }); saveAll(); draw(); return; }
+    if (a === 'all') { var its = build().filter(function (i) { return !i.home; }), anyLeft = its.some(function (i) { return !i.got; }); its.forEach(function (i) { if (anyLeft) have[i.key] = have[i.key] || Date.now(); else delete have[i.key]; }); hap(12); saveAll(); draw(); return; }
+    if (a === 'sweep') { build().forEach(function (i) { if (i.got) { hide[i.key] = Date.now(); delete have[i.key]; } }); hap(12); saveAll(); draw(); return; }
+    if (a === 'unskip') { skip = {}; saveAll(); draw(); return; }
     if (a === 'days') { days = days === 7 ? 3 : days === 3 ? 14 : 7; hap(); saveAll(); draw(); return; }
     if (a === 'tg') { var txt = tgText(); window.open('https://t.me/share/url?url=' + encodeURIComponent(' ') + '&text=' + encodeURIComponent(txt), '_blank'); return; }
     if (a === 'cookPantry') { close(); setTimeout(function () { if (window.KCat && KCat.fridge) KCat.fridge(pantry.map(function (p) { return p.name; })); }, 320); return; }
@@ -240,12 +246,12 @@
   function moreSheet(it) {
     mini(it.name, '<div class="ct-menu">' +
       '<button type="button" data-mo="home">🏠 Есть дома — не покупать</button>' +
-      STORES.map(function (s, i) { return '<a href="' + s[1] + encodeURIComponent(it.name) + '" target="_blank" rel="noopener" data-mo="store">🔎 Найти в ' + (s[0] === 'Самокат' ? 'Самокате' : s[0] === 'Лавка' ? 'Лавке' : s[0]) + '</a>'; }).join('') +
+      STORES.map(function (s, i) { return '<a href="' + s[1] + encodeURIComponent(it.name) + '" target="_blank" rel="noopener" data-mo="store" data-nm="' + esc(it.name) + '">🔎 Найти в ' + (s[0] === 'Самокат' ? 'Самокате' : s[0] === 'Лавка' ? 'Лавке' : s[0]) + '</a>'; }).join('') +
       '<button type="button" data-mo="price">₽ Изменить цену</button>' +
       '<button type="button" data-mo="hide" class="ct-danger">Убрать из списка</button></div>' +
-      (it.from.length ? '<p class="small ct-note">Для: ' + esc(it.from.join(', ')) + '</p>' : ''),
+      '<p class="small ct-note">Название копируется — если откроется сайт, вставьте его в поиск приложения.</p>' + (it.from.length ? '<p class="small ct-note">Для: ' + esc(it.from.join(', ')) + '</p>' : ''),
       function (e, mm, shut) { var b = e.target.closest('[data-mo]'); if (!b) return; var a = b.getAttribute('data-mo');
-        if (a === 'store') { setTimeout(shut, 100); return; }
+        if (a === 'store') { try { navigator.clipboard.writeText(b.getAttribute('data-nm')); } catch (x) {} setTimeout(shut, 100); return; }
         shut();
         if (a === 'home') { pantry.push({ name: it.name }); saveAll(); draw(); }
         if (a === 'price') setTimeout(function () { priceSheet(it); }, 280);
@@ -254,9 +260,11 @@
   }
 
   /* ---------- из карточки рецепта ---------- */
-  function addRecipe(id) { if (extraR.indexOf(id) < 0) extraR.push(id); saveAll(); }
-  function removeRecipe(id) { extraR = extraR.filter(function (x) { return x !== id; }); saveAll(); }
-  function hasRecipe(id) { return extraR.indexOf(id) >= 0; }
+  function addRecipe(id) { delete skip[id]; if (extraR.indexOf(id) < 0 && !hasRecipe(id)) extraR.push(id); saveAll(); }
+  /* убрать блюдо из корзины целиком: и добавленное вручную, и пришедшее из плана (план не трогаем) */
+  function removeRecipe(id) { extraR = extraR.filter(function (x) { return x !== id; }); var pd = L().planDays ? L().planDays() : {}; if (Object.keys(pd).some(function (k) { return (pd[k] || []).indexOf(id) >= 0; })) skip[id] = Date.now(); saveAll(); }
+  function hasRecipe(id) { return sources().some(function (s) { return s.r.id === id; }); }
+  function dlab(k) { var t = L().today ? L().today() : ''; var d = new Date(k), n = Math.round((d - new Date(t)) / 864e5); return n === 0 ? 'сегодня' : n === 1 ? 'завтра' : ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][d.getDay()] + ', ' + d.getDate(); }
   /* остатки после готовки → кладовка */
   function leftovers(r) {
     var ing = (r.ingredients || []).filter(function (i) { return i && i.name && !/соль|вода|перец черн/i.test(i.name); }), sel = {};

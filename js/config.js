@@ -1,5 +1,5 @@
 window.KUKING_CONFIG = {
-  version: '4.6.0',
+  version: '4.6.1',
   supabaseUrl: 'https://akwijavguhthhxpdjgfq.supabase.co',
   supabaseAnonKey: 'sb_publishable_SuPpHmpSzJYEyUpKDrJ5zw_FR-V3MAj' // публичный ключ, ему место в приложении
 };

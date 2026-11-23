@@ -107,6 +107,27 @@ async function image(prompt) {
   throw Object.assign(new Error('GigaChat: ' + lastErr.slice(0, 300)), { status: 502 });
 }
 
+
+// строгий ответ по схеме: GigaChat «вызывает функцию» и отдаёт аргументы готовым JSON-объектом — без кривых скобок и болтовни
+async function callFn(body) {
+  let lastErr = '';
+  for (const m of (body.model ? [body.model] : MODELS)) {
+    const t = await getToken();
+    const r = await fetch(CHAT, {
+      method: 'POST', client,
+      headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ model: m, messages: body.messages, functions: [body.fn], function_call: { name: body.fn.name }, temperature: body.temperature ?? 0.2, max_tokens: Math.min(+body.max_tokens || 4000, 16000) }),
+    });
+    const txt = await r.text();
+    if (!r.ok) { lastErr = txt; if (r.status === 401) token = null; if (r.status === 404 || r.status === 402 || /model|quota|limit|balance/i.test(txt)) continue; break; }
+    const j = JSON.parse(txt), ch = j.choices && j.choices[0], fc = ch && ch.message && ch.message.function_call;
+    if (!fc) { lastErr = 'нет вызова функции: ' + (ch && ch.finish_reason); continue; }
+    const args = typeof fc.arguments === 'string' ? JSON.parse(fc.arguments) : fc.arguments;
+    return { args };
+  }
+  throw Object.assign(new Error('GigaChat: ' + lastErr.slice(0, 300)), { status: 502 });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
@@ -121,6 +142,10 @@ Deno.serve(async (req) => {
       return json(await image(body.prompt));
     }
     if (!Array.isArray(body.messages) || !body.messages.length) return json({ error: { message: 'Пустой запрос' } }, 400);
+    if (body.action === 'fn') {
+      if (!body.fn || !body.fn.name || !body.fn.parameters) return json({ error: { message: 'Нет схемы' } }, 400);
+      return json(await callFn(body));
+    }
 
     const list = body.model ? [body.model] : MODELS;
     let res = null, lastErr = '';

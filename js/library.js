@@ -259,7 +259,7 @@
     }
     withDishes.forEach(function (k) {
       var ids = plan[k].filter(byId);
-      if (c.shop === 'day') out.push({ key: 'shop:' + k, day: k, time: minus(cookAt(k), 2), kind: 'shop', title: 'Закупка', sub: 'на сегодняшний ужин', ids: ids });
+      if (c.shop === 'day') out.push({ key: 'shop:' + k, day: k, time: minus(cookAt(k), 2), kind: 'shop', title: 'Закупка', sub: 'на сегодня', ids: ids });
       if (c.shop === 'delivery') out.push({ key: 'order:' + k, day: addDays(k, -1), time: '20:00', kind: 'shop', title: 'Заказать продукты', sub: 'доставка к ' + dayName(k).toLowerCase() + ', ' + dayDate(k), ids: ids });
       ids.forEach(function (id) {
         var r = byId(id);
@@ -274,7 +274,7 @@
           while (cm < 0) { cm += 1440; dd = addDays(dd, -1); }
           if (a.hours >= 10) { dd = addDays(k, -1); cm = 21 * 60; } // на ночь — вечером накануне
           var tm = String((cm / 60) | 0).padStart(2, '0') + ':' + String(cm % 60).padStart(2, '0');
-          out.push({ key: 'mar:' + k + ':' + id + (ai ? ':' + ai : ''), day: dd, time: tm, kind: 'marinade', title: a.what, sub: 'для «' + r.title + '» — за ' + a.hours + ' ч до готовки', ids: [id], ahead: a });
+          out.push({ key: 'mar:' + k + ':' + id + (ai ? ':' + ai : ''), day: dd, time: tm, kind: 'marinade', title: a.what, sub: 'к «' + r.title + '»', ids: [id], ahead: a });
         });
         out.push({ key: 'cook:' + k + ':' + id, day: k, time: cookAt(k), kind: 'cook', title: r.title, sub: String(r.totalTime || '').replace('≈ ', ''), ids: [id], dish: id });
       });
@@ -285,17 +285,17 @@
   }
   /* пуши: будущие напоминания кладём на сервер, он присылает их вовремя */
   var syncT = 0;
-  /* Уведомления в духе Duolingo: коротко, по делу, с характером, не чаще 3 в день, ночью тишина */
+  /* Уведомления сканируют глазом: заголовок = суть, текст — 2–4 слова, не чаще 3 в день, ночью тишина */
   var PUSH = {
-    shop: [['Закупка сегодня', 'Список уже собран — открой «План» и пройдись по полкам.'], ['Пора в магазин', '{sub}. Список в «Плане», ничего не забудешь.'], ['Тележку в руки', 'Сегодня закупка: {sub}.']],
-    freeze: [['Мясо — в морозилку', 'Плоско, в пакет, с датой. Минута дела.'], ['Не забудь про морозилку', 'Убери мясо, пока не забыл — потом скажешь спасибо.']],
-    thaw: [['Достань мясо', 'Из морозилки в холодильник — к ужину будет мягким.'], ['Мясо на разморозку', 'Переложи в холодильник на нижнюю полку. Завтра без нервов.']],
-    marinade: [['{title}', '{sub}. Пять минут сейчас — и вечером вкус в два раза мощнее.'], ['Время маринада', '{title} — {sub}.']],
-    cook: [['Через 30 минут — {title}', 'Достань посуду и включи музыку.'], ['Скоро к плите', '{title} через полчаса. Шеф готов?'], ['{title} сегодня', 'Через 30 минут стартуем. Нож наточен?']],
-    empty: [['На завтра пусто', 'Выбери блюдо сейчас — успеешь закупиться.'], ['А что завтра?', 'Тапни «План» и накидай блюдо за 10 секунд.']],
-    rate: [['Как зашёл {title}?', 'Поставь оценку — следующий рецепт будет точнее.'], ['Оцени {title}', 'Пара тапов — и нейросеть поймёт, что тебе по кайфу.']],
-    week: [['Неделя на подходе', 'Раскидай блюда на 30 секунд — закупка и напоминания распишутся сами.']],
-    nudge: [['Плита скучает', 'Давно не готовил. Крутани барабан — подберу что-нибудь под настроение.'], ['Шеф, ты где?', 'Три дня без готовки. Одно блюдо — и форма вернётся.']]
+    shop: [['🛒 Закупка сегодня', '{sub}']],
+    freeze: [['🧊 Мясо в морозилку', 'Плоско, с датой']],
+    thaw: [['🥩 Достань мясо', 'Морозилка → холодильник']],
+    marinade: [['🫙 {title}', '{sub}']],
+    cook: [['🔥 {title} через 30 мин', 'Достань посуду']],
+    empty: [['📅 На завтра пусто', 'Выбери блюдо']],
+    rate: [['⭐ Оцени: {title}', 'Пара тапов']],
+    week: [['📅 Неделя пустая', 'Собери меню']],
+    nudge: [['🍳 Давно не готовил', 'Подберу блюдо']]
   };
   var PRIO = { cook: 0, marinade: 1, thaw: 2, shop: 3, freeze: 4, empty: 5, rate: 6, week: 7, nudge: 8 };
   function hashStr(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return Math.abs(h); }
@@ -331,7 +331,7 @@
         if (rest.length) { var last = keep[2]; last.digest = rest.map(function (r) { return pushText(r).title; }); }
         keep.forEach(function (x) {
           var d = dParse(x.day), hhmm = x.time.split(':'); d.setHours(+hhmm[0], +hhmm[1], 0, 0);
-          var t = pushText(x); if (x.digest) t.body += ' И ещё: ' + x.digest.join(', ') + '.';
+          var t = pushText(x); if (x.digest) t.body = [t.body].concat(x.digest).filter(Boolean).join(' · ');
           if (d.getTime() > now) rows.push({ user_id: me, key: x.key, at: d.toISOString(), title: t.title, body: t.body, sent: false });
         });
       });
@@ -810,7 +810,8 @@
     if (ch && adm) h += '<section class="tg-sec tg-chefrow">' + CROWN + '<span>Админ <b>' + esc(adm.nick) + '</b> поставил</span><b class="lib-score ' + scCls(ch) + '">' + ch + '<small>/10</small></b></section>';
     h += rateBlock(r);
     var thr = SOC().thread(r.id, reviews[r.id]); if (thr) h += '<section class="tg-sec">' + thr + '</section>';
-    if (window.KHub) { h += KHub.recipeHTML(r); KHub.load(r.id, function () { if (!ov.hidden && view === 'detail' && !typing()) keepY(render); }); }
+    /* соцблок перерисовываем точечно — без перерисовки всего рецепта (иначе экран моргает) */
+    if (window.KHub) { h += '<div class="hb-root" data-hb-rid="' + esc(r.id) + '">' + KHub.recipeHTML(r) + '</div>'; KHub.load(r.id, function () { hubPatch(r.id); }); }
     var hasAir = window.KPrefs ? KPrefs.has('Аэрогриль') : true;
     h += '<div class="tg-more">' + (window.Fresh && window.KukingAI && KukingAI.ready() && hasAir && !/аэрогрил/i.test(r.title) ? '<button type="button" class="ghost-btn" data-a="rwair" data-id="' + esc(r.id) + '">♨️ Переделать под аэрогриль</button>' : '') + (window.KCart ? '<button type="button" class="ghost-btn' + (KCart.hasRecipe(r.id) ? ' on' : '') + '" data-a="tocart" data-id="' + esc(r.id) + '">🛒 ' + (KCart.hasRecipe(r.id) ? 'В корзине — убрать' : 'В корзину') + '</button><button type="button" class="ghost-btn" data-a="left" data-id="' + esc(r.id) + '">🥡 Осталось после готовки</button>' : '') + (window.KCat ? '<button type="button" class="ghost-btn" data-a="tocol" data-id="' + esc(r.id) + '">📁 ' + (KCat.inCols(r.id).length ? esc(KCat.inCols(r.id).join(', ')) : 'В коллекцию') + '</button>' : '') + (r.manual ? '<button type="button" class="ghost-btn" data-a="editme" data-id="' + esc(r.id) + '">Изменить</button>' : '') +
       (r.ai && !r.manual ? '<button type="button" class="ghost-btn" data-a="upg" data-id="' + esc(r.id) + '">' + (r.upgraded ? 'Обновить ещё раз' : 'Обновить под новые правила') + '</button>' : '') +
@@ -1094,7 +1095,7 @@
     on('[data-sort]', function (b) { sortBy = b.getAttribute('data-sort'); sortOpen = false; lset('kuking:sort2', sortBy); render(); });
     on('.lib-go', function (b) { choose(b.getAttribute('data-id')); });
     on('.tg-del', function (b) { armed(b, 'Точно убрать?', function () { var id = b.getAttribute('data-id'); hidden[id] = Date.now(); saveHidden(); go('list', undefined, true); }); });
-    on('.lib-kill', function (b) { armed(b, 'Точно?', function () { purge([b.getAttribute('data-id')]); render(); }); });
+    on('.lib-kill', function (b) { purge([b.getAttribute('data-id')]); if (window.kHaptic) window.kHaptic(10); render(); });
     on('.lib-clear', function (b) { armed(b, 'Тапни ещё раз — удалю все', function () { purge(Object.keys(hidden)); render(); }); });
     on('.lib-back', function (b) { delete hidden[b.getAttribute('data-id')]; saveHidden(); render(); });
     on('.lib-pt', function (b) {
@@ -1269,6 +1270,11 @@
     });
   }
   window.KDragDown = dragDown;
+  function hubPatch(rid) {
+    if (ov.hidden || view !== 'detail') return; var el = ov.querySelector('.hb-root[data-hb-rid="' + rid.replace(/"/g, '') + '"]'), r = byId(rid); if (!el || !r) return;
+    var ae = document.activeElement; if (ae && el.contains(ae) && /INPUT|TEXTAREA/.test(ae.tagName) && ae.value) return;
+    var y = ov.scrollTop, html = KHub.recipeHTML(r); if (el.__h === html) return; el.__h = html; el.innerHTML = html; ov.scrollTop = y;
+  }
   function keepY(fn) { var y = ov.scrollTop; fn(); ov.scrollTop = y; }
 
   /* ---------- контекст для нейросети ---------- */
@@ -1375,6 +1381,8 @@
     byId: byId, today: today, emoji: emoji,
     importRecipe: function (rec) { var c = JSON.parse(JSON.stringify(rec)); c.id = 'ai-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); c.ai = true; freshCtx.added(c); return c.id; },
     planDays: function () { return plan; },
+    rawReviews: function () { return reviews; },
+    quiet: function (o, cb) { return window.Fresh.quiet(freshCtx, o, cb); },
     /* что уже отмечено купленным в закупках плана, где есть это блюдо */
     shopChecked: function (id) { var out = {}; try { tasksAll().forEach(function (t) { if (t.kind === 'shop' && (t.ids || []).indexOf(id) >= 0) { var hv = shopHave[t.key] || {}; Object.keys(hv).forEach(function (k) { if (hv[k]) out[k] = 1; }); } }); } catch (e) {} return out; },
     isDone: function (k) { return !!doneTasks[k]; },

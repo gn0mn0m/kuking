@@ -65,7 +65,8 @@
     if (pa[0] >= need[0]) { it.home = true; it.note = 'дома ' + fmt(pa[0]) + ' ' + pa[1]; return; }
     it.amount = need[0] - pa[0]; it.unit = need[1]; it.note = 'дома ' + fmt(pa[0]) + ' ' + pa[1] + ', докупить разницу';
   }
-  function perish(name) { var d = dept(name); return d === 'meat' || d === 'veg' || d === 'dairy' || d === 'bread' || /соус|бульон|готов|тесто|фарш/i.test(name); }
+  /* портится ли: мясо, молочка, хлеб, зелень и нежные овощи; картошка, лук, чеснок, корнеплоды, цитрусы, соусы в бутылках — нет */
+  function perish(name) { var n = nk(name), d = dept(name); if (/картоф|^лук(?! зел| порей)|репчат|чеснок|тыкв|свекл|морков|имбир|лимон|лайм|апельсин|соев|сух|консерв|заморож/.test(n)) return false; return d === 'meat' || d === 'veg' || d === 'dairy' || d === 'bread' || /бульон|готов|тесто|фарш/.test(n); }
   function inPantry(name) { var s = nk(name); return pantry.some(function (p) { var q = nk(p.name); return q && (s === q || s.indexOf(q) === 0 || q.indexOf(s) === 0); }); }
 
   /* ---------- сбор корзины ---------- */
@@ -84,8 +85,12 @@
     var sum = {}, order = [];
     function add(name, amount, unit, text, from, rid) {
       if (!name || /^вода\b/i.test(clean(name))) return;
+      /* ложки и щепотки в магазине не продаются: переводим в граммы/мл (≈), мелочь покажем как «немного» */
+      var sp = { 'ч.л.': 5, 'ст.л.': 15, 'щепотка': 1, 'щепотки': 1, 'щеп.': 1 }[String(unit || '').toLowerCase()], approx = false;
+      if (sp) { amount = (+amount || 1) * sp; unit = /масл|уксус|соус|сироп|сок|вин|молок|сливк|вод/i.test(name) ? 'мл' : 'г'; text = ''; approx = true; }
       var k = nk(name) + '|' + (unit || '');
       if (!sum[k]) { sum[k] = { key: k, name: clean(name), unit: unit || '', amount: 0, text: text || '', from: [], rids: [] }; order.push(k); }
+      if (approx) sum[k].approx = true;
       if (rid && sum[k].rids.indexOf(rid) < 0) sum[k].rids.push(rid);
       if (amount) sum[k].amount += +amount; if (from && sum[k].from.indexOf(from) < 0) sum[k].from.push(from);
     }
@@ -99,7 +104,7 @@
     Object.keys(have).forEach(function (k) { if (!sum[k]) delete have[k]; }); Object.keys(hide).forEach(function (k) { if (!sum[k]) delete hide[k]; });
     return order.map(function (k) { var it = sum[k]; it.dept = dept(it.name); it.got = !!have[k]; it.hidden = !!hide[k]; withPantry(it); return it; }).filter(function (it) { return withHidden || !it.hidden; });
   }
-  function qty(it) { return it.amount ? fmt(it.amount) + ' ' + it.unit : it.text || ''; }
+  function qty(it) { if (it.approx && it.amount && it.amount < 60) return 'немного · ≈ ' + fmt(it.amount) + ' ' + it.unit; return it.amount ? (it.approx ? '≈ ' : '') + fmt(it.amount) + ' ' + it.unit : it.text || 'немного'; }
   function fmt(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
 
   /* ---------- цены ---------- */
@@ -193,8 +198,8 @@
   function pRow(p, i) {
     var d = daysLeft(p), cls = d == null ? '' : d < 0 ? ' bad' : d <= 2 ? ' soon' : '';
     return '<li class="pt-it' + cls + '" data-pi="' + i + '"><div class="pt-main"><b>' + esc(p.name) + '</b>' +
-      (p.exp ? '<button type="button" class="pt-exp" data-pa="exp">' + esc(expLabel(p)) + '</button>' : perish(p.name) ? '<button type="button" class="pt-exp ask" data-pa="exp">Срок годности?</button>' : '') + '</div>' +
-      (p.amount == null || p.amount === '' ? '<button type="button" class="pt-always" data-pa="qty">всегда есть</button>' :
+      (p.exp ? '<button type="button" class="pt-exp" data-pa="exp">' + esc(expLabel(p)) + '</button>' : !p.noexp && perish(p.name) ? '<button type="button" class="pt-exp ask" data-pa="exp">Срок годности?</button>' : '') + '</div>' +
+      (p.amount == null || p.amount === '' ? '<button type="button" class="pt-always" data-pa="qty">есть много</button>' :
         '<div class="pt-qty"><button type="button" data-pa="minus" aria-label="Меньше">−</button><button type="button" class="pt-v" data-pa="qty">' + fmt(p.amount) + ' ' + esc(p.unit || '') + '</button><button type="button" data-pa="plus" aria-label="Больше">+</button></div>') +
       '<button type="button" class="ct-more" data-pa="del" aria-label="Убрать">×</button></li>';
   }
@@ -222,9 +227,9 @@
       return '<label class="set-f qz-f"><span>Продукт</span><input id="psN" maxlength="40" value="' + esc(p.name) + '" placeholder="Например, куриное бедро"' + (p0 ? ' readonly' : '') + '></label>' +
         '<span class="qz-l">Сколько осталось</span><div class="pt-row"><input id="psA" type="number" inputmode="decimal" min="0" step="any" value="' + (always ? '' : esc(p.amount)) + '" placeholder="Количество"' + (always ? ' disabled' : '') + '>' +
         '<div class="seg qz-seg">' + ['г', 'мл', 'шт'].map(function (u) { return '<button type="button" role="radio" data-pu="' + u + '" aria-checked="' + (!always && p.unit === u) + '">' + u + '</button>'; }).join('') +
-        '<button type="button" role="radio" data-pu="" aria-checked="' + always + '">Всегда есть</button></div></div>' +
+        '<button type="button" role="radio" data-pu="" aria-checked="' + always + '">Есть много</button></div></div>' +
         '<span class="qz-l">Годен до' + (per ? ' — продукт портится' : '') + '</span><div class="qz-chips">' + [[0, 'Сегодня'], [1, 'Завтра'], [3, '3 дня'], [7, 'Неделя'], [14, '2 недели'], [30, 'Месяц'], [-1, 'Не портится']].map(function (x) {
-          var on = x[0] === -1 ? !p.exp : p.exp === addD(x[0]); return '<button type="button" class="qz-chip" data-pe="' + x[0] + '" aria-pressed="' + on + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+          var on = x[0] === -1 ? !p.exp && (p.noexp || !per) : p.exp === addD(x[0]); return '<button type="button" class="qz-chip" data-pe="' + x[0] + '" aria-pressed="' + on + '">' + x[1] + '</button>'; }).join('') + '</div>' +
         '<input id="psE" type="date" class="pt-date" value="' + (p.exp || '') + '">' +
         '<button type="button" class="nav-btn primary ct-cook" data-ps="ok">Сохранить</button>';
     }
@@ -232,18 +237,18 @@
       var u = e.target.closest('[data-pu]'), ex = e.target.closest('[data-pe]');
       p.name = (mm.querySelector('#psN') || {}).value || p.name; var av = (mm.querySelector('#psA') || {}).value; if (!always) p.amount = av;
       if (u) { var v = u.getAttribute('data-pu'); always = v === ''; if (!always) p.unit = v; redraw(); return; }
-      if (ex) { var n = +ex.getAttribute('data-pe'); p.exp = n < 0 ? null : addD(n); redraw(); return; }
+      if (ex) { var n = +ex.getAttribute('data-pe'); p.exp = n < 0 ? null : addD(n); p.noexp = n < 0; redraw(); return; }
       if (e.target.closest('[data-ps]')) {
         p.name = String(p.name || '').trim(); if (!p.name) { mm.querySelector('#psN').focus(); return; }
         var dv = mm.querySelector('#psE').value; if (dv) p.exp = dv;
         var a = always ? null : +String(av).replace(',', '.'); if (!always && !(a > 0)) { mm.querySelector('#psA').focus(); return; }
-        var out = { name: p.name.slice(0, 40), amount: a, unit: always ? '' : p.unit, exp: p.exp || null, at: Date.now() };
+        var out = { name: p.name.slice(0, 40), amount: a, unit: always ? '' : p.unit, exp: p.exp || null, at: Date.now() }; if (!out.exp && p.noexp) out.noexp = true;
         if (out.unit === 'кг') { out.amount *= 1000; out.unit = 'г'; }
         shut(); onSave(out);
       }
       function redraw() { var bd = mm.querySelector('.ks-body'); bd.innerHTML = body(); }
     });
-    m.addEventListener('input', function (e) { if (e.target.id === 'psE') p.exp = e.target.value || null; });
+    m.addEventListener('input', function (e) { if (e.target.id === 'psE') { p.exp = e.target.value || null; if (p.exp) p.noexp = false; } });
     if (!p0) setTimeout(function () { var i = m.querySelector('#psN'); if (i) i.focus(); }, 300);
   }
   function addD(n) { var d = today0(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -398,35 +403,79 @@
       });
   }
 
-  /* ---------- меню на неделю по КБЖУ ---------- */
+  /* ---------- меню на неделю ----------
+     В основном новое. Из книги — только 10/10 и 9/10, которые не готовили 2 недели (9/10 дорабатываем до 10).
+     Готовим реже, чем кажется: одно блюдо на 2 дня, частота из привычек. Кладовка и то, что портится, — первыми. */
+  var WM = { name: 'menyu_nedeli', description: 'Меню готовки на неделю для одного человека: дни готовки и блюда.',
+    parameters: { type: 'object', properties: { dni: { type: 'array', description: 'Дни готовки по порядку', items: { type: 'object', properties: {
+      den: { type: 'string', description: 'Дата YYYY-MM-DD строго из списка свободных дней' },
+      istochnik: { type: 'string', enum: ['kniga', 'novoe'], description: 'kniga — рецепт из книги (поле id), novoe — новое блюдо (поле nazvanie)' },
+      id: { type: 'string', description: 'id рецепта из книги, только если istochnik=kniga' },
+      nazvanie: { type: 'string', description: 'Для нового: конкретное блюдо 2–6 слов — белок + гарнир или соус' },
+      pochemu: { type: 'string', description: 'До 50 знаков: что из кладовки идёт в дело или зачем это блюдо' },
+      porcii: { type: 'integer', description: 'Сколько порций приготовить, 2–3' } }, required: ['den', 'istochnik', 'pochemu', 'porcii'] } } }, required: ['dni'] },
+    few_shot_examples: [{ request: 'Свободные дни: 2026-11-24 (вт), 2026-11-25 (ср), 2026-11-26 (чт), 2026-11-27 (пт). Готовок: 2. Кладовка: куриное бедро 600 г — СЪЕСТЬ ЗА 2 дн.; рис 1000 г',
+      params: { dni: [{ den: '2026-11-24', istochnik: 'novoe', nazvanie: 'Куриные бёдра терияки с рисом', pochemu: 'бедро из кладовки, съесть за 2 дня', porcii: 3 }, { den: '2026-11-26', istochnik: 'novoe', nazvanie: 'Паста с фаршем болоньезе', pochemu: 'другой белок, 30 минут', porcii: 2 }] } }] };
+  function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function weekMenu() {
     var lib = L(), all = (lib.all ? lib.all() : []).filter(function (r) { return r.ingredients && r.ingredients.length; });
-    var td = lib.today(), pd = lib.planDays(), free = [];
-    for (var i = 0; i < 7; i++) { var d = new Date(td); d.setDate(d.getDate() + i); var k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); if (!(pd[k] || []).length) free.push(k); }
-    var m = mini('Меню на неделю', '<div class="ct-wm"><div class="fr-pot" aria-hidden="true"><i></i><i></i><i></i></div><p class="small">Нейросеть раскладывает ужины по свободным дням под вашу норму…</p></div>', function () {});
-    if (!free.length) { m.querySelector('.ks-body').innerHTML = '<p class="small">На неделю всё уже запланировано.</p>'; return; }
-    if (all.length < 3) { m.querySelector('.ks-body').innerHTML = '<p class="small">В книге пока мало рецептов — добавьте хотя бы три, например через «10 идей под твой вкус».</p>'; return; }
+    var td = lib.today(), pd = lib.planDays(), free = [], rv = lib.rawReviews ? lib.rawReviews() : {};
+    for (var i = 0; i < 7; i++) { var d = new Date(td + 'T12:00'); d.setDate(d.getDate() + i); var k = ymd(d); if (!(pd[k] || []).length) free.push(k); }
+    var m = mini('Меню на неделю', '<div class="ct-wm"><div class="fr-pot" aria-hidden="true"><i></i><i></i><i></i></div><p class="small">Нейросеть собирает неделю под кладовку и вашу норму…</p></div>', function () {});
+    function body(h) { m.querySelector('.ks-body').innerHTML = h; }
+    if (!free.length) return body('<p class="small">На неделю всё уже запланировано.</p>');
+    if (!(window.KukingAI && KukingAI.ready && KukingAI.ready() && KukingAI.fn)) return body('<p class="small">Для меню нужна нейросеть — она пока не подключена.</p>');
+    /* когда последний раз готовили: последний день в плане до сегодня, иначе дата оценки */
+    var last = {}; Object.keys(pd).forEach(function (k) { if (k >= td) return; (pd[k] || []).forEach(function (id) { if (!last[id] || last[id] < k) last[id] = k; }); });
+    function ago(id) { var x = last[id] || (rv[id] && rv[id].at); return x ? (new Date(td + 'T12:00') - new Date(String(x).slice(0, 10) + 'T12:00')) / 864e5 : 999; }
+    var byId = {}; all.forEach(function (r) { byId[r.id] = r; });
+    var cand = all.filter(function (r) { var v = rv[r.id], s = v && v.score; return s >= 10 || (s === 9 && ago(r.id) >= 14); })
+      .map(function (r) { var s = rv[r.id].score, dd = (r.dishes || [])[0] || {}; return { id: r.id, t: r.title, kkal: dd.kcal || 0, belok: dd.p || 0, ocenka: s }; });
+    var fr = (window.KBody && KBody.get ? (KBody.get() || {}).freq : '') || 'r3';
+    var sessions = Math.min({ r1: 2, r3: 3, r5: 4, r7: 5 }[fr] || 3, Math.ceil(free.length / 2));
+    var pan = pantry.map(function (p) { var dl = daysLeft(p); return p.name + (p.amount != null && p.amount !== '' ? ' ' + fmt(p.amount) + ' ' + (p.unit || '') : ' (есть)') + (dl != null ? (dl <= 2 ? ' — СЪЕСТЬ ЗА ' + Math.max(0, dl) + ' дн.' : ' — годен ' + dl + ' дн.') : ''); });
     var t = window.KBody && KBody.targets && KBody.targets();
     var DOW = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-    if (!(window.KukingAI && KukingAI.ready && KukingAI.ready()) || !(window.claude && window.claude.use)) { m.querySelector('.ks-body').innerHTML = '<p class="small">Для меню нужна нейросеть — она пока не подключена.</p>'; return; }
-    Promise.resolve(window.claude.use('sample')).then(function (s) {
-      return s.json({ system: 'Ты нутрициолог и шеф. Составляешь меню ужинов из книги рецептов человека. Отвечаешь только JSON-объектом.',
-        user: 'Свободные дни: ' + free.map(function (k) { return k + ' (' + DOW[new Date(k).getDay()] + ')'; }).join(', ') + '.\n' +
-          (t ? 'Цель: ' + t.goal + '. На ужин примерно ' + t.meal.kcal + ' ккал, белок ' + t.meal.p + ' г.\n' : '') + (window.KPrefs ? KPrefs.promptLine() + '\n' : '') +
-          'Рецепты (id, название, ккал/белок на порцию, минут): ' + JSON.stringify(all.map(function (r) { var d = (r.dishes || [])[0] || {}; return [r.id, r.title, d.kcal || 0, d.p || 0, window.KMeta ? KMeta.mins(r.totalTime) : 0]; })) +
-          '\nПравила: в будни быстрее, в выходные можно дольше; не ставь одно блюдо два дня подряд; чередуй белок; повтор за неделю — максимум дважды. Верни {"days":[{"day":"YYYY-MM-DD","id":"id рецепта","why":"до 40 знаков"}]}' },
-        { modelTier: 'default', cache: false, temperature: 0.5 });
-    }).then(function (v) {
-      var ids = {}; all.forEach(function (r) { ids[r.id] = r; });
-      var plan = (v && Array.isArray(v.days) ? v.days : []).filter(function (x) { return x && ids[x.id] && free.indexOf(x.day) >= 0; });
+    KukingAI.fn({ fn: WM, temperature: 0.4,
+      system: 'Ты шеф и нутрициолог. Составляешь реалистичную неделю готовки для одного человека: готовит редко и без запары, одно блюдо на 2 дня, ничего не пропадает.',
+      user: 'Свободные дни: ' + free.map(function (k) { return k + ' (' + DOW[new Date(k + 'T12:00').getDay()] + ')'; }).join(', ') + '.\n' +
+        'Готовок за неделю: ровно ' + sessions + '. Блюдо на 2 дня (porcii 2–3); между готовками день-два доедаем — дни готовки не подряд.\n' +
+        (t ? 'Цель: ' + t.goal + '; на приём ≈ ' + t.meal.kcal + ' ккал, белок ' + t.meal.p + ' г.\n' : '') + (window.KPrefs ? KPrefs.promptLine() + '\n' : '') +
+        'КЛАДОВКА: ' + (pan.length ? pan.join('; ') : 'пусто') + '.\nСначала то, что скоро испортится, потом остальное из кладовки.\n' +
+        (cand.length ? 'Из книги можно брать ТОЛЬКО эти проверенные рецепты: ' + JSON.stringify(cand) + '\n' : 'Из книги брать нечего — все блюда новые.\n') +
+        'Больше половины готовок — НОВЫЕ блюда (istochnik=novoe): простые, активная готовка до 30–40 минут, белок каждый раз другой, блюдо хорошо стоит 2 дня в холодильнике. Из книги — максимум одно. Названия — конкретная еда, без слов «вечер», «ужин», «ночь».' })
+    .then(function (v) {
+      var used = {}, plan = (v && Array.isArray(v.dni) ? v.dni : []).filter(function (x) {
+        if (!x || free.indexOf(x.den) < 0 || used[x.den]) return false;
+        if (x.istochnik === 'kniga') { if (!cand.some(function (c) { return c.id === x.id; })) return false; } else if (!x.nazvanie) return false;
+        used[x.den] = 1; return true; }).slice(0, sessions);
       if (!plan.length) throw { message: 'Нейросеть не собрала меню — попробуйте ещё раз' };
-      var kc = 0; plan.forEach(function (x) { kc += ((ids[x.id].dishes || [])[0] || {}).kcal || 0; });
-      m.querySelector('.ks-body').innerHTML = '<ul class="ct-list ct-wml">' + plan.map(function (x) { var r = ids[x.id], d = (r.dishes || [])[0] || {};
-        return '<li class="ct-it"><span class="ct-day">' + DOW[new Date(x.day).getDay()] + '<b>' + new Date(x.day).getDate() + '</b></span><span class="ct-t"><b>' + esc(r.title) + '</b><small>' + esc([d.kcal ? d.kcal + ' ккал · Б ' + d.p : '', x.why].filter(Boolean).join(' · ')) + '</small></span></li>'; }).join('') + '</ul>' +
-        (kc ? '<p class="small">В среднем ≈ ' + Math.round(kc / plan.length) + ' ккал за ужин' + (t ? ' при цели ' + t.meal.kcal : '') + '.</p>' : '') +
-        '<button type="button" class="nav-btn primary ct-cook" data-wm="ok">В план и корзину</button>';
-      m.addEventListener('click', function (e) { if (!e.target.closest('[data-wm]')) return; plan.forEach(function (x) { lib.planAdd(x.day, x.id); }); hap(12); m.classList.remove('on'); setTimeout(function () { m.remove(); open('cart'); }, 280); });
-    }).catch(function (e) { m.querySelector('.ks-body').innerHTML = '<p class="small">' + esc(e && e.message || (window.KukingAIMsg ? KukingAIMsg(e) : 'Нейросеть не ответила')) + '</p>'; });
+      body('<ul class="ct-list ct-wml">' + plan.map(function (x) {
+        var r = x.istochnik === 'kniga' ? byId[x.id] : null, up = r && rv[r.id].score === 9, dd = new Date(x.den + 'T12:00');
+        return '<li class="ct-it" data-wd="' + x.den + '"><span class="ct-day">' + DOW[dd.getDay()] + '<b>' + dd.getDate() + '</b></span><span class="ct-t"><b>' + esc(r ? r.title : x.nazvanie) + '</b><small>' +
+          esc([r ? (up ? 'из книги · доработаю до 10' : 'из книги · 10/10') : 'новое', (x.porcii || 2) + ' порц.', x.pochemu].filter(Boolean).join(' · ')) + '</small></span><span class="wm-st" aria-live="polite"></span></li>'; }).join('') + '</ul>' +
+        '<p class="small">Новые рецепты пишет нейросеть — по одному, 1–3 минуты каждый. Окно можно закрыть: всё сохранится в план.</p>' +
+        '<button type="button" class="nav-btn primary ct-cook" data-wm="ok">В план и корзину</button>');
+      var busy = false;
+      m.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-wm]'); if (!b) return;
+        if (b.getAttribute('data-wm') === 'cart') { m.classList.remove('on'); setTimeout(function () { m.remove(); open('cart'); }, 280); return; }
+        if (busy) return; busy = true; b.disabled = true; b.textContent = 'Пишу рецепты…'; hap(12);
+        var q = plan.slice(), fails = 0;
+        (function next() {
+          var x = q.shift();
+          if (!x) { busy = false; b.disabled = false; b.setAttribute('data-wm', 'cart'); b.textContent = fails ? 'Готово, ' + fails + ' не вышло — открыть корзину' : 'Готово — открыть корзину'; if (lib.refresh) lib.refresh(); return; }
+          var st = m.querySelector('[data-wd="' + x.den + '"] .wm-st'), r = x.istochnik === 'kniga' ? byId[x.id] : null;
+          if (r && rv[r.id].score >= 10) { lib.planAdd(x.den, r.id); if (st) st.textContent = '✓'; return next(); }
+          if (st) st.innerHTML = '<i class="wm-spin"></i>';
+          var g = Math.max(1, Math.min(2, Math.ceil((+x.porcii || 2) / 2)));
+          lib.quiet(r ? { base: r, why: 'доработать до 10/10' } : { title: x.nazvanie, why: x.pochemu, mode: 'self', guests: g,
+            note: 'Блюдо на ' + (x.porcii || 2) + ' порции — часть съедается на следующий день. ' + (pan.length ? 'Что есть дома, использовать в первую очередь: ' + pan.join('; ') + '.' : '') })
+            .then(function (nr) { lib.planAdd(x.den, nr.id); if (st) st.textContent = '✓'; next(); })
+            .catch(function () { fails++; if (st) st.textContent = '✕'; next(); });
+        })();
+      });
+    }).catch(function (e) { body('<p class="small">' + esc(e && e.message || (window.KukingAIMsg ? KukingAIMsg(e) : 'Нейросеть не ответила')) + '</p>'); });
   }
 
   function count() { try { return build().filter(function (i) { return !i.home && !i.got; }).length; } catch (e) { return 0; } }

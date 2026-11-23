@@ -160,6 +160,18 @@
     clear: function () { cfg = {}; try { localStorage.removeItem(KEY); } catch (e) {} },
     ready: ready,
     test: function () { return wrapAbort(complete('Ответь одним словом: готов', { maxTokens: 20 })); },
+    /* строгий JSON по схеме: на сервере «Жарко» — через вызов функции GigaChat (аргументы приходят готовым объектом);
+       у других провайдеров — обычный json-ответ со схемой в тексте */
+    fn: function (o) {
+      if (kind() !== 'server') return window.claude.use('sample').then(function (s) { return s.json({ system: o.system, user: o.user + '\nВерни JSON строго по схеме: ' + JSON.stringify(o.fn.parameters) }, { temperature: o.temperature || 0.2, cache: false }); });
+      return S().token().then(function (t) {
+        return fetch(base(), { method: 'POST', signal: o.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t, apikey: (window.KUKING_CONFIG || {}).supabaseAnonKey || '' },
+          body: JSON.stringify({ action: 'fn', messages: [{ role: 'system', content: o.system }, { role: 'user', content: o.user }], fn: o.fn, temperature: o.temperature || 0.2 }) });
+      }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+        if (r.status === 400 && /Пустой|схем/i.test(JSON.stringify(j))) throw err('old_server', 'Сервер без строгого режима');
+        if (!r.ok || !j.args) throw err(r.status === 401 ? 'not_granted' : 'provider_error', (j.error && j.error.message) || 'Нейросеть не ответила');
+        return j.args; }); });
+    },
     /* фото блюда: рисует GigaChat на сервере «Жарко» (функция ai, action image) */
     canImage: function () { return kind() === 'server' && ready(); },
     image: function (prompt, signal) {

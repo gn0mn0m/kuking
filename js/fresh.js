@@ -164,7 +164,7 @@
       if (s.type === 'cover') x.lede = txt(s.lede);
       if (s.type === 'shop' || s.type === 'tools') { x.title = str(s.title, s.type === 'shop' ? 'Список продуктов' : 'Поверхности и посуда'); x.note = txt(s.note); }
       if (s.type === 'step') {
-        x.title = str(s.title, 'Шаг'); x.time = str(s.time); x.dur = str(s.dur); x.joke = txt(s.joke);
+        x.title = str(s.title, 'Шаг'); x.time = str(s.time); x.dur = str(s.dur); x.joke = txt(s.joke); if (s.sync) x.sync = txt(s.sync);
         if (s.lanes && (arr(s.lanes.chef).length || arr(s.lanes.sous).length)) x.lanes = { chef: acts(s.lanes.chef), sous: acts(s.lanes.sous) };
         else x.both = acts(s.both);
         if (!(x.lanes || (x.both && x.both.length))) return;
@@ -199,7 +199,8 @@
   var COMPANY = {
     self: '- Режим «для себя»: baseGuests 2, готовит один — во всех шагах используй поле both (без lanes). Максимально просто и быстро: активная готовка до 30 мин, минимум посуды и нарезки, без докупки специй. Подача простая, но в правильном порядке.',
     romance: '- Режим «романтика»: baseGuests 3, готовит один — во всех шагах используй поле both (без lanes). Классика, максимальный вкус без излишеств, красивая подача, всё под конкретный алкоголь (назови его). Можно несколько блюд, но в соло реально успеть.',
-    friends: '- Режим «друзья»: baseGuests 5, двое у плиты: шеф (chef) и су-шеф (sous) — шаги через lanes. Шеф ленивый: соусы, блендер, финальные штрихи. Тяжёлая нарезка — су-шефу. Нагрузка на слайде равная, задачи не переплетать, никто не прыгает между чужими задачами. Порции большие, несколько блюд.'
+    friends: '- Режим «друзья»: baseGuests 5, двое у плиты: шеф (chef) и су-шеф (sous) — шаги через lanes. Шеф ленивый: соусы, блендер, финальные штрихи. Тяжёлая нарезка — су-шефу. Нагрузка на слайде равная, задачи не переплетать, никто не прыгает между чужими задачами. Порции большие, несколько блюд. ' +
+      'ПОРЯДОК ДЛЯ ДВОИХ — железный: 1) продукт нельзя использовать раньше, чем его подготовили (обжарили, нарезали, замариновали) в этом или прошлом шаге; 2) обжарку, запекание и соус делает тот, у кого продукт в руках, — не передавай сырое «на потом»; 3) если один ждёт другого — в его дорожке прямо: «Жди от су-шефа: …» и чем заняться пока; 4) последнее действие каждой дорожки — «Освободился раньше? …» с полезным делом на будущее (задел, мойка, посуда к подаче); 5) связку шага — в поле sync.'
   };
   COMPANY.self += ' Сначала вся нарезка, потом готовка.'; COMPANY.romance += ' Сначала вся нарезка, потом готовка.'; COMPANY.friends += ' Сначала вся нарезка, потом готовка.';
   /* что значит каждый уровень повара — так нейросеть понимает, насколько подробно писать */
@@ -242,7 +243,7 @@
     '    item — фактура: grain (зёрна риса/булгура), noodle, smooth (пюре/хумус), sauce, strip (полоски мяса), chunk (кусочки/кубики мяса), slice (ломтики), cube (кубики овощей), ring (кольца лука/перца), leaf (зелень, салат), tri (треугольники лаваша/чипсов), dot (кунжут, перец, гранат)',
     '    color — реальный цвет продукта после готовки в #rrggbb (жареная курица #b0652c, рис #f3ead6, огурец #7cb35e, томат #d9452b, лук красный маринованный #b9487c, сметана #f6f1e7, зелень #4d9a3a)',
     '    Слои — в порядке укладки (снизу вверх), 4–8 штук, каждый what — что и как лежит, как в шаге сборки. Сектора не перекрывают друг друга.',
-    '  step: {type:"step", short, title, time:"0:00 – 0:20", dur:"20 мин", both:[действия]} — для одного повара; для двоих вместо both — chef:[…] и sous:[…]; joke — прикол',
+    '  step: {type:"step", short, title, time:"0:00 – 0:20", dur:"20 мин", sync?, both:[действия]} — для одного повара; для двоих вместо both — lanes:{chef:[…], sous:[…]}; sync — одна фраза о связке шага: что чего ждёт и в каком порядке (обязательно у двоих, если один ждёт результат другого); joke — прикол',
     '  действие: {t, tool?, timer?:{min,label}, cut?, how?, clean?}. В t вставляй количества как {id} или {id:часть}, главное — **жирным**'
   ].join('\n');
   function people() {
@@ -504,7 +505,7 @@
           }).then(function (json) {
             var r = fix(json, pick[0], GEN && GEN.mode || pick[3]), pr = window.KRecipe ? window.KRecipe.problems(r) : [];
             if (pr.length && !note) { var er = new Error('рецепт не прошёл сверку: ' + pr.join('; ')); throw er; } // одна переписка с конкретными ошибками
-            return window.KRecipe ? window.KRecipe.fix(r) : r;
+            var rr = window.KRecipe ? window.KRecipe.fix(r) : r; return note ? rr : review(rr, sub).then(function (iss) { if (iss) throw new Error('шеф-ревизор нашёл ошибки: ' + iss); return rr; });
           });
         }
         /* не прошло проверку — одна попытка с подсказкой, что не так */
@@ -670,7 +671,7 @@
           .then(function (json) {
             var r = fix(json, old.title, GEN.mode), pr = window.KRecipe ? window.KRecipe.problems(r) : [];
             if (pr.length && !note) throw new Error('рецепт не прошёл сверку: ' + pr.join('; '));
-            return window.KRecipe ? window.KRecipe.fix(r) : r;
+            var rr = window.KRecipe ? window.KRecipe.fix(r) : r; return note ? rr : review(rr, sub).then(function (iss) { if (iss) throw new Error('шеф-ревизор нашёл ошибки: ' + iss); return rr; });
           });
       }
       return attempt().catch(function (e) { if (e && (e.code === 'cancelled' || e.code === 'not_granted' || e.code === 'bad_key' || e.code === 'network')) throw e; return attempt(e && e.message ? e.message : 'кривой JSON'); });
@@ -735,7 +736,7 @@
           .then(function (json) {
             var r = fix(json, base ? base.title : str(json && json.title, 'Рецепт'), GEN.mode), pr = window.KRecipe ? window.KRecipe.problems(r) : [];
             if (pr.length && !note) throw new Error('рецепт не прошёл сверку: ' + pr.join('; '));
-            return window.KRecipe ? window.KRecipe.fix(r) : r;
+            var rr = window.KRecipe ? window.KRecipe.fix(r) : r; return note ? rr : review(rr, sub).then(function (iss) { if (iss) throw new Error('шеф-ревизор нашёл ошибки: ' + iss); return rr; });
           });
       }
       return attempt().catch(function (e) { if (e && (e.code === 'cancelled' || e.code === 'not_granted' || e.code === 'bad_key' || e.code === 'network')) throw e; return attempt(e && e.message ? e.message : 'кривой JSON'); });
@@ -755,5 +756,66 @@
       btns.innerHTML = '<p class="small" style="flex-basis:100%;margin:0 0 6px">' + esc(aiMsg(e)) + '.</p><button type="button" class="nav-btn" data-u="close">Закрыть</button>';
     });
   }
-  window.Fresh = { upgrade: upgrade, rework: rework, custom: custom, manual: manual, spin: spin, merge: merge, toDoc: toDoc, forget: forget, themes: THEMES, stale: stale, refresh: refreshIdeas, setIdeas: setIdeas };
+  /* шеф-ревизор: отдельный проход GigaChat в строгом режиме (вызов функции). Ищет только реальные ошибки порядка и техники.
+     Нет строгого режима или нейросеть молчит — рецепт не держим. */
+  var REVIEW = { name: 'otchet_revizora', description: 'Отчёт шеф-ревизора о проверке рецепта: только реальные ошибки, из-за которых блюдо испортится или повара запутаются.',
+    parameters: { type: 'object', properties: {
+      ok: { type: 'boolean', description: 'true — ошибок, мешающих готовить, нет' },
+      oshibki: { type: 'array', description: 'Список ошибок (пусто, если ok)', items: { type: 'object', properties: {
+        shag: { type: 'string', description: 'Название шага' },
+        chto: { type: 'string', description: 'Что не так, конкретно' },
+        kak: { type: 'string', description: 'Как исправить' } }, required: ['shag', 'chto', 'kak'] } } },
+      required: ['ok', 'oshibki'] },
+    few_shot_examples: [{ request: 'Шаг «В духовку»: шеф кладёт мясо на противень, су-шеф в это же время обжаривает мясо.', params: { ok: false, oshibki: [{ shag: 'В духовку', chto: 'Шеф берёт мясо до обжарки — в духовку уйдёт сырое', kak: 'Обжаривает тот, кто кладёт в духовку; противень — только после обжарки, связку в sync' }] } }] };
+  function review(r, sub) {
+    if (!(window.KukingAI && KukingAI.fn)) return Promise.resolve(null);
+    if (sub) sub.textContent = 'Шеф-ревизор проверяет порядок и технику…';
+    var steps = (r.slides || []).filter(function (s) { return s.type === 'step'; }).map(function (s) {
+      var L = function (a) { return (a || []).map(function (x) { return '— ' + String(x.t || '').replace(/\{[^}]+\}/g, '').replace(/\*\*/g, ''); }).join('\n'); };
+      return '## ' + s.title + ' (' + s.time + ')' + (s.sync ? '\nСвязка: ' + s.sync : '') + (s.lanes ? '\nШЕФ:\n' + L(s.lanes.chef) + '\nСУ-ШЕФ:\n' + L(s.lanes.sous) : '\n' + L(s.both));
+    }).join('\n\n');
+    var ing = (r.ingredients || []).filter(function (i) { return i && i.name; }).map(function (i) { return i.name; }).join(', ');
+    return KukingAI.fn({ fn: REVIEW, temperature: 0.1,
+      system: 'Ты шеф-ревизор ресторана уровня Мишлен. Проверяешь технологическую карту перед сменой. Ищешь только реальные ошибки: продукт используется раньше, чем подготовлен; сырое идёт туда, где нужно обжаренное; один повар ждёт другого без указания; повар простаивает без дела; нарушена техника (не обсушил перед обжаркой, переполнил сковороду, нет отдыха мяса, соль/кислота не в тот момент); время шага нереально; продукт из списка нигде не используется. Мелочи стиля — не ошибки.',
+      user: 'Рецепт «' + r.title + '», ' + (r.mode === 'friends' ? 'готовят двое: шеф и су-шеф' : 'готовит один') + '.\nПродукты: ' + ing + '\n\n' + steps })
+      .then(function (a) { if (!a || a.ok || !Array.isArray(a.oshibki) || !a.oshibki.length) return null; return a.oshibki.slice(0, 6).map(function (x) { return '«' + x.shag + '»: ' + x.chto + ' → ' + x.kak; }).join('; '); })
+      .catch(function () { return null; });
+  }
+
+
+  /* тихая генерация без окна — для меню на неделю. o = {title, why, mode, guests, base (доработать старый), note (кладовка)} */
+  function quiet(ctx, o, onStage) {
+    ctxRef = ctx;
+    var base = o.base, mode = MODE_RU[o.mode] ? o.mode : base && MODE_RU[base.mode] ? base.mode : 'self', keep = GEN;
+    GEN = { mode: mode, guests: o.guests || (base && base.baseGuests) || DEF[mode] || 2 };
+    var theme, extra = o.note ? '\n' + o.note : '';
+    if (base) {
+      var brief = [base.tagline, (base.dishes || []).map(function (d) { return d.name; }).join(', ')].filter(Boolean).join(' — ');
+      theme = [base.title, brief, '', mode];
+      extra += '\n# ДОРАБОТКА СУЩЕСТВУЮЩЕГО РЕЦЕПТА\nБлюдо «' + base.title + '» оценено на 9 из 10. Сохрани блюдо, белок, гарнир и название, но доведи до 10: исправь то, на что жаловались в отзывах, усили вкус и технику.' +
+        '\nСТАРАЯ ВЕРСИЯ:\n' + JSON.stringify({ ingredients: base.ingredients, dishes: base.dishes, totalTime: base.totalTime }).slice(0, 6000);
+    } else theme = [o.title, o.why || '', '', mode];
+    var existing = (window.RECIPES || []).filter(function (x) { return !base || x.id !== base.id; }).map(function (x) { return '«' + x.title + '»'; });
+    var sub = { set textContent(v) { if (onStage) onStage(v); } };
+    return Promise.resolve(window.claude && window.claude.use ? window.claude.use('sample') : null).then(function (sample) {
+      if (!sample) throw { code: 'not_granted' };
+      function attempt(note) {
+        return sample.json(buildPrompt(theme, ctx.reviews(), existing, note, extra), { modelTier: 'complex', cache: false, temperature: 0.5,
+          onText: function (u) { sub.textContent = 'Пишу рецепт · ' + Math.round(u.text.length / 1000) + ' тыс. знаков'; } })
+          .then(function (json) {
+            var r = fix(json, base ? base.title : str(json && json.title, o.title || 'Рецепт'), GEN.mode), pr = window.KRecipe ? window.KRecipe.problems(r) : [];
+            if (pr.length && !note) throw new Error('рецепт не прошёл сверку: ' + pr.join('; '));
+            var rr = window.KRecipe ? window.KRecipe.fix(r) : r; return note ? rr : review(rr, sub).then(function (iss) { if (iss) throw new Error('шеф-ревизор нашёл ошибки: ' + iss); return rr; });
+          });
+      }
+      return attempt().catch(function (e) { if (e && (e.code === 'cancelled' || e.code === 'not_granted' || e.code === 'bad_key' || e.code === 'network')) throw e; return attempt(e && e.message ? e.message : 'кривой JSON'); });
+    }).then(function (r) {
+      if (base) {
+        r.id = base.id; r.title = base.title; r.added = base.added || r.added; r.upgraded = new Date().toISOString().slice(0, 10); if (!r.icon && base.icon) r.icon = base.icon;
+        cache[r.id] = r; saveCache(); window.RECIPES = (window.RECIPES || []).map(function (x) { return x.id === r.id ? r : x; }); ctx.added(r, true);
+      } else { r.id = 'ai-' + Date.now().toString(36); cache[r.id] = r; saveCache(); window.RECIPES.push(r); ctx.added(r, false); }
+      GEN = keep; return r;
+    }, function (e) { GEN = keep; throw e; });
+  }
+  window.Fresh = { upgrade: upgrade, rework: rework, quiet: quiet, custom: custom, manual: manual, spin: spin, merge: merge, toDoc: toDoc, forget: forget, themes: THEMES, stale: stale, refresh: refreshIdeas, setIdeas: setIdeas };
 })();

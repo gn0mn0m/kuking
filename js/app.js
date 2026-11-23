@@ -748,7 +748,7 @@
   function buildStep(s, el) {
     var friends = modeOf(state.guests) === 'friends', k = 's' + state.idx;
     el.innerHTML = '<div class="step-meta"><span class="pill pill-time">' + esc(s.time) + '</span><span class="pill">' + esc(s.dur) + '</span></div>' +
-      '<h2 class="step-title">' + E(k + '.title', s.title) + '</h2>' + stepNeeds(s);
+      '<h2 class="step-title">' + E(k + '.title', s.title) + '</h2>' + stepNeeds(s) + (s.sync ? '<p class="step-sync"><b>Связка</b> ' + E(k + '.sync', s.sync) + '</p>' : '');
     var lanes = h('div', 'lanes');
     if (s.both && friends && !state.solo && !hasLanes()) { // рецепт без разделения, а у плиты двое — делим сами
       var parts = splitBoth(visibleActs(keyed(s.both, k + '.both')));
@@ -765,11 +765,14 @@
       var show = ['chef', 'sous'].filter(function (r) { return state.lanes[r]; });
       if (show.length === 1) lanes.classList.add('one');
       show.forEach(function (r) { lanes.appendChild(laneEl(r, visibleActs(keyed(s.lanes[r], k + '.' + r)), true)); });
+      /* скрытая дорожка напарника не пропадает: коротко видно, что он сейчас делает — чтобы никто не забегал вперёд */
       ['chef', 'sous'].filter(function (r) { return !state.lanes[r]; }).forEach(function (r) {
-        var pill = h('button', 'lane-restore', 'Показать: ' + esc(roleName(r)));
-        pill.type = 'button';
-        pill.addEventListener('click', function () { toggleLane(r, true); });
-        el.appendChild(pill);
+        var acts = visibleActs(keyed(s.lanes[r] || [], k + '.' + r)).filter(function (a) { return !a.divider; });
+        var box = h('div', 'mate');
+        box.innerHTML = '<div class="mate-h"><span>Сейчас у напарника — ' + esc(roleName(r).toLowerCase()) + '</span><button type="button" class="mate-show">Показать</button></div>' +
+          '<ol class="mate-l">' + acts.map(function (a) { var dk = M.id + ':' + a._k; return '<li' + (doneActs[dk] ? ' class="done"' : '') + '>' + E(a._k, a.t) + '</li>'; }).join('') + '</ol>';
+        box.querySelector('.mate-show').addEventListener('click', function () { toggleLane(r, true); });
+        el.appendChild(box);
       });
     }
     el.appendChild(lanes);

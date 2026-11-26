@@ -21,10 +21,13 @@ cat <<'TXT'
 Где взять строку подключения: supabase.com → проект → кнопка «Connect» (вверху) → вкладка
 «Connection String» → тип «Session pooler» (работает по IPv4). Строка выглядит так:
   postgresql://postgres.akwijavguhthhxpdjgfq:[YOUR-PASSWORD]@aws-0-....pooler.supabase.com:5432/postgres
-Вставь её как есть — [YOUR-PASSWORD] скрипт уберёт сам, пароль спросит отдельно.
+Вставь её как есть — [YOUR-PASSWORD] (или [YOUR-DATABASE-PASSWORD]) скрипт уберёт сам, пароль спросит отдельно.
 TXT
 read -rp "Строка подключения: " SRC
-SRC=$(printf '%s' "$SRC" | sed -E 's#:\[YOUR-PASSWORD\]@#@#; s#^postgres://#postgresql://#' | tr -d '[:space:]')
+# любую заглушку пароля в квадратных скобках убираем: в панели Supabase встречаются разные варианты
+SRC=$(printf '%s' "$SRC" | sed -E 's#:\[[A-Za-z_-]*\]@#@#; s#^postgres://#postgresql://#' | tr -d '[:space:]')
+case "$SRC" in *pooler.supabase.com*) ;; *db.*.supabase.co*)
+  echo "Это прямая строка (db.….supabase.co) — она только по IPv6 и с сервера не откроется. Нужна «Session pooler» (…pooler.supabase.com)."; exit 1;; esac
 case "$SRC" in postgresql://*@*) ;; *) echo "Не похоже на строку подключения"; exit 1;; esac
 read -rsp "Пароль базы облачного Supabase (не отображается): " PW; echo
 PW=${PW//\\/\\\\}; PW=${PW//:/\\:}
@@ -60,6 +63,11 @@ delete from auth.identities;
 delete from auth.users;
 \copy auth.users ($USERS_COLS) from '/migrate/users.csv' with (format csv, header)
 \copy auth.identities ($IDENT_COLS) from '/migrate/identities.csv' with (format csv, header)
+-- служебные строки токенов не переносим, а GoTrue не умеет читать в них NULL («Database error querying schema»)
+update auth.users set confirmation_token = coalesce(confirmation_token, ''), recovery_token = coalesce(recovery_token, ''),
+  email_change_token_new = coalesce(email_change_token_new, ''), email_change_token_current = coalesce(email_change_token_current, ''),
+  email_change = coalesce(email_change, ''), phone_change = coalesce(phone_change, ''),
+  phone_change_token = coalesce(phone_change_token, ''), reauthentication_token = coalesce(reauthentication_token, '');
 commit;
 SQL
 docker compose exec -T -u root db pg_restore -h localhost -U supabase_admin -d postgres \

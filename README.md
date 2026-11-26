@@ -1,26 +1,11 @@
-# Кукинг
+# Жарко 5
 
-Книга рецептов-слайдшоу для iPhone: продукты с галочками, посуда, шаги на шефа и су-шефа, таймеры, подача и салют. Ставится на экран «Домой», работает без интернета.
+Книга рецептов, план недели, покупки с кладовкой и готовка по шагам (один или двое поваров).
+Статичное PWA для GitHub Pages, данные — Supabase (таблицы из `supabase/setup.sql` и `supabase/setup-4.sql`).
 
-## Установка на iPhone
-1. Открыть сайт в Safari.
-2. «Поделиться» → «На экран „Домой“» → «Добавить».
-
-## Что внутри
-- `index.html` — оболочка и стили; `js/recipes/*.js` — рецепты (данные).
-- `js/store.js` — вход и общие оценки через Supabase (без библиотек).
-- `js/ai.js` — нейросеть по своему ключу: OpenAI-совместимые, Gemini, Anthropic. Ключ хранится только в телефоне.
-- `sw.js` — офлайн и обновления. После любых правок: `python3 tools/build_sw.py`.
-- `supabase/setup.sql` — таблица и права для базы, запускается один раз.
-
-## Облако (Supabase), один раз
-1. supabase.com → New project `kuking`.
-2. SQL Editor → вставить `supabase/setup.sql` → Run.
-3. Authentication → Sign In / Providers → Email: выключить «Confirm email» (иначе друзьям придёт письмо).
-4. Project Settings → API: Project URL и anon public key → в `js/config.js`.
-   `service_role` и пароль базы никуда не вставлять и никому не слать.
-
-## Нейросеть для всех (GigaChat через сервер)
-1. developers.sber.ru → GigaChat API → физлицо → проект → «Authorization key».
-2. Supabase → Edge Functions → Secrets → `GIGACHAT_KEY` = этот ключ.
-3. Edge Functions → Deploy new function → Via Editor → имя `ai` → вставить `supabase/functions/ai/index.ts` → Deploy (Verify JWT оставить включённым).
+- `index.html`, `css/app.css` — оболочка и оформление (темы и акценты на CSS-переменных).
+- `js/core.js` — помощники, шторки, тосты, тема. `js/data.js` — рецепты, план, покупки, кладовка, напоминания, импорт.
+- `js/ui/*` — экраны. `js/gen.js` — нейросеть (строгие вызовы функций GigaChat + проверка кодом + шеф-ревизор).
+- `js/recipes/*.js` — встроенные рецепты.
+- План по ссылке: `…/#import=<base64url JSON>` с полями `days`, `guests`, `pantry`, `extra`, `note`.
+- После правок: `python3 tools/build_sw.py` — новая версия воркера, телефоны обновятся сами.

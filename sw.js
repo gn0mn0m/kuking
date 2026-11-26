@@ -1,7 +1,8 @@
 /* Service worker «Жарко»: офлайн и обновления. Версия кэша = хэш файлов сборки. */
-var CACHE = 'kuking-c7c01e5199';
+var CACHE = 'kuking-509d09e011';
 var ASSETS = [
 "./",
+"css/app.css",
 "icons/favicon-16.png",
 "icons/favicon-32.png",
 "icons/icon-180.png",
@@ -10,24 +11,14 @@ var ASSETS = [
 "icons/icon.svg",
 "icons/maskable-512.png",
 "index.html",
-"js/ai.js",
 "js/app.js",
-"js/ask.js",
-"js/cart.js",
-"js/catalog.js",
-"js/confetti.js",
-"js/config.js",
-"js/cuts.js",
-"js/dishpic.js",
-"js/fresh.js",
-"js/fun.js",
-"js/haptic.js",
-"js/hub.js",
-"js/library.js",
-"js/meta.js",
-"js/plate.js",
-"js/progress-bar.js",
-"js/quiz.js",
+"js/core.js",
+"js/data.js",
+"js/gen.js",
+"js/img.js",
+"js/lib/ai.js",
+"js/lib/config.js",
+"js/lib/store.js",
 "js/recipes/buckwheat-merchant.js",
 "js/recipes/chashushuli-pasta.js",
 "js/recipes/chicken-potato-tray.js",
@@ -38,12 +29,14 @@ var ASSETS = [
 "js/recipes/taco-night.js",
 "js/recipes/teriyaki-chicken.js",
 "js/recipes/tikka-masala.js",
-"js/ring-timer.js",
-"js/settings.js",
-"js/slide-transition.js",
 "js/social.js",
-"js/store.js",
-"js/tech.js",
+"js/ui/book.js",
+"js/ui/cook.js",
+"js/ui/friends.js",
+"js/ui/plan.js",
+"js/ui/recipe.js",
+"js/ui/settings.js",
+"js/ui/today.js",
 "manifest.webmanifest"
 ];
 /* ставим свежие файлы мимо HTTP-кэша (GitHub держит старьё 10 минут) и сразу становимся главными — без «закрой и открой» */
@@ -65,7 +58,16 @@ self.addEventListener('fetch', function (e) {
     return;
   }
   if (url.origin !== location.origin) return; // облако и нейросеть — всегда в сеть, мимо кэша
-  // своё: сначала кэш (мгновенный старт и офлайн), обновления приходят новой версией воркера
+  // страница — сначала сеть (свежая версия сразу), нет сети за 2,5 с — из кэша
+  if (req.mode === 'navigate') {
+    e.respondWith(new Promise(function (ok) {
+      var done = false, t = setTimeout(function () { caches.match('./').then(function (h) { if (!done && h) { done = true; ok(h); } }); }, 2500);
+      fetch(req, { cache: 'no-store' }).then(function (r) { if (done) return; done = true; clearTimeout(t); if (r.ok) { var cp = r.clone(); caches.open(CACHE).then(function (c) { c.put('./', cp); }); } ok(r); })
+        .catch(function () { caches.match('./').then(function (h) { if (!done) { done = true; ok(h || Response.error()); } }); });
+    }));
+    return;
+  }
+  // остальное своё: из кэша этой версии (мгновенно и офлайн), новая версия воркера приносит новые файлы
   e.respondWith(caches.match(req, { ignoreSearch: true }).then(function (hit) {
     return hit || fetch(req).then(function (r) {
       if (r.ok) { var cp = r.clone(); caches.open(CACHE).then(function (c) { c.put(req, cp); }); }
@@ -74,7 +76,7 @@ self.addEventListener('fetch', function (e) {
   }));
 });
 
-/* пуши: дни рождения друзей и напоминания */
+/* пуши: напоминания плана, сообщения, дни рождения */
 self.addEventListener('push', function (e) {
   var d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data && e.data.text() }; }
   e.waitUntil(self.registration.showNotification(d.title || 'Жарко', {

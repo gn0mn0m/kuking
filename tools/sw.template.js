@@ -20,7 +20,16 @@ self.addEventListener('fetch', function (e) {
     return;
   }
   if (url.origin !== location.origin) return; // облако и нейросеть — всегда в сеть, мимо кэша
-  // своё: сначала кэш (мгновенный старт и офлайн), обновления приходят новой версией воркера
+  // страница — сначала сеть (свежая версия сразу), нет сети за 2,5 с — из кэша
+  if (req.mode === 'navigate') {
+    e.respondWith(new Promise(function (ok) {
+      var done = false, t = setTimeout(function () { caches.match('./').then(function (h) { if (!done && h) { done = true; ok(h); } }); }, 2500);
+      fetch(req, { cache: 'no-store' }).then(function (r) { if (done) return; done = true; clearTimeout(t); if (r.ok) { var cp = r.clone(); caches.open(CACHE).then(function (c) { c.put('./', cp); }); } ok(r); })
+        .catch(function () { caches.match('./').then(function (h) { if (!done) { done = true; ok(h || Response.error()); } }); });
+    }));
+    return;
+  }
+  // остальное своё: из кэша этой версии (мгновенно и офлайн), новая версия воркера приносит новые файлы
   e.respondWith(caches.match(req, { ignoreSearch: true }).then(function (hit) {
     return hit || fetch(req).then(function (r) {
       if (r.ok) { var cp = r.clone(); caches.open(CACHE).then(function (c) { c.put(req, cp); }); }
@@ -29,7 +38,7 @@ self.addEventListener('fetch', function (e) {
   }));
 });
 
-/* пуши: дни рождения друзей и напоминания */
+/* пуши: напоминания плана, сообщения, дни рождения */
 self.addEventListener('push', function (e) {
   var d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data && e.data.text() }; }
   e.waitUntil(self.registration.showNotification(d.title || 'Жарко', {

@@ -1,753 +1,210 @@
-/* Social — друзья в стиле мессенджера: ник, поиск, заявки, ссылка-приглашение, профиль друга
-   с его оценками (и кнопкой поставить свою), ответы под оценками, шеф (админ) с короной.
-   Данные — Supabase: profiles, friends, replies, docs(reviews); права режет база (setup.sql). */
+/* Друзья: профили, заявки, лента, отзывы и комментарии к рецептам, фото, личные сообщения, пуши.
+   Таблицы Supabase прежние: profiles, friends, profile_info, docs(reviews), photos, review_likes, qa, messages, push_subs. */
 (function () {
   'use strict';
-  var S = window.KukingStore;
-  var API = { enabled: false, badge: function () { return 0; }, admin: function () { return null; }, me: function () { return null; },
-    thread: function () { return ''; }, bindThreads: function () {}, open: function () {}, onChange: function () {} };
-  window.KukingSocial = API;
-  if (!S || !S.enabled) return;
-
-  var CROWN = '<svg class="soc-crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 11H5z"/></svg>';
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  var Z = window.Z, D = Z.data, E = Z.esc;
+  function S() { return window.KukingStore; }
+  function on() { return !!(S() && S().enabled && S().user()); }
+  function uid() { return on() ? S().user().id : null; }
   function q(s) { return encodeURIComponent(s); }
-  function scCls(n) { return n >= 9 ? 'sc-top' : n >= 7 ? 'sc-good' : n >= 5 ? 'sc-mid' : n >= 3 ? 'sc-low' : 'sc-bad'; }
-  function titleOf(id, fallback) { var r = (window.RECIPES || []).filter(function (x) { return x.id === id; })[0]; return r ? r.title : (fallback || id); }
-  function hasRecipe(id) { return !!(window.KukingLib && window.KukingLib.has(id)); }
-  function ago(iso) {
-    var m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-    if (m < 1) return 'только что'; if (m < 60) return m + ' мин'; var h = Math.round(m / 60); if (h < 24) return h + ' ч';
-    var d = Math.round(h / 24); return d < 30 ? d + ' дн' : new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-  }
-  function avatar(p, big) {
-    var ai = p && info[p.id] && info[p.id].avatar;
-    if (ai) return '<span class="soc-av' + (big ? ' big' : '') + (p.is_admin ? ' chef' : '') + '" aria-hidden="true"><img src="' + esc(ai) + '" alt="" loading="lazy">' + (p.is_admin ? CROWN : '') + '</span>';
-    var n = (p && p.nick || '?').trim(), h = 0; for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 3;
-    return '<span class="soc-av' + (big ? ' big' : '') + ' av' + h + (p && p.is_admin ? ' chef' : '') + '" aria-hidden="true">' + esc(n.charAt(0).toUpperCase()) + (p && p.is_admin ? CROWN : '') + '</span>';
-  }
-  var MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-  function bdayText(b) { if (!b) return ''; var x = b.split('-'); return +x[2] + ' ' + MONTHS[+x[1] - 1]; }
-  function bdayToday(b) {
-    if (!b) return false; var x = b.split('-'), n = new Date(), m = n.getMonth() + 1, d = n.getDate();
-    var leap = new Date(n.getFullYear(), 1, 29).getDate() === 29;
-    return +x[1] === m && (+x[2] === d || (!leap && m === 2 && d === 28 && +x[2] === 29));
-  }
-  function nickHTML(p) { return '<span class="soc-nm"><b class="soc-nick">' + esc(p ? p.nick : 'кто-то') + '</b>' + (p ? (p.is_admin ? '<span class="soc-chef adm">' + CROWN + 'админ</span>' : '<span class="soc-chef">шеф</span>') : '') + '</span>'; }
+  function req(m, p, b, pr) { return S().req(m, p, b, pr); }
 
-  /* ---------- состояние ---------- */
-  var me = null, admin = null, people = {}, info = {}, links = [], replies = [], reviewsBy = {}, loaded = false, subs = [];
-  /* копия данных в телефоне: без сети аккаунт, друзья и оценки видны сразу */
-  var CKEY = 'kuking:socCache';
-  (function () { try {
-    var c = JSON.parse(localStorage.getItem(CKEY) || 'null'), u = S.user();
-    if (c && u && c.uid === u.id) { me = c.me; admin = c.admin; people = c.people || {}; info = c.info || {}; links = c.links || []; replies = c.replies || []; reviewsBy = c.reviewsBy || {}; loaded = true; }
-  } catch (e) {} })();
-  function saveCache() { try { localStorage.setItem(CKEY, JSON.stringify({ uid: uid(), me: me, admin: admin, people: people, info: info, links: links, replies: replies, reviewsBy: reviewsBy, at: Date.now() })); } catch (e) { try { localStorage.removeItem(CKEY); } catch (x) {} } }
-  function uid() { return S.user() && S.user().id; }
-  function emit() { subs.forEach(function (f) { try { f(); } catch (e) {} }); }
-  API.onChange = function (f) { subs.push(f); };
-  API.me = function () { return me; };
-  API.admin = function () { return admin; };
-  API.isAdmin = function () { return !!(me && me.is_admin); };
-  API.person = function (id) { return people[id]; };
-  API.info = function (id) { return info[id]; };
-  API.badge = function () { return links.filter(function (l) { return l.status === 'pending' && l.b === uid(); }).length; };
-  API.reviewsOf = function (userId) { return reviewsBy[userId] || {}; };
-  API.circle = function () { var ids = friendIds(); if (admin && admin.id !== uid() && ids.indexOf(admin.id) < 0) ids.push(admin.id); return ids; };
-  API.avatarHTML = function (p) { return avatar(p); };
-  API.ago = function (iso) { return ago(iso); };
-  API.rerender = function () { if (!ov.hidden) render(); };
-  /* все оценки и комментарии друзей — для нейросети: кто, сколько, что сказал, что ответили */
-  API.feedback = function () {
-    var out = [];
-    Object.keys(reviewsBy).forEach(function (u) { var rv = reviewsBy[u] || {}, p = people[u] || {}, nm = (info[u] && info[u].name) || p.nick || 'кто-то';
-      Object.keys(rv).forEach(function (rid) { var v = rv[rid] || {}; if (!v.score && !v.comment) return;
-        out.push({ rid: rid, who: nm + (u === uid() ? ' (я)' : ''), score: v.score, comment: v.comment || '', replies: replies.filter(function (x) { return x.recipe_id === rid && x.review_owner === u; }).map(function (x) { var a = people[x.author] || {}; return ((info[x.author] && info[x.author].name) || a.nick || '?') + ': ' + x.body; }) }); }); });
-    return out;
-  };
-  /* кто ест: имя, любимое и что не ест — для нейросети */
-  API.eaters = function () {
-    var ids = [uid()].concat(friendIds()); if (admin && ids.indexOf(admin.id) < 0) ids.push(admin.id);
-    return ids.map(function (id) { var i = info[id] || {}, p = people[id] || {}; if (!i.likes && !i.avoid && !i.allergy) return null;
-      return { who: (i.name || p.nick || '') + (id === uid() ? ' (это я)' : ''), likes: i.likes || undefined, avoid: i.avoid || undefined, allergy: i.allergy || undefined }; }).filter(Boolean);
-  };
+  var st = Z.ls.get('kuking:soc5', null) || { me: null, people: {}, links: [], reviews: {}, info: {} };
+  var feed = [], msgs = [], recipeData = {}, loaded = false;
+  function cache() { Z.ls.set('kuking:soc5', { me: st.me, people: st.people, links: st.links, reviews: st.reviews, info: st.info }); }
+  var COL = ['#6E1F2E', '#3F6B3A', '#1D1A17', '#A3324B', '#8A5A32', '#46753D'];
+  function color(id) { var h = 0; String(id).split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) | 0; }); return COL[Math.abs(h) % COL.length]; }
+  function nick(id) { if (id === uid()) return 'Ты'; var p = st.people[id]; var inf = st.info[id]; return (inf && inf.name) || (p && p.nick) || 'Кто-то'; }
+  function av(id, cls) { var n = nick(id === uid() ? '' : id); var inf = st.info[id]; if (inf && inf.avatar) return '<img class="av ' + (cls || '') + '" src="' + inf.avatar + '" alt="" style="object-fit:cover">'; return '<span class="av ' + (cls || '') + '" style="background:' + color(id) + '" aria-hidden="true">' + E((id === uid() ? (st.me && st.me.nick || 'Я') : n)[0].toUpperCase()) + '</span>'; }
+  function friends() { var m = uid(); return st.links.filter(function (l) { return l.status === 'accepted'; }).map(function (l) { return l.a === m ? l.b : l.a; }); }
+  function incoming() { var m = uid(); return st.links.filter(function (l) { return l.status !== 'accepted' && l.b === m; }).map(function (l) { return l.a; }); }
+  function outgoing() { var m = uid(); return st.links.filter(function (l) { return l.status !== 'accepted' && l.a === m; }).map(function (l) { return l.b; }); }
 
-  function friendIds() { var m = uid(); return links.filter(function (l) { return l.status === 'accepted'; }).map(function (l) { return l.a === m ? l.b : l.a; }); }
-  function relation(id) {
-    var m = uid(), l = links.filter(function (x) { return (x.a === m && x.b === id) || (x.b === m && x.a === id); })[0];
-    if (!l) return 'none'; if (l.status === 'accepted') return 'friend'; return l.a === m ? 'sent' : 'incoming';
-  }
-
-  function loadProfiles(ids) {
-    ids = ids.filter(function (id) { return id && !people[id]; });
+  function loadPeople(ids) {
+    ids = ids.filter(function (id, i) { return id && ids.indexOf(id) === i && !st.people[id]; });
     if (!ids.length) return Promise.resolve();
-    return S.req('GET', 'profiles?select=id,nick,is_admin&id=in.(' + ids.map(q).join(',') + ')').then(function (rows) { (rows || []).forEach(function (p) { people[p.id] = p; }); });
+    return req('GET', 'profiles?select=id,nick,is_admin&id=in.(' + ids.map(q).join(',') + ')').then(function (rows) { (rows || []).forEach(function (p) { st.people[p.id] = p; }); });
   }
-  function refresh() {
-    if (!S.user()) return Promise.resolve();
+  function load() {
+    if (!on()) return Promise.resolve();
     var m = uid();
     return Promise.all([
-      S.req('GET', 'profiles?select=id,nick,is_admin&id=eq.' + q(m)),
-      S.req('GET', 'profiles?select=id,nick,is_admin&is_admin=eq.true&limit=1'),
-      S.req('GET', 'friends?select=a,b,status,created_at&a=eq.' + q(m)),
-      S.req('GET', 'friends?select=a,b,status,created_at&b=eq.' + q(m)),
-      S.req('GET', 'replies?select=id,recipe_id,review_owner,author,body,created_at&order=created_at.asc&limit=1000'),
-      S.allReviews(),
-      S.req('GET', 'profile_info?select=*').catch(function () { return []; })
+      req('GET', 'profiles?select=id,nick,is_admin&id=eq.' + q(m)),
+      Promise.all([req('GET', 'friends?select=a,b,status,created_at&a=eq.' + q(m)), req('GET', 'friends?select=a,b,status,created_at&b=eq.' + q(m))]).then(function (x) { return (x[0] || []).concat(x[1] || []); }),
+      S().allReviews(),
+      req('GET', 'profile_info?select=id,name,bday,likes,avoid,allergy,avatar').catch(function () { return []; }),
+      req('GET', 'photos?select=id,recipe_id,recipe_title,author,thumb,caption,created_at&order=created_at.desc&limit=40').catch(function () { return []; }),
+      req('GET', 'qa?select=id,recipe_id,recipe_title,parent,author,body,by_ai,kind,created_at&parent=is.null&order=created_at.desc&limit=40').catch(function () { return []; }),
+      req('GET', 'messages?select=id,sender,receiver,body,recipe_title,created_at,read_at&order=created_at.desc&limit=400').catch(function () { return []; })
     ]).then(function (r) {
-      info = {}; (r[6] || []).forEach(function (x) { info[x.id] = x; });
-      var mySk = info[uid()] && info[uid()].skill; if (mySk) try { localStorage.setItem('kuking:skill', String(mySk)); } catch (e) {}
-      me = r[0] && r[0][0] || null; admin = r[1] && r[1][0] || null;
-      if (me) people[me.id] = me; if (admin) people[admin.id] = admin;
-      links = (r[2] || []).concat(r[3] || []); replies = r[4] || [];
-      reviewsBy = {};
-      (r[5] || []).forEach(function (row) { if (row.user_id) (reviewsBy[row.user_id] = reviewsBy[row.user_id] || {})[row.id] = row.data || {}; });
-      var ids = []; links.forEach(function (l) { ids.push(l.a, l.b); }); replies.forEach(function (x) { ids.push(x.author, x.review_owner); });
-      return loadProfiles(ids);
-    }).then(function () {
-      loaded = true;
-      if (me && me.is_admin) S.claimLegacy();
-      var chef = !!(me && me.is_admin), was = false; try { was = localStorage.getItem('kuking:chef') === '1'; } catch (e) {}
-      saveCache();
-      if (chef !== was) { try { if (chef) localStorage.setItem('kuking:chef', '1'); else localStorage.removeItem('kuking:chef'); } catch (e) {} location.reload(); return; }
-      emit(); if (!ov.hidden && !busyForm()) render();
+      st.me = r[0] && r[0][0] || null; if (st.me) st.people[st.me.id] = st.me;
+      st.links = r[1] || [];
+      st.reviews = {}; (r[2] || []).forEach(function (row) { if (row.user_id && row.data && row.data.score) (st.reviews[row.user_id] = st.reviews[row.user_id] || {})[row.id] = row.data; });
+      st.info = {}; (r[3] || []).forEach(function (x) { st.info[x.id] = x; });
+      var ph = r[4] || [], qa = r[5] || []; msgs = r[6] || [];
+      var ids = []; st.links.forEach(function (l) { ids.push(l.a, l.b); }); Object.keys(st.reviews).forEach(function (id) { ids.push(id); }); ph.forEach(function (x) { ids.push(x.author); }); qa.forEach(function (x) { ids.push(x.author); }); msgs.forEach(function (x) { ids.push(x.sender, x.receiver); });
+      return loadPeople(ids).then(function () {
+        feed = [];
+        Object.keys(st.reviews).forEach(function (u) { if (u === m) return; Object.keys(st.reviews[u]).forEach(function (rid) { var v = st.reviews[u][rid]; feed.push({ kind: 'rev', who: u, rid: rid, title: v.title, score: v.score, text: v.comment, at: v.updatedAt || v.at }); }); });
+        ph.forEach(function (x) { feed.push({ kind: 'photo', who: x.author, rid: x.recipe_id, title: x.recipe_title, thumb: x.thumb, text: x.caption, at: x.created_at, id: x.id }); });
+        qa.forEach(function (x) { if (x.by_ai) return; feed.push({ kind: x.kind === 'c' ? 'com' : 'ask', who: x.author, rid: x.recipe_id, title: x.recipe_title, text: x.body, at: x.created_at, id: x.id }); });
+        feed.sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
+        loaded = true; cache(); Z.emit('social'); if (Z.badges) Z.badges();
+      });
     }).catch(function () {});
   }
-  API.refresh = refresh;
+  setInterval(function () { if (!document.hidden && on()) load(); }, 60000);
+  Z.on('social', function () { var v = document.getElementById('view'); if (v && /friends/.test(location.hash) && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.value)) Z.render(true); });
 
-  /* ---------- оверлей ---------- */
-  var ov = document.createElement('div');
-  ov.className = 'soc-ov'; ov.hidden = true;
-  ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Друзья');
-  document.body.appendChild(ov);
-  var view = 'list', viewing = null, found = null, searchQ = '', msg = '', busy = false, nickMsg = '', timer = null;
-
-  /* вторая страница (профиль друга или анкета) живёт, пока экран уезжает назад — без мигания */
-  var page2 = null, lastHTML = '', anketaFrom = 'friends', openFrom = 'chats';
-  function render() {
-    var keep = document.activeElement && ov.contains(document.activeElement) && document.activeElement.id;
-    var pages = ov.querySelectorAll('.soc-page'), deep = view === 'profile' || view === 'nick';
-    var pos = [pages[0] ? pages[0].scrollTop : 0, pages[1] ? pages[1].scrollTop : 0];
-    if (view === 'profile') page2 = 'profile'; if (view === 'nick') page2 = 'nick';
-    var html = '<section class="soc-page' + (!deep ? ' cur' : '') + '">' + listHTML() + '</section>' +
-      '<section class="soc-page' + (deep ? ' cur' : '') + '">' + (page2 === 'nick' ? anketaPage() : viewing ? profileHTML(viewing) : '') + '</section>';
-    var wrap = ov.querySelector('.soc-wrap');
-    if (wrap && html === lastHTML) { wrap.classList.toggle('deep', deep); return; } // ничего не поменялось — не трогаем экран
-    lastHTML = html;
-    var wasDeep = wrap ? wrap.classList.contains('deep') : deep;
-    ov.innerHTML = '<div class="soc-wrap' + ((ov.hidden ? deep : wasDeep) ? ' deep' : '') + '">' + html + '</div>';
-    wrap = ov.querySelector('.soc-wrap');
-    if (!ov.hidden && wasDeep !== deep) { void wrap.offsetWidth; wrap.classList.toggle('deep', deep); }
-    bind();
-    if (view === 'nick' && anqSnap == null && ov.querySelector('#socNick')) anqSnap = anqState();
-    ov.querySelectorAll('.soc-page').forEach(function (pg) { pg.addEventListener('scroll', function () { if (pg.classList.contains('cur')) ov.classList.toggle('scrolled', pg.scrollTop > 40); }, { passive: true }); });
-    pages = ov.querySelectorAll('.soc-page'); pages[0].scrollTop = pos[0]; pages[1].scrollTop = wasDeep === deep ? pos[1] : 0;
-    if (keep) { var el = ov.querySelector('#' + keep); if (el) { el.focus(); if (el.setSelectionRange && el.value) el.setSelectionRange(el.value.length, el.value.length); } }
-  }
-  function tabMode() { return openFrom === 'chats'; }
-  function head(title, back) {
-    var t = !me ? 'Анкета' : tabMode() ? 'Чаты' : 'Друзья';
-    if (back) return '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' + (tabMode() ? 'Чаты' : 'Друзья') + '</button><span class="tg-head-t">' + esc(title) + '</span></header>';
-    if (!tabMode()) return '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Профиль</button><span class="tg-head-t">' + t + '</span></header>';
-    return '<header class="tg-head soc-head2"><span class="tg-mini" aria-hidden="true">' + t + '</span><span class="tg-nav-r"></span></header><h2 class="lib-title tg-big">' + t + '</h2>';
-  }
-
-  function listHTML() {
-    if (!S.user()) return head() + '<div class="soc-empty"><p>Чтобы добавлять друзей, войдите в аккаунт.</p><button type="button" class="nav-btn primary" data-a="login">Войти</button></div>';
-    if (!loaded) return head() + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-btn"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
-    if (!me) return head() + nickForm(true);
-    if (view === 'push') return head() + pushCard(true);
-    return head() + (tabMode() ? chatsBody() : friendsBody()) + (msg ? '<p class="set-msg soc-pad">' + esc(msg) + '</p>' : '');
-  }
-  function byActivity() {
-    var m = uid();
-    return friendIds().map(function (id) { return people[id] || { id: id, nick: '…' }; }).filter(function (p) { return !admin || p.id !== admin.id; })
-      .sort(function (a, b) { var x = lastAt(b.id), y = lastAt(a.id); return x !== y ? (x > y ? 1 : -1) : a.nick.localeCompare(b.nick, 'ru'); });
-  }
-  /* Чаты: только друзья и строка поиска по ним — без заявок и приглашений, это в Профиль → Друзья */
-  var chatQ = '';
-  function chatsBody() {
-    var m = uid(), fr = byActivity();
-    if (window.KHub && KHub.ready() && KHub.mode() === 'feed') return KHub.chatsTop() + KHub.feedHTML();
-    var h = '<label class="tg-search soc-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
-      '<input id="socChatQ" type="search" enterkeyhint="search" placeholder="Поиск по чатам" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(chatQ) + '" aria-label="Поиск по нику, имени и сообщениям"></label>';
-    var rows = (admin && admin.id !== m ? row(admin, false, true) : '') + fr.map(function (p) { return row(p, false); }).join('');
-    if (!rows) return h + '<div class="soc-empty soc-empty-chats"><p>Чатов пока нет. Добавьте друзей — и здесь появится переписка.</p><button type="button" class="nav-btn primary" data-a="tofriends">Найти друзей</button></div>';
-    if (window.KHub && KHub.ready()) h = KHub.chatsTop() + h;
-    return h + '<ul class="soc-list tgl" id="socChats">' + rows + '</ul><p class="small soc-pad soc-nores" id="socNoRes" hidden>Никого не нашёл.</p>';
-  }
-  function filterChats() {
-    var q = chatQ.trim().toLowerCase(), n = 0, list = ov.querySelector('#socChats'); if (!list) return;
-    list.querySelectorAll('.soc-row').forEach(function (r) { var ok = !q || (r.getAttribute('data-q') || '').indexOf(q) >= 0; r.hidden = !ok; if (ok) n++; });
-    var nr = ov.querySelector('#socNoRes'); if (nr) nr.hidden = n > 0;
-  }
-  /* Друзья: найти человека и позвать — плюс заявки и друзья */
-  function friendsBody() {
-    var m = uid();
-    var h = '<form class="tg-search soc-find" id="socFind" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>' +
-      '<input id="socQ" type="search" enterkeyhint="search" placeholder="Найти по нику" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(searchQ) + '" aria-label="Ник друга"></form>';
-    if (found) h += '<h3 class="soc-sec">Нашёл</h3><ul class="soc-list tgl">' + (found.length ? found.map(function (p) { return row(p, true); }).join('') : '<li class="small soc-pad">Никого с таким ником.</li>') + '</ul>';
-    h += '<ul class="soc-list tgl soc-inv"><li class="soc-row"><button type="button" class="soc-who soc-add" data-a="invite"><span class="soc-av soc-av-add" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.6"/><path d="M3.5 19c.9-3.4 3.4-5.2 6.5-5.2 1.4 0 2.6.3 3.6 1M18 13v6M15 16h6"/></svg></span>' +
-      '<span class="soc-who-t"><b class="soc-add-t">Позвать по ссылке</b><span class="small">или пусть найдёт тебя по нику ' + esc(me.nick) + '</span></span></button></li></ul>';
-    var inc = links.filter(function (l) { return l.status === 'pending' && l.b === m; });
-    if (inc.length) h += '<h3 class="soc-sec">Хотят в друзья · ' + inc.length + '</h3><ul class="soc-list tgl">' + inc.map(function (l) { return row(people[l.a] || { id: l.a, nick: '…' }, false); }).join('') + '</ul>';
-    var out = links.filter(function (l) { return l.status === 'pending' && l.a === m; });
-    if (out.length) h += '<h3 class="soc-sec">Ждут ответа</h3><ul class="soc-list tgl">' + out.map(function (l) { return row(people[l.b] || { id: l.b, nick: '…' }, false); }).join('') + '</ul>';
-    var fr = byActivity().sort(function (a, b) { return a.nick.localeCompare(b.nick, 'ru'); });
-    var rows = (admin && admin.id !== m ? row(admin, false, true) : '') + fr.map(function (p) { return row(p, false); }).join('');
-    h += '<h3 class="soc-sec">Друзья · ' + (fr.length + (admin && admin.id !== m ? 1 : 0)) + '</h3>' + (rows ? '<ul class="soc-list tgl">' + rows + '</ul>' : '<p class="small soc-pad">Пока никого. Пригласите друзей по ссылке.</p>');
+  /* ---------- отзывы, фото и комментарии к рецепту: свой узел, обновляется точечно ---------- */
+  function recipeHTML(r) {
+    var x = recipeData[r.id], h = '<h2 class="h-sec">Друзья о блюде</h2>';
+    if (!on()) return h + '<p class="small muted">Войди, чтобы видеть отзывы друзей.</p>';
+    var revs = []; Object.keys(st.reviews).forEach(function (u) { if (u !== uid() && st.reviews[u][r.id]) revs.push({ u: u, v: st.reviews[u][r.id] }); });
+    if (!x && !revs.length) return h + '<p class="small muted"><span class="spin"></span></p>';
+    var likes = x ? x.likes : [];
+    h += revs.length ? '<div class="stack">' + revs.map(function (o) {
+      var n = likes.filter(function (l) { return l.review_owner === o.u; }).length, mine = likes.some(function (l) { return l.review_owner === o.u && l.liker === uid(); });
+      return '<div class="card pad"><div class="row">' + av(o.u) + '<div class="grow"><p style="font-weight:600">' + E(nick(o.u)) + '</p><p class="small muted">' + E(o.v.at ? Z.dayRel(o.v.at) : '') + '</p></div><span class="score">' + o.v.score + '</span></div>' + (o.v.comment ? '<p style="margin-top:8px">' + E(o.v.comment) + '</p>' : '') +
+        '<button type="button" class="btn btn-soft btn-s" data-like="' + E(o.u) + '" aria-pressed="' + mine + '" style="margin-top:10px' + (mine ? ';background:var(--act);border-color:var(--act);color:var(--act-ink)' : '') + '">Вкусно' + (n ? ', ' + n : '') + '</button></div>'; }).join('') + '</div>' : '<p class="small muted">Друзья это ещё не готовили.</p>';
+    if (x && x.photos.length) h += '<div class="chips" style="margin-top:12px">' + x.photos.map(function (p) { return '<img src="' + p.thumb + '" alt="Фото ' + E(nick(p.author)) + '" style="width:96px;height:96px;object-fit:cover;border-radius:var(--r-s);flex:none">'; }).join('') + '</div>';
+    if (x) {
+      var top = x.qa.filter(function (c) { return !c.parent; });
+      if (top.length) h += '<ul class="list" style="margin-top:14px">' + top.map(function (c) {
+        var ans = x.qa.filter(function (a) { return a.parent === c.id; });
+        return '<li class="li" style="display:block"><div class="row" style="align-items:flex-start">' + av(c.author) + '<div class="grow"><p class="small"><b>' + E(nick(c.author)) + '</b> <span class="muted">' + E(Z.ago(c.created_at)) + '</span></p><p>' + E(c.body) + '</p>' +
+          ans.map(function (a) { return '<p class="small" style="margin-top:6px;padding-left:10px;border-left:2px solid var(--line-2)"><b>' + E(a.by_ai ? 'Шеф-нейросеть' : nick(a.author)) + ':</b> ' + E(a.body) + '</p>'; }).join('') + '</div>' +
+          (c.author === uid() ? '<button type="button" class="icon-btn" style="border:0;background:none" data-cdel="' + c.id + '" aria-label="Удалить комментарий">' + Z.icon('trash') + '</button>' : '') + '</div></li>'; }).join('') + '</ul>';
+    }
+    h += '<form class="row" id="cf" style="margin-top:12px"><label class="sr" for="ci">Комментарий</label><input id="ci" class="inp" placeholder="Комментарий или вопрос" maxlength="1500" autocomplete="off"><button class="icon-btn" aria-label="Отправить">' + Z.icon('send') + '</button></form>';
+    h += '<label class="btn btn-soft btn-s" style="margin-top:10px;cursor:pointer">' + Z.icon('camera') + 'Добавить своё фото<input type="file" accept="image/*" id="pf" class="sr"></label>';
     return h;
   }
-  function lastAt(id) { var rv = reviewsBy[id] || {}, t = ''; Object.keys(rv).forEach(function (k) { if (rv[k].score && String(rv[k].at || '') > t) t = String(rv[k].at); }); return t; }
-  function stats(id) {
-    var rv = reviewsBy[id] || {}, ks = Object.keys(rv).filter(function (k) { return rv[k].score; });
-    if (!ks.length) return '';
-    var avg = Math.round(ks.reduce(function (s, k) { return s + rv[k].score; }, 0) / ks.length * 10) / 10;
-    return ks.length + ' ' + (ks.length % 10 === 1 && ks.length % 100 !== 11 ? 'оценка' : ks.length % 10 >= 2 && ks.length % 10 <= 4 && (ks.length % 100 < 10 || ks.length % 100 >= 20) ? 'оценки' : 'оценок') + ' · средняя ' + avg;
+  function patch(rid) {
+    var n = document.getElementById('hub'); if (!n || n.getAttribute('data-rid') !== rid) return;
+    var a = document.activeElement; if (a && n.contains(a) && a.value) return;
+    var r = D.byId(rid); if (!r) return; var html = recipeHTML(r); if (n.__h === html) return; n.__h = html; n.innerHTML = html; bindHub(n, r);
   }
-  function row(p, searching, pinned) {
-    var rel = relation(p.id), act = '';
-    if (pinned) rel = rel === 'friend' ? 'friend' : 'pinned';
-    if (rel === 'incoming') act = '<button type="button" class="nav-btn primary soc-sm" data-a="accept" data-id="' + p.id + '">Принять</button><button type="button" class="ghost-btn soc-sm" data-a="decline" data-id="' + p.id + '">✕</button>';
-    else if (rel === 'sent') act = '<button type="button" class="ghost-btn soc-sm" data-a="cancel" data-id="' + p.id + '">Отменить</button>';
-    else if (rel === 'none' && searching) act = '<button type="button" class="nav-btn primary soc-sm" data-a="add" data-id="' + p.id + '">Добавить</button>';
-    var open = rel === 'friend' || p.is_admin;
-    var pi = info[p.id] || {}, rv = reviewsBy[p.id] || {}, lastId = null;
-    Object.keys(rv).forEach(function (k) { if (rv[k].score && (!lastId || String(rv[k].at || '') > String(rv[lastId].at || ''))) lastId = k; });
-    var lr = lastId && rv[lastId];
-    var cs = tabMode() && window.KHub && KHub.ready() && (rel === 'friend' || p.is_admin) && p.id !== uid() ? (KHub.rowSub(p.id) || { text: 'Напишите первым', at: '', unread: 0 }) : null;
-    var sub = rel === 'sent' ? 'заявка ушла' : rel === 'incoming' ? 'хочет в друзья' : bdayToday(pi.bday) ? '🎂 Сегодня день рождения' :
-      lr ? 'Оценил «' + titleOf(lastId, lr.title) + '» — ' + lr.score + '/10' : open ? 'ещё ничего не оценил' : (pi.name || '');
-    var when = lr && rel !== 'sent' && rel !== 'incoming' && lr.at ? ago(lr.at) : '';
-    if (cs) { sub = cs.text; when = cs.at ? ago(cs.at) : ''; }
-    var pin = pinned ? '<svg class="soc-pin" viewBox="0 0 24 24" aria-label="Закреплён"><path d="M14 3l7 7-3 1-4 4 1 4-2 2-4-5-5 5-1-1 5-5-5-4 2-2 4 1 4-4z"/></svg>' : '';
-    return '<li class="soc-row' + (p.is_admin ? ' is-chef' : '') + '" data-q="' + esc([p.nick, pi.name, sub].join(' ').toLowerCase()) + '">' +
-      (cs ? '<button type="button" class="soc-who" data-hub="chat" data-id="' + p.id + '">' : open ? '<button type="button" class="soc-who" data-a="profile" data-id="' + p.id + '">' : '<div class="soc-who">') +
-      avatar(p) + '<span class="soc-who-t"><span class="soc-l1">' + nickHTML(p) + (pi.name && rel !== 'sent' && rel !== 'incoming' ? '<span class="soc-real">' + esc(pi.name) + '</span>' : '') + '<span class="soc-when">' + esc(when) + '</span></span>' +
-      '<span class="soc-l2"><span class="small">' + esc(sub) + '</span>' + pin + (cs && cs.unread ? '<em class="hb-un">' + cs.unread + '</em>' : '') + '</span></span>' +
-      (open ? '</button>' : '</div>') +
-      (act ? '<span class="soc-act">' + act + '</span>' : '') + '</li>';
+  function loadRecipe(r) {
+    if (!on()) return;
+    var n = document.getElementById('hub'); if (n) bindHub(n, r);
+    Promise.all([
+      req('GET', 'photos?select=id,recipe_id,author,thumb,caption,created_at&recipe_id=eq.' + q(r.id) + '&order=created_at.desc&limit=30').catch(function () { return []; }),
+      req('GET', 'review_likes?select=recipe_id,review_owner,liker&recipe_id=eq.' + q(r.id)).catch(function () { return []; }),
+      req('GET', 'qa?select=id,recipe_id,parent,author,body,by_ai,kind,created_at&recipe_id=eq.' + q(r.id) + '&order=created_at.asc&limit=200').catch(function () { return []; })
+    ]).then(function (x) {
+      recipeData[r.id] = { photos: x[0] || [], likes: x[1] || [], qa: x[2] || [] };
+      var ids = []; recipeData[r.id].photos.forEach(function (p) { ids.push(p.author); }); recipeData[r.id].qa.forEach(function (c) { ids.push(c.author); });
+      return loadPeople(ids);
+    }).then(function () { patch(r.id); });
   }
-  /* черновик анкеты: что ввёл — не пропадёт, даже если экран перерисуется */
-  var needSql = false;
-  /* аватарка: обрезаем по центру в квадрат 192×192 и храним прямо в анкете (jpeg ~15 КБ) — без отдельного хранилища */
-  function uploadAvatar(file) {
-    return new Promise(function (ok, no) {
-      var img = new Image(), url = URL.createObjectURL(file);
-      img.onload = function () {
-        var n = 192, c = document.createElement('canvas'); c.width = n; c.height = n;
-        var k = Math.min(img.naturalWidth, img.naturalHeight), sx = (img.naturalWidth - k) / 2, sy = (img.naturalHeight - k) / 2;
-        var g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, sx, sy, k, k, 0, 0, n, n); URL.revokeObjectURL(url);
-        var d = c.toDataURL('image/jpeg', 0.82); if (d.length > 70000) d = c.toDataURL('image/jpeg', 0.6);
-        ok(d);
-      };
-      img.onerror = function () { no(new Error('это не картинка')); };
-      img.src = url;
-    });
+  function bindHub(n, r) {
+    n.onsubmit = function (e) {
+      e.preventDefault(); var i = n.querySelector('#ci'), v = i.value.trim(); if (!v) return;
+      i.value = ''; i.blur();
+      var x = recipeData[r.id] = recipeData[r.id] || { photos: [], likes: [], qa: [] }, tmp = { id: -Date.now(), recipe_id: r.id, author: uid(), body: v, kind: 'c', created_at: new Date().toISOString() };
+      x.qa.push(tmp); patch(r.id);
+      req('POST', 'qa', { recipe_id: r.id, recipe_title: String(r.title).slice(0, 120), author: uid(), body: v.slice(0, 1500), kind: 'c' }, 'return=representation').then(function (rows) { var k = x.qa.indexOf(tmp); if (k >= 0 && rows && rows[0]) x.qa[k] = rows[0]; patch(r.id); })
+        .catch(function () { x.qa = x.qa.filter(function (c) { return c !== tmp; }); patch(r.id); Z.toast('Комментарий не отправился. Проверь связь.'); });
+    };
+    n.onchange = function (e) {
+      if (e.target.id !== 'pf' || !e.target.files[0]) return;
+      var f = e.target.files[0]; Z.toast('Загружаю фото…');
+      shrinkFile(f, 1280, 0.8).then(function (full) { return shrinkFile(f, 320, 0.7).then(function (th) { return [full, th]; }); }).then(function (x) {
+        return req('POST', 'photos', { recipe_id: r.id, recipe_title: String(r.title).slice(0, 120), author: uid(), thumb: x[1], full_img: x[0] }, 'return=minimal');
+      }).then(function () { Z.toast('Фото добавлено'); loadRecipe(r); }, function () { Z.toast('Фото не загрузилось'); });
+    };
   }
-  var FDK = 'kuking:anketa', fd = null; try { fd = JSON.parse(localStorage.getItem(FDK)); } catch (e) {}
-  function saveFd() { try { if (fd) localStorage.setItem(FDK, JSON.stringify(fd)); else localStorage.removeItem(FDK); } catch (e) {} }
-  function busyForm() { var a = document.activeElement; return busy || !!(ov.querySelector('#socNick') && fd) || !!(a && ov.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); }
-  function fv(k, dflt) { return fd && fd[k] != null ? fd[k] : dflt; }
-  var nickState = '', nickTimer = null;
-  function checkNick(v) {
-    clearTimeout(nickTimer);
-    var hint = ov.querySelector('#socNickHint'); if (!hint) return;
-    if (me && v.toLowerCase() === me.nick.toLowerCase()) { nickState = ''; hint.textContent = ''; hint.className = 'soc-nick-hint'; return; }
-    if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(v)) { nickState = 'bad'; hint.textContent = v ? '3–20 символов: буквы, цифры, _' : ''; hint.className = 'soc-nick-hint bad'; return; }
-    hint.textContent = 'проверяю…'; hint.className = 'soc-nick-hint';
-    nickTimer = setTimeout(function () {
-      S.req('GET', 'profiles?select=id&nick=ilike.' + q(v.replace(/_/g, '\\_')) + '&limit=1').then(function (rows) {
-        var h = ov.querySelector('#socNickHint'); if (!h || ov.querySelector('#socNickIn').value.trim() !== v) return;
-        var taken = rows && rows.length && rows[0].id !== uid();
-        nickState = taken ? 'taken' : 'ok';
-        h.textContent = taken ? '✕ занят — придумай другой' : '✓ свободен'; h.className = 'soc-nick-hint ' + (taken ? 'bad' : 'ok');
-      }).catch(function () { var h = ov.querySelector('#socNickHint'); if (h) h.textContent = ''; });
-    }, 450);
+  function shrinkFile(f, max, qq) {
+    return new Promise(function (ok, no) { var fr = new FileReader(); fr.onload = function () { var im = new Image(); im.onload = function () { var k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', qq)); }; im.onerror = no; im.src = fr.result; }; fr.onerror = no; fr.readAsDataURL(f); });
   }
-  function mySkill() { try { return +localStorage.getItem('kuking:skill') || 5; } catch (e) { return 5; } }
-  var SKILLS = ['', 'впервые у плиты — объясняем каждое движение', 'жарил яичницу — подсказки на всём', 'готовлю по рецепту, но путаюсь в терминах', 'готовлю иногда — нужны подсказки на сложном', 'уверенно по рецепту', 'чувствую огонь и время — подсказки редко', 'импровизирую, знаю технику', 'шарю — только суть и цифры', 'почти профи — коротко', 'профи — свари макароны, и всё ясно'];
-  function skillText(n) { return '— ' + (SKILLS[+n] || SKILLS[5]); }
-  function isoToRu(b) { if (!b) return ''; var x = b.split('-'); return x[2] + '.' + x[1] + '.' + x[0]; }
-  function ruToIso(t) { // '05.03.1999' → '1999-03-05'; пусто → null; криво → false
-    t = String(t || '').trim(); if (!t) return null;
-    var m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(t); if (!m) return false;
-    var d = +m[1], mo = +m[2], y = +m[3], dt = new Date(y, mo - 1, d);
-    if (y < 1920 || y > new Date().getFullYear() || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return false;
-    return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-  }
-  function maskDate(e) { // цифры → дд.мм.гггг, точки сами
-    var el = e.target, dg = el.value.replace(/\D/g, '').slice(0, 8);
-    var out = dg.slice(0, 2) + (dg.length > 2 ? '.' + dg.slice(2, 4) : '') + (dg.length > 4 ? '.' + dg.slice(4) : '');
-    if (e.inputType && e.inputType.indexOf('delete') === 0 && /\.$/.test(el.value)) out = el.value;
-    el.value = out;
-  }
-  /* анкета разложена по смыслу: Обо мне · Готовка · Питание. Поля других разделов остаются в форме скрытыми — сохраняются как были */
-  var anqSect = null;
-  var SECT = { me: 'Обо мне', cook: 'Готовка', body: 'Питание' };
-  function nickForm(first) {
-    var i = info[uid()] || {}, sc = first ? null : anqSect;
-    function g(k) { var show = sc ? sc === k : k !== 'body'; return '<div class="anq-g"' + (show ? '' : ' hidden') + '>'; }
-    return '<form class="soc-nickf set-form" id="socNick">' + (first ? '<h3 class="soc-form-h">Знакомимся</h3><p class="small">Пара строк о себе — друзья увидят, нейросеть учтёт. Первый пользователь становится администратором.</p>' : '') +
-      g('me') + '<div class="soc-avpick"><span class="soc-avprev" id="socAvPrev">' + (fv('avatar', i.avatar) ? '<img src="' + esc(fv('avatar', i.avatar)) + '" alt="">' : '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>') + '</span>' +
-      '<label class="ghost-btn soc-avbtn">' + (fv('avatar', i.avatar) ? 'Сменить фото' : 'Добавить фото') + '<input id="socAvIn" type="file" accept="image/*" hidden></label>' + (fv('avatar', i.avatar) ? '<button type="button" class="lib-link soc-avdel" data-a="avdel">Убрать</button>' : '') + '<small id="socAvMsg" class="soc-nick-hint"></small></div>' +
-      '<label class="set-f"><span>Ник — по нему вас найдут друзья</span><input id="socNickIn" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" minlength="3" maxlength="20" pattern="[A-Za-z0-9_А-Яа-яЁё]{3,20}" required value="' + esc(fv('nick', me ? me.nick : '')) + '"><small id="socNickHint" class="soc-nick-hint" aria-live="polite"></small></label>' +
-      '<label class="set-f"><span>Имя</span><input id="socName" type="text" autocomplete="given-name" maxlength="40" value="' + esc(fv('name', i.name || '')) + '" placeholder="Как к тебе обращаться"></label>' +
-      '<label class="set-f"><span>День рождения</span><input id="socBday" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="дд.мм.гггг" value="' + esc(String(fv('bday', isoToRu(i.bday))).replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$3.$2.$1')) + '"></label>' +
-      '</div>' + g('cook') + (sc === 'cook' ? '<p class="small anq-h">По этому нейросеть решает, сколько разжёвывать в шагах, сколько времени закладывать и что тебе вообще предлагать.</p>' : '') +
-      '<label class="set-f soc-skill"><span>Уровень готовки: <b id="socSkillV">' + esc(fv('skill', i.skill || mySkill())) + '</b> из 10 <em id="socSkillT">' + skillText(fv('skill', i.skill || mySkill())) + '</em></span><input id="socSkill" type="range" min="1" max="10" step="1" value="' + esc(fv('skill', i.skill || mySkill())) + '" aria-describedby="socSkillT"></label>' +
-      (first ? '' : habitsHTML()) +
-      '<label class="set-f"><span>Любимая кухня и вкусы</span><input id="socLikes" type="text" maxlength="300" value="' + esc(fv('likes', i.likes || '')) + '" placeholder="Грузинская, острое, бургеры…"></label>' +
-      '<label class="set-f"><span>Что не жрёшь</span><input id="socAvoid" type="text" maxlength="300" value="' + esc(fv('avoid', i.avoid || '')) + '" placeholder="Кинза, грибы, рыба…"></label>' +
-      '<label class="set-f"><span>Аллергии</span><input id="socAllergy" type="text" maxlength="200" value="' + esc(fv('allergy', i.allergy || '')) + '" placeholder="Орехи, лактоза, морепродукты…"></label>' +
-      '</div>' + (first ? '' : g('body') + bodyHTML() + '</div>') +
-      '<div class="set-row"><button type="submit" class="nav-btn primary soc-save" id="socSave"><span>' + (first ? 'Погнали' : sc === 'body' ? 'Готово' : 'Сохранить') + '</span></button></div>' +
-      '<div class="soc-msgw' + (nickMsg ? ' open' : '') + '" id="socMsgW"><div><p class="set-msg' + (/…$/.test(nickMsg) ? ' busy' : '') + '" id="socNickMsg" aria-live="polite">' + esc(nickMsg) + '</p></div></div></form>';
+  function recipeClick(e, r) {
+    var b = e.target.closest('[data-like]');
+    if (b) {
+      var ow = b.getAttribute('data-like'), x = recipeData[r.id]; if (!x) return;
+      var mine = x.likes.filter(function (l) { return l.review_owner === ow && l.liker === uid(); })[0];
+      if (mine) { x.likes = x.likes.filter(function (l) { return l !== mine; }); req('DELETE', 'review_likes?recipe_id=eq.' + q(r.id) + '&review_owner=eq.' + ow + '&liker=eq.' + uid()).catch(function () {}); }
+      else { x.likes.push({ recipe_id: r.id, review_owner: ow, liker: uid() }); req('POST', 'review_likes', { recipe_id: r.id, review_owner: ow, liker: uid() }, 'return=minimal').catch(function () {}); }
+      Z.haptic(6); patch(r.id); return;
+    }
+    b = e.target.closest('[data-cdel]');
+    if (b) { var id = +b.getAttribute('data-cdel'), y = recipeData[r.id]; y.qa = y.qa.filter(function (c) { return c.id !== id && c.parent !== id; }); patch(r.id); req('DELETE', 'qa?id=eq.' + id).catch(function () {}); }
   }
 
-  function anketaPage() {
-    var back = anketaFrom === 'friends' && me;
-    var h = back ? '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="nickx"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' + (tabMode() ? 'Чаты' : 'Друзья') + '</button><span class="tg-head-t">' + (SECT[anqSect] || 'Анкета') + '</span></header>'
-      : '<header class="tg-head tg-head-sub soc-head2"><button type="button" class="tg-back" data-a="nickx"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Профиль</button><span class="tg-head-t">' + (SECT[anqSect] || 'Анкета') + '</span></header>';
-    if (!loaded) return h + '<div class="skel" aria-busy="true" aria-label="Загружаю"><i class="sk-card"></i><i class="sk-row"></i><i class="sk-row"></i><i class="sk-row"></i></div>';
-    return h + nickForm(false);
+  /* ---------- сообщения ---------- */
+  function unread() { var m = uid(); return msgs.filter(function (x) { return x.receiver === m && !x.read_at; }).length; }
+  function threads() {
+    var m = uid(), by = {};
+    msgs.forEach(function (x) { var o = x.sender === m ? x.receiver : x.sender; if (!by[o]) by[o] = { who: o, last: x, unread: 0 }; if (x.receiver === m && !x.read_at) by[o].unread++; });
+    return Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return String(b.last.created_at).localeCompare(String(a.last.created_at)); });
   }
-  /* тело и цель — только в телефоне, для точного КБЖУ */
-  function bseg(n, opts) { var b = window.KBody ? window.KBody.get() : {}; return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-body="' + n + '" data-v="' + o[0] + '" aria-checked="' + (String(b[n]) === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
-  /* как часто и сколько готовит — по этому нейросеть решает про заготовки впрок и сложность */
-  function habitsHTML() {
-    return '<span class="ps-l">Готовлю</span>' + bseg('freq', [['r1', '1–2 р/нед'], ['r3', '3–4'], ['r5', '5–6'], ['r7', 'Каждый день']]) +
-      '<span class="ps-l">Время на одну готовку</span>' + bseg('ctime', [['t30', '30 мин'], ['t60', '1 ч'], ['t120', '2 ч'], ['t180', '3 ч']]);
+  function send(to, body, recipe) {
+    var row = { sender: uid(), receiver: to, body: (body || '').slice(0, 2000) };
+    if (recipe) { row.recipe = recipe; row.recipe_title = String(recipe.title).slice(0, 120); }
+    var tmp = Object.assign({ id: -Date.now(), created_at: new Date().toISOString() }, row); msgs.unshift(tmp); Z.emit('social');
+    return req('POST', 'messages', row, 'return=representation').then(function (rows) {
+      var i = msgs.indexOf(tmp); if (i >= 0 && rows && rows[0]) msgs[i] = rows[0]; Z.emit('social');
+      if (rows && rows[0]) fn('msg', { id: rows[0].id }).catch(function () {});
+    }, function (e) { msgs = msgs.filter(function (x) { return x !== tmp; }); Z.emit('social'); throw e; });
   }
-  function bodyHTML() {
-    var b = window.KBody ? window.KBody.get() : {};
-    function seg(n, opts) { return '<div class="seg" role="radiogroup">' + opts.map(function (o) { return '<button type="button" role="radio" data-body="' + n + '" data-v="' + o[0] + '" aria-checked="' + (b[n] === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
-    return '<fieldset class="soc-body"><p class="small soc-body-h">Видишь только ты — хранится в телефоне. По этим цифрам нейросеть считает КБЖУ твоей порции.</p>' +
-      '<span class="ps-l">Пол</span>' + seg('sex', [['m', 'Мужской'], ['f', 'Женский']]) +
-      '<div class="soc-body-row"><label class="set-f"><span>Рост, см</span><input data-bodyn="h" type="number" inputmode="numeric" min="120" max="230" value="' + (b.h || '') + '" placeholder="180"></label>' +
-      '<label class="set-f"><span>Вес, кг</span><input data-bodyn="w" type="number" inputmode="decimal" min="35" max="250" step="0.1" value="' + (b.w || '') + '" placeholder="80"></label></div>' +
-      '<span class="ps-l">Тренировки в неделю</span>' + seg('act', [['low', 'Сижу'], ['light', '1–3'], ['mid', '3–5'], ['high', 'Каждый день']]) +
-      '<span class="ps-l">Цель</span>' + seg('goal', [['cut', 'Сушка'], ['keep', 'Держать'], ['bulk', 'Масса']]) +
-      '<span class="ps-l">Приёмов пищи в день</span>' + bseg('meals', [['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']]) +
-      '<p class="soc-norm" id="socNorm" aria-live="polite">' + normText() + '</p></fieldset>';
+  function markRead(who) {
+    var m = uid(), now = new Date().toISOString(), any = false;
+    msgs.forEach(function (x) { if (x.sender === who && x.receiver === m && !x.read_at) { x.read_at = now; any = true; } });
+    if (any) { req('PATCH', 'messages?receiver=eq.' + m + '&sender=eq.' + who + '&read_at=is.null', { read_at: now }).catch(function () {}); if (Z.badges) Z.badges(); }
   }
-  function normText() {
-    var t = window.KBody && window.KBody.targets();
-    return t ? 'В день ≈ <b>' + t.day.kcal + ' ккал</b> · Б ' + t.day.p + ' · Ж ' + t.day.f + ' · У ' + t.day.c + ' г<br><span>Порция в рецепте (' + Math.round(window.KBody.share() * 100) + '% дня) ≈ ' + t.meal.kcal + ' ккал · Б ' + t.meal.p + ' г</span>' : 'Заполни пол, рост и вес — посчитаю норму.';
+  function openShared(id) {
+    return req('GET', 'messages?select=recipe&id=eq.' + id).then(function (r) { return r && r[0] && r[0].recipe; });
   }
-  function setNickMsg(t, kind) {
-    nickMsg = t || '';
-    var w = ov.querySelector('#socMsgW'), p = ov.querySelector('#socNickMsg'); if (!w || !p) return;
-    if (t) { p.textContent = t; p.className = 'set-msg' + (kind === 'ok' ? ' ok' : '') + (/…$/.test(t) ? ' busy' : ''); }
-    w.classList.toggle('open', !!t);
-    if (t && kind === 'bad') { p.classList.remove('shake'); void p.offsetWidth; p.classList.add('shake'); if (window.kHaptic) window.kHaptic(20); }
+  function shareRecipe(r) {
+    var fr = friends(); if (!on()) return Z.toast('Войди, чтобы отправлять рецепты');
+    if (!fr.length) return Z.toast('Сначала добавь друга во вкладке «Друзья»');
+    var s = Z.sheet('Отправить рецепт', '<ul class="list">' + fr.map(function (id) { return '<li><button type="button" class="chk" data-to="' + E(id) + '">' + av(id) + '<span class="grow chk-name">' + E(nick(id)) + '</span>' + Z.icon('send') + '</button></li>'; }).join('') + '</ul>');
+    s.body.onclick = function (e) { var b = e.target.closest('[data-to]'); if (!b) return; var to = b.getAttribute('data-to'); s.close(); send(to, '', r).then(function () { Z.toast('Отправил ' + nick(to)); }, function () { Z.toast('Не отправилось'); }); };
   }
-  /* ---------- редактор фото: двигай пальцем, щипком ближе ---------- */
-  function cropper(file) {
-    return new Promise(function (ok, no) {
-      var url = URL.createObjectURL(file), img = new Image();
-      img.onerror = function () { URL.revokeObjectURL(url); no(new Error('это не картинка')); };
-      img.onload = function () {
-        var W = img.naturalWidth, H = img.naturalHeight;
-        var c = document.createElement('div'); c.className = 'crop-ov'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', 'Фото профиля');
-        c.innerHTML = '<div class="crop-top"><button type="button" class="ghost-btn" data-c="x">Отмена</button><b>Фото профиля</b><button type="button" class="nav-btn primary" data-c="ok">Готово</button></div>' +
-          '<div class="crop-stage"><img alt="" draggable="false"><div class="crop-mask" aria-hidden="true"></div></div>' +
-          '<div class="crop-bar"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg><input type="range" min="1" max="4" step="0.01" value="1" aria-label="Приблизить"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/></svg></div>' +
-          '<p class="small crop-hint">Двигай пальцем, разведи двумя — ближе</p>';
-        document.body.appendChild(c);
-        var stage = c.querySelector('.crop-stage'), im = c.querySelector('img'), rng = c.querySelector('input');
-        im.src = url; im.style.width = W + 'px'; im.style.height = H + 'px';
-        var S0 = 1, D = 1, z = 1, tx = 0, ty = 0;
-        function size() { var r = stage.getBoundingClientRect(); D = Math.min(r.width, r.height) - 32; S0 = D / Math.min(W, H); }
-        function clamp() { var sc = S0 * z, mx = Math.max(0, (W * sc - D) / 2), my = Math.max(0, (H * sc - D) / 2); tx = Math.max(-mx, Math.min(mx, tx)); ty = Math.max(-my, Math.min(my, ty)); }
-        function draw() { clamp(); im.style.transform = 'translate(' + (tx - W / 2) + 'px,' + (ty - H / 2) + 'px) scale(' + (S0 * z) + ')'; rng.value = z; }
-        size(); draw();
-        requestAnimationFrame(function () { c.classList.add('on'); });
-        var pts = {}, last = null;
-        function snap() { var k = Object.keys(pts); if (k.length >= 2) { var a = pts[k[0]], b = pts[k[1]]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) }; } if (k.length === 1) return { x: pts[k[0]].x, y: pts[k[0]].y, d: 0 }; return null; }
-        stage.addEventListener('pointerdown', function (e) { stage.setPointerCapture(e.pointerId); pts[e.pointerId] = { x: e.clientX, y: e.clientY }; last = snap(); stage.classList.add('drag'); });
-        stage.addEventListener('pointermove', function (e) { if (!pts[e.pointerId]) return; pts[e.pointerId] = { x: e.clientX, y: e.clientY }; var n = snap(); if (!n || !last) { last = n; return; }
-          if (n.d && last.d) z = Math.max(1, Math.min(4, z * n.d / last.d));
-          tx += n.x - last.x; ty += n.y - last.y; last = n; draw(); });
-        function up(e) { delete pts[e.pointerId]; last = snap(); if (!last) stage.classList.remove('drag'); }
-        stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
-        stage.addEventListener('wheel', function (e) { e.preventDefault(); z = Math.max(1, Math.min(4, z * (e.deltaY < 0 ? 1.08 : 0.93))); draw(); }, { passive: false });
-        rng.addEventListener('input', function () { z = +rng.value; draw(); });
-        function done(v) { c.classList.remove('on'); setTimeout(function () { c.remove(); URL.revokeObjectURL(url); }, 320); if (v) ok(v); else no(null); }
-        c.addEventListener('click', function (e) {
-          var b = e.target.closest('[data-c]'); if (!b) return;
-          if (b.getAttribute('data-c') === 'x') return done(null);
-          var n = 320, cv = document.createElement('canvas'); cv.width = n; cv.height = n;
-          var sc = S0 * z, side = D / sc, sx = W / 2 - tx / sc - side / 2, sy = H / 2 - ty / sc - side / 2;
-          var g = cv.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, sx, sy, side, side, 0, 0, n, n);
-          var q = 0.85, d = cv.toDataURL('image/jpeg', q); while (d.length > 85000 && q > 0.4) { q -= 0.1; d = cv.toDataURL('image/jpeg', q); }
-          done(d);
-        });
-      };
-      img.src = url;
-    });
+
+  /* ---------- друзья ---------- */
+  function act(a, id) {
+    var m = uid(), p;
+    if (a === 'add') { var rev = st.links.some(function (l) { return l.a === id && l.b === m; }); p = rev ? req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' }) : req('POST', 'friends', { a: m, b: id }); }
+    else if (a === 'accept') p = req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' });
+    else if (a === 'decline') p = req('DELETE', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m));
+    else if (a === 'cancel') p = req('DELETE', 'friends?a=eq.' + q(m) + '&b=eq.' + q(id));
+    else if (a === 'remove') p = Promise.all([req('DELETE', 'friends?a=eq.' + q(m) + '&b=eq.' + q(id)), req('DELETE', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m))]);
+    return p.then(load);
   }
+  function search(v) { return req('GET', 'profiles?select=id,nick,is_admin&nick=ilike.*' + q(v.replace(/[%*_]/g, '')) + '*&id=neq.' + q(uid()) + '&limit=15').then(function (rows) { (rows || []).forEach(function (p) { st.people[p.id] = p; }); return rows || []; }); }
+  function setNick(n) {
+    var p = st.me ? req('PATCH', 'profiles?id=eq.' + q(uid()), { nick: n }) : req('POST', 'profiles', { id: uid(), nick: n }).then(function () { return S().rpc('claim_admin').catch(function () {}); });
+    return p.then(load);
+  }
+  function saveInfo(d) { d.id = uid(); d.updated_at = new Date().toISOString(); return req('POST', 'profile_info?on_conflict=id', [d], 'resolution=merge-duplicates,return=minimal').then(load); }
 
   /* ---------- пуши ---------- */
-  var FN = ((window.KUKING_CONFIG || {}).supabaseUrl || '').replace(/\/+$/, '') + '/functions/v1/birthday-push';
-  var ANON = (window.KUKING_CONFIG || {}).supabaseAnonKey || '';
-  function standalone() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
-  function pushState() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return /iPhone|iPad/.test(navigator.userAgent) && !standalone() ? 'install' : 'nope';
-    if (Notification.permission === 'denied') return 'denied';
-    return localStorage.getItem('kuking:push') === '1' && Notification.permission === 'granted' ? 'on' : 'off';
+  var FN = ((window.KUKING_CONFIG || {}).supabaseUrl || '').replace(/\/+$/, '') + '/functions/v1/birthday-push', FNS = [FN, FN + 'ing'];
+  function fn(action, extra, i) {
+    i = i || 0;
+    var call = action === 'init' ? fetch(FNS[i], { method: 'POST', body: JSON.stringify({ action: 'init' }) }) :
+      S().token().then(function (t) { return fetch(FNS[i], { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: (window.KUKING_CONFIG || {}).supabaseAnonKey, Authorization: 'Bearer ' + t }, body: JSON.stringify(Object.assign({ action: action }, extra || {})) }); });
+    return Promise.resolve(call).then(function (r) { if (r.status === 404 && i + 1 < FNS.length) return fn(action, extra, i + 1); if (!r.ok) throw new Error('Сервер уведомлений ответил ' + r.status); return r.json(); });
   }
-  function b64u(s) { var p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
-  /* у функции может быть имя birthday-push или birthday-pushing — пробуем оба, рабочее запоминаем */
-  var FNS = [FN, FN + 'ing'];
-  try { var fk = localStorage.getItem('kuking:fn'); if (fk === '1') FNS.reverse(); } catch (e) {}
-  function fnCall(action, i, extra) {
-    i = i || 0; var url = FNS[i];
-    /* init — «простой» запрос без своих заголовков: браузер не делает предзапрос CORS, который чаще всего и падает */
-    var req = action === 'init' ? fetch(url, { method: 'POST', body: JSON.stringify({ action: action }) }) :
-      S.token().then(function (t) { return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + t }, body: JSON.stringify(Object.assign({ action: action }, extra || {})) }); });
-    return Promise.resolve(req).catch(function () { throw new Error('сервер уведомлений не отвечает. В Supabase у функции birthday-push выключи «Verify JWT» и нажми Deploy ещё раз'); })
-      .then(function (r) {
-        if (r.status === 404 && i + 1 < FNS.length) return fnCall(action, i + 1, extra);
-        if (!r.ok) throw new Error(r.status === 404 ? 'функция birthday-push не загружена в Supabase' : r.status === 401 ? 'у функции birthday-push включён «Verify JWT» — выключи его' : 'функция ответила ' + r.status + ' — открой у неё Logs');
-        try { localStorage.setItem('kuking:fn', url === FN ? '0' : '1'); } catch (e) {}
-        return r.json().then(function (j) { if (j && j.error) throw new Error('функция: ' + j.error); return j; });
-      });
+  function b64u(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var raw = atob(s), a = new Uint8Array(raw.length); for (var i = 0; i < raw.length; i++) a[i] = raw.charCodeAt(i); return a; }
+  function pushState() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.Notification) return /iPhone|iPad/.test(navigator.userAgent) && !navigator.standalone ? 'install' : 'nope';
+    if (Notification.permission === 'denied') return 'denied';
+    return Notification.permission === 'granted' && Z.ls.get('kuking:push', null) ? 'on' : 'off';
   }
   function enablePush() {
     return Notification.requestPermission().then(function (perm) {
-      if (perm !== 'granted') throw new Error('Ты не разрешил уведомления');
-      return Promise.all([navigator.serviceWorker.ready, fnCall('init')]);
-    }).then(function (r) {
-      var reg = r[0], key = r[1].publicKey;
-      return reg.pushManager.getSubscription().then(function (old) { return old || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) }); });
-    }).then(function (sub) { return S.rpc('save_push', { sub: sub.toJSON() }); })
-      .then(function () { try { localStorage.setItem('kuking:push', '1'); } catch (e) {} });
-  }
-  API.pushState = pushState;
-  API.enablePush = enablePush;
-  API.testPush = function () { return fnCall('test'); };
-  API.notify = function (action, extra) { return fnCall(action, 0, extra).catch(function () {}); };
-  function pushCard(after) {
-    var st = pushState(), h = '<div class="soc-push card"><h3 class="soc-form-h">🔔 Уведомления</h3>';
-    if (st === 'on') h += '<p class="small">Включены.</p><button type="button" class="ghost-btn" data-a="ptest">Проверить пуш</button>';
-    else if (st === 'install') h += '<p class="small">На iPhone пуши работают только из приложения на экране «Домой»: Safari → Поделиться → «На экран „Домой“», открой оттуда и включи тут.</p>';
-    else if (st === 'denied') h += '<p class="small">Уведомления запрещены. Включи: Настройки iPhone → Уведомления → Жарко.</p>';
-    else if (st === 'nope') h += '<p class="small">Этот браузер пуши не умеет.</p>';
-    else h += '<p class="small">Разреши «Жарко» присылать уведомления. Без спама.</p><button type="button" class="nav-btn primary" data-a="pon">Включить уведомления</button>';
-    if (after) h += '<button type="button" class="' + (st === 'off' ? 'ghost-btn' : 'nav-btn primary') + '" data-a="pdone">' + (st === 'off' ? 'Потом' : 'Дальше') + '</button>';
-    return h + (msg ? '<p class="set-msg' + (/…$/.test(msg) ? ' busy' : '') + '">' + esc(msg) + '</p>' : '') + '</div>';
+      if (perm !== 'granted') throw new Error('Уведомления не разрешены');
+      return Promise.all([navigator.serviceWorker.ready, fn('init')]);
+    }).then(function (r) { var reg = r[0]; return reg.pushManager.getSubscription().then(function (old) { return old || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(r[1].publicKey) }); }); })
+      .then(function (sub) { return S().rpc('save_push', { sub: sub.toJSON() }); })
+      .then(function () { Z.ls.set('kuking:push', '1'); D.syncTasks(); });
   }
 
-  /* ---------- профиль человека ---------- */
-  function profileHTML(id) {
-    var p = people[id] || { id: id, nick: '…' }, rv = reviewsBy[id] || {}, mine = reviewsBy[uid()] || {};
-    var ids = Object.keys(rv).filter(function (k) { return rv[k].score; }).sort(function (a, b) { return String(rv[b].at || '').localeCompare(String(rv[a].at || '')); });
-    var pi = info[id] || {};
-    var h = head(p.nick, true) + (window.KHub ? '' : '') + '<div class="soc-prof">' + avatar(p, true) + '<div>' + nickHTML(p) + (pi.name ? '<p class="soc-name">' + esc(pi.name) + '</p>' : '') + '<p class="small">' + esc(stats(id) || 'Оценок пока нет') + '</p></div></div>';
-    if (window.KHub) h += KHub.profileExtra(id);
-    if (pi.bday || pi.likes || pi.avoid || pi.allergy) h += '<dl class="soc-facts">' +
-      (pi.bday ? '<div' + (bdayToday(pi.bday) ? ' class="today"' : '') + '><dt>День рождения</dt><dd>' + (bdayToday(pi.bday) ? 'Сегодня' : esc(bdayText(pi.bday))) + '</dd></div>' : '') +
-      (pi.likes ? '<div><dt>Любит</dt><dd>' + esc(pi.likes) + '</dd></div>' : '') +
-      (pi.avoid ? '<div><dt>Не ест</dt><dd>' + esc(pi.avoid) + '</dd></div>' : '') + (pi.allergy ? '<div><dt>Аллергия</dt><dd>' + esc(pi.allergy) + '</dd></div>' : '') + '</dl>';
-    if (!ids.length) h += '<p class="small soc-pad">Пока ничего не оценил.</p>';
-    h += '<div class="soc-revs">' + ids.map(function (rid) {
-      var d = rv[rid], my = mine[rid] && mine[rid].score, have = hasRecipe(rid);
-      return '<article class="soc-rev card"><header class="soc-rev-h"><h3>' + esc(titleOf(rid, d.title)) + '</h3><b class="lib-score ' + scCls(d.score) + '">' + d.score + '<small>/10</small></b></header>' +
-        (d.comment ? '<p class="soc-cm">' + esc(d.comment) + '</p>' : '') +
-        (API.isAdmin() && d.comment && id !== uid() ? '<button type="button" class="lib-link soc-wipe" data-a="wipe" data-owner="' + id + '" data-rid="' + esc(rid) + '">стереть коммент</button>' : '') +
-        '<div class="soc-mine">' + (my ? '<span>Твоя: <b class="' + scCls(my) + '">' + my + '</b>/10</span>' + (have ? '<button type="button" class="lib-link" data-a="rate" data-rid="' + esc(rid) + '">изменить</button>' : '')
-          : have ? '<button type="button" class="nav-btn primary soc-sm" data-a="rate" data-rid="' + esc(rid) + '">Поставить свою</button>' : '<span class="small">Этого рецепта нет в твоей книге</span>') + '</div>' +
-        threadBody(rid, id) + '</article>';
-    }).join('') + '</div>';
-    if (relation(id) === 'friend' && !p.is_admin) h += '<div class="soc-pad"><button type="button" class="ghost-btn soc-unfriend" data-a="unfriend" data-id="' + id + '">Убрать из друзей</button></div>';
-    return h;
-  }
-
-  /* ---------- ответы под оценкой ---------- */
-  function repliesOf(rid, owner) { return replies.filter(function (x) { return x.recipe_id === rid && x.review_owner === owner; }); }
-  function threadBody(rid, owner) {
-    var list = repliesOf(rid, owner), m = uid();
-    return '<div class="soc-thr" data-rid="' + esc(rid) + '" data-owner="' + owner + '">' +
-      (list.length ? '<ul class="soc-reps">' + list.map(function (x) {
-        var p = people[x.author];
-        return '<li class="soc-rep' + (x.author === m ? ' me' : '') + '"><div class="soc-rep-h">' + nickHTML(p) + '<span class="small">' + ago(x.created_at) + '</span>' +
-          (x.author === m || API.isAdmin() ? '<button type="button" class="soc-x" data-a="delrep" data-id="' + x.id + '" aria-label="Удалить ответ">✕</button>' : '') + '</div><p>' + esc(x.body) + '</p></li>';
-      }).join('') + '</ul>' : '') +
-      '<form class="soc-reply" data-rid="' + esc(rid) + '" data-owner="' + owner + '"><input type="text" maxlength="1000" placeholder="Ответить…" aria-label="Ответ" id="rep-' + esc(rid).replace(/[^\w-]/g, '') + '-' + owner.slice(0, 8) + '">' +
-      '<button type="submit" class="soc-send" aria-label="Отправить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2-6z"/></svg></button></form></div>';
-  }
-  /* блок «Обсуждение» на карточке рецепта: шеф и ты, у кого есть оценка */
-  var openThr = {};
-  API.thread = function (rid, myReview) {
-    if (!S.user() || !me) return '';
-    var owners = [], m = uid();
-    if (admin && admin.id !== m && reviewsBy[admin.id] && reviewsBy[admin.id][rid] && reviewsBy[admin.id][rid].score) owners.push(admin.id);
-    if (myReview && myReview.score) owners.push(m);
-    if (!owners.length) return '';
-    var n = owners.reduce(function (s, o) { return s + repliesOf(rid, o).length; }, 0);
-    var h = '<div class="lib-thr-wrap"><h3 class="tg-sec-h">Комментарии' + (n ? ' · ' + n : '') + '</h3>';
-    h += owners.map(function (o) {
-      var d = (reviewsBy[o] || {})[rid] || myReview, p = people[o];
-      return '<div class="lib-thr-item"><div class="soc-rep-h">' + nickHTML(p) + '<b class="lib-score sm ' + scCls(d.score) + '">' + d.score + '</b></div>' +
-        (o !== m && d.comment ? '<p class="soc-cm">' + esc(d.comment) + '</p>' : '') + threadBody(rid, o) + '</div>';
-    }).join('');
-    return h + '</div>';
-  };
-  API.bindThreads = function (root, rerender) {
-    root.querySelectorAll('.lib-thr').forEach(function (b) { b.addEventListener('click', function () { var r = b.getAttribute('data-rid'); openThr[r] = !openThr[r]; rerender(); }); });
-    bindReplies(root, rerender);
-  };
-  function bindReplies(root, rerender) {
-    root.querySelectorAll('.soc-reply').forEach(function (f) {
-      f.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var inp = f.querySelector('input'), body = inp.value.trim(); if (!body || busy) return;
-        busy = true; inp.disabled = true;
-        S.req('POST', 'replies', { recipe_id: f.getAttribute('data-rid'), review_owner: f.getAttribute('data-owner'), author: uid(), body: body }, 'return=representation')
-          .then(function (rows) { busy = false; if (rows && rows[0]) replies.push(rows[0]); emit(); rerender(); })
-          .catch(function () { busy = false; inp.disabled = false; toast('Не отправилось — проверь интернет'); });
-      });
-    });
-    root.querySelectorAll('[data-a=delrep]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        armed(b, 'Удалить?', function () {
-          var id = +b.getAttribute('data-id');
-          S.req('DELETE', 'replies?id=eq.' + id).then(function () { replies = replies.filter(function (x) { return x.id !== id; }); emit(); rerender(); }).catch(function () { toast('Не удалилось'); });
-        });
-      });
-    });
-  }
-
-  /* ---------- действия ---------- */
-  function act(a, b) {
-    var id = b.getAttribute('data-id'), m = uid();
-    if (a === 'close') return close();
-    if (a === 'back') { view = 'list'; render(); return; }
-
-    if (a === 'login') { close(); if (window.KukingSettings) window.KukingSettings.open('account'); return; }
-    if (a === 'nick') { anketaFrom = 'friends'; view = 'nick'; nickMsg = ''; render(); return; }
-    if (a === 'nickx') { leaveAnketa(); return; }
-    if (a === 'avdel') { fd = fd || {}; fd.avatar = ''; saveFd(); var pv = ov.querySelector('#socAvPrev'); pv.classList.add('swap'); setTimeout(function () { pv.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>'; pv.classList.remove('swap'); }, 180); b.remove(); var mm = ov.querySelector('#socAvMsg'); mm.textContent = 'Фото уберу после «Сохранить»'; mm.className = 'soc-nick-hint'; return; }
-    if (a === 'profile') { viewing = id; view = 'profile'; render(); ov.querySelectorAll('.soc-page')[1].scrollTop = 0; return; }
-    if (a === 'invite') return invite();
-    if (a === 'tofriends') { close(); if (window.__kGoTab) window.__kGoTab('profile'); setTimeout(function () { API.openFriends(); }, 380); return; }
-    if (a === 'pon') { msg = 'Включаю…'; render(); enablePush().then(function () { msg = ''; render(); toast('Пуши включены'); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
-    if (a === 'ptest') { msg = 'Шлю…'; render(); API.testPush().then(function (r) { msg = r && r.sent ? 'Ушло — глянь шторку' : 'Подписка не нашлась, включи пуши заново'; if (!(r && r.sent)) try { localStorage.removeItem('kuking:push'); } catch (e) {} render(); }).catch(function (e) { msg = 'Не вышло: ' + (e && e.message || ''); render(); }); return; }
-    if (a === 'pdone') { msg = ''; view = 'list'; render(); return; }
-    if (a === 'add') {
-      var rev = links.filter(function (l) { return l.a === id && l.b === m && l.status === 'pending'; })[0];
-      return run(rev ? S.req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' }) : S.req('POST', 'friends', { a: m, b: id, status: 'pending' }), rev ? 'Теперь вы друзья' : 'Заявка ушла');
-    }
-    if (a === 'accept') return run(S.req('PATCH', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m), { status: 'accepted' }), 'Теперь вы друзья');
-    if (a === 'decline') return run(S.req('DELETE', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m)), '');
-    if (a === 'cancel') return run(S.req('DELETE', 'friends?a=eq.' + q(m) + '&b=eq.' + q(id)), '');
-    if (a === 'unfriend') return armed(b, 'Точно убрать?', function () {
-      run(Promise.all([S.req('DELETE', 'friends?a=eq.' + q(m) + '&b=eq.' + q(id)), S.req('DELETE', 'friends?a=eq.' + q(id) + '&b=eq.' + q(m))]), 'Убрал из друзей').then(function () { view = 'list'; render(); });
-    });
-    if (a === 'rate') { var rid = b.getAttribute('data-rid'); close(); if (window.KukingLib) window.KukingLib.rate(rid); return; }
-    if (a === 'wipe') return armed(b, 'Точно стереть?', function () {
-      var owner = b.getAttribute('data-owner'), r2 = b.getAttribute('data-rid');
-      run(S.rpc('admin_clear_comment', { owner: owner, rid: r2 }), 'Коммент стёрт');
-    });
-  }
-  function run(p, ok) {
-    return p.then(function () { if (ok) toast(ok); return refresh(); }).catch(function (e) { toast('Не вышло: ' + (e && e.message || 'нет связи')); });
-  }
-  function bind() {
-    ov.querySelectorAll('[data-a]').forEach(function (b) { if (b.tagName === 'BUTTON') b.addEventListener('click', function () { act(b.getAttribute('data-a'), b); }); });
-    var f = ov.querySelector('#socFind');
-    if (f) f.addEventListener('submit', function (e) {
-      e.preventDefault(); searchQ = ov.querySelector('#socQ').value.trim().replace(/[%*,()]/g, '');
-      if (searchQ.length < 2) { found = null; render(); return; }
-      S.req('GET', 'profiles?select=id,nick,is_admin&nick=ilike.*' + q(searchQ) + '*&id=neq.' + q(uid()) + '&limit=15').then(function (rows) {
-        found = rows || []; found.forEach(function (p) { people[p.id] = p; }); render();
-      }).catch(function () { found = []; render(); });
-    });
-    var cq = ov.querySelector('#socChatQ');
-    if (cq) { filterChats(); cq.addEventListener('input', function () { chatQ = cq.value; filterChats(); }); }
-    var qi = ov.querySelector('#socQ');
-    if (qi && f) qi.addEventListener('input', function () { clearTimeout(qi._t); qi._t = setTimeout(function () { if (f.isConnected) f.dispatchEvent(new Event('submit', { cancelable: true })); }, 380); });
-    var nf = ov.querySelector('#socNick');
-    if (nf) {
-      var bd = ov.querySelector('#socBday'); if (bd) bd.addEventListener('input', maskDate);
-      var avIn = ov.querySelector('#socAvIn');
-      if (avIn) avIn.addEventListener('change', function () {
-        var f = avIn.files && avIn.files[0]; if (!f) return;
-        var m = ov.querySelector('#socAvMsg'); avIn.value = '';
-        cropper(f).then(function (url) {
-          fd = fd || {}; fd.avatar = url; saveFd();
-          var pv = ov.querySelector('#socAvPrev'); pv.innerHTML = '<img src="' + esc(url) + '" alt="">'; pv.classList.remove('pop'); void pv.offsetWidth; pv.classList.add('pop');
-          m.textContent = 'Фото готово — жми «Сохранить»'; m.className = 'soc-nick-hint ok'; if (window.kHaptic) window.kHaptic(10);
-        }).catch(function (e) { if (!e) return; m.textContent = 'Не открылось: ' + (e.message || ''); m.className = 'soc-nick-hint bad'; });
-      });
-      ov.querySelectorAll('[data-body]').forEach(function (bb) { bb.addEventListener('click', function () {
-        var b = window.KBody.get(); b[bb.getAttribute('data-body')] = bb.getAttribute('data-v'); window.KBody.set(b);
-        bb.parentNode.querySelectorAll('[data-body]').forEach(function (x) { x.setAttribute('aria-checked', String(x === bb)); });
-        var nm = ov.querySelector('#socNorm'); if (nm) nm.innerHTML = normText(); if (window.kHaptic) window.kHaptic(6); }); });
-      ov.querySelectorAll('[data-bodyn]').forEach(function (inp) { inp.addEventListener('input', function () {
-        var b = window.KBody.get(), v = parseFloat(String(inp.value).replace(',', '.')); b[inp.getAttribute('data-bodyn')] = v > 0 ? v : undefined; window.KBody.set(b);
-        ov.querySelector('#socNorm').innerHTML = normText(); }); });
-      var sk = ov.querySelector('#socSkill'); if (sk) sk.addEventListener('input', function () { ov.querySelector('#socSkillV').textContent = sk.value; ov.querySelector('#socSkillT').textContent = skillText(sk.value); });
-      var map = { socNickIn: 'nick', socName: 'name', socBday: 'bday', socLikes: 'likes', socAvoid: 'avoid', socAllergy: 'allergy', socSkill: 'skill', socAvIn: '' };
-      nf.addEventListener('input', function (e) { var k = map[e.target.id]; if (!k) return; fd = fd || {}; fd[k] = e.target.value; saveFd(); if (k === 'nick') checkNick(e.target.value.trim()); });
-      nf.addEventListener('change', function (e) { var k = map[e.target.id]; if (k) { fd = fd || {}; fd[k] = e.target.value; saveFd(); } });
-      var ni = ov.querySelector('#socNickIn'); if (ni && ni.value && (!me || ni.value !== me.nick)) checkNick(ni.value.trim());
-    }
-    if (nf) nf.addEventListener('submit', function (e) {
-      e.preventDefault(); if (busy) return;
-      if (me && anqSect === 'body' && anketaFrom === 'profile') { anqSnap = null; if (window.kHaptic) window.kHaptic(10); toast('Сохранено'); emit(); close(); return; } // тело хранится в телефоне сразу
-      var v = function (id) { return ov.querySelector(id).value.trim(); };
-      var nick = v('#socNickIn'), first = !me;
-      var bdIso = ruToIso(v('#socBday'));
-      if (bdIso === false) { setNickMsg('День рождения: число.месяц.год, например 05.03.1999', 'bad'); return; }
-      var data = { id: uid(), avatar: fd && fd.avatar != null ? (fd.avatar || null) : (info[uid()] || {}).avatar || null, name: v('#socName') || null, bday: bdIso, likes: v('#socLikes') || null, allergy: v('#socAllergy') || null, avoid: v('#socAvoid') || null, skill: +v('#socSkill') || 5, updated_at: new Date().toISOString() };
-      try { localStorage.setItem('kuking:skill', String(data.skill)); } catch (e) {}
-      if (!/^[A-Za-z0-9_А-Яа-яЁё]{3,20}$/.test(nick)) { setNickMsg('Ник: 3–20 символов, буквы, цифры, _', 'bad'); return; }
-      if (nickState === 'taken') { setNickMsg('Ник занят — придумай другой', 'bad'); return; }
-      busy = true; anqSnap = null; setNickMsg(''); var sv = ov.querySelector('#socSave'); if (sv) { sv.classList.add('busy'); sv.disabled = true; }
-      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-      var step = me ? (me.nick === nick ? Promise.resolve() : S.req('PATCH', 'profiles?id=eq.' + q(uid()), { nick: nick }))
-        : S.req('POST', 'profiles', { id: uid(), nick: nick }).then(function () { return S.rpc('claim_admin'); });
-      function saveInfo(d) {
-        return S.req('POST', 'profile_info?on_conflict=id', [d], 'resolution=merge-duplicates,return=minimal').catch(function (er) {
-          /* база ещё старая (нет колонки skill/avatar) — сохраняем остальное, уровень держим в телефоне */
-          var m = /'(\w+)' column|column "?(\w+)"?/i.exec(String(er && er.message || ''));
-          var col = m && (m[1] || m[2]);
-          if (col && col in d) { var c = {}; for (var k in d) if (k !== col) c[k] = d[k]; needSql = true; return saveInfo(c); }
-          throw er;
-        });
-      }
-      step.then(function () { return saveInfo(data); })
-        .then(function () { fd = null; saveFd(); return refresh(); })
-        .then(function () {
-          busy = false; if (needSql) toast('Сохранил. Аллергии и фото заработают после свежего SQL');
-          var sv2 = ov.querySelector('#socSave'); if (sv2) { sv2.classList.remove('busy'); sv2.classList.add('ok'); sv2.querySelector('span').textContent = 'Сохранено'; }
-          if (window.kHaptic) window.kHaptic(12); emit();
-          setTimeout(function () {
-            if (first) { view = pushState() !== 'nope' ? 'push' : 'list'; render(); acceptPending(); return; }
-            if (anketaFrom === 'profile') close(); else { view = 'list'; render(); }
-          }, 750);
-        })
-        .catch(function (er) { busy = false; var sv3 = ov.querySelector('#socSave'); if (sv3) { sv3.classList.remove('busy'); sv3.disabled = false; }
-          setNickMsg(/duplicate|unique|23505|409/i.test(String(er && (er.message || er.code))) ? 'Ник занят — придумай другой' : 'Не вышло: ' + (er && er.message), 'bad'); });
-    });
-    bindReplies(ov, render);
-  }
-
-  function invite() {
-    var url = location.origin + location.pathname + '?invite=' + uid();
-    var text = 'Присоединяйся к «Жарко» — будем вместе готовить и ставить оценки. Мой ник: ' + me.nick;
-    if (navigator.share) { navigator.share({ title: 'Жарко', text: text, url: url }).catch(function () {}); return; }
-    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast('Ссылка скопирована — кидай в чат'); })
-      .catch(function () { msg = url; render(); });
-  }
-
-  /* приглашение по ссылке: ?invite=<id> */
-  var IKEY = 'kuking:invite';
-  (function () {
-    var m = /[?&]invite=([0-9a-f-]{36})/i.exec(location.search);
-    if (!m) return;
-    try { localStorage.setItem(IKEY, m[1]); } catch (e) {}
-    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
-  })();
-  function acceptPending() {
-    var inv = null; try { inv = localStorage.getItem(IKEY); } catch (e) {}
-    if (!inv || !S.user() || !me || inv === uid()) { try { if (inv === uid()) localStorage.removeItem(IKEY); } catch (e) {} return; }
-    return S.rpc('accept_invite', { inviter: inv }).then(function (ok) {
-      try { localStorage.removeItem(IKEY); } catch (e) {}
-      if (ok) return loadProfiles([inv]).then(refresh).then(function () { toast('Вы с ' + ((people[inv] || {}).nick || 'другом') + ' теперь друзья'); });
-    }).catch(function () {});
-  }
-
-  function toast(t) {
-    var el = document.createElement('div'); el.className = 'send-toast'; el.setAttribute('role', 'status'); el.textContent = t; el.style.zIndex = 80;
-    document.body.appendChild(el); requestAnimationFrame(function () { el.classList.add('on'); });
-    setTimeout(function () { el.classList.remove('on'); setTimeout(function () { el.remove(); }, 400); }, 2400);
-  }
-  function armed(b, label, go) {
-    if (b.getAttribute('data-armed')) { go(); return; }
-    b.setAttribute('data-armed', '1'); b.classList.add('armed'); var t = b.textContent; b.textContent = label;
-    setTimeout(function () { if (b.isConnected) { b.removeAttribute('data-armed'); b.classList.remove('armed'); b.textContent = t; } }, 3000);
-  }
-
-  var last = null;
-  var hideT = null;
-  function open(personId) {
-    clearTimeout(hideT);
-    last = document.activeElement;
-    if (personId === '#anketa') { view = 'nick'; page2 = 'nick'; personId = null; } else { view = personId ? 'profile' : 'list'; viewing = personId || viewing; if (personId) page2 = 'profile'; }
-    found = null; msg = ''; lastHTML = '';
-    render(); ov.hidden = false; requestAnimationFrame(function () { ov.classList.add('on'); (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} }); });
-    refresh(); clearInterval(timer); timer = setInterval(function () { if (!document.hidden) refresh(); }, 20000);
-  }
-  /* несохранённые правки анкеты: снимок полей при открытии, сравнение при выходе */
-  var anqSnap = null, bodySnap = null;
-  function anqState() {
-    var f = ov.querySelector('#socNick'); if (!f) return null;
-    return [].map.call(f.querySelectorAll('input:not([type=file])'), function (i) { return i.value.trim(); }).join('\u0001') + '|' + (fd && fd.avatar != null ? String(fd.avatar).length : '') + '|' + JSON.stringify(window.KBody ? window.KBody.get() : {});
-  }
-  function anqDirty() { return view === 'nick' && anqSnap != null && anqState() !== anqSnap; }
-  function anqDrop() { fd = null; saveFd(); nickMsg = ''; anqSnap = null; try { if (bodySnap && window.KBody) window.KBody.set(JSON.parse(bodySnap)); } catch (e) {} }
-  function anqSubmit() { var f = ov.querySelector('#socNick'); if (f) { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true })); } }
-  function askLeave(go) { window.kAskLeave({ save: anqSubmit, drop: function () { anqDrop(); go(); } }); }
-  function leaveAnketa() {
-    if (anqDirty()) { askLeave(leaveAnketa); return false; }
-    anqDrop(); if (anketaFrom === 'profile') { close(); return true; } view = 'list'; render(); return true;
-  }
-  function close(then) {
-    if (anqDirty()) { askLeave(function () { close(); if (typeof then === 'function') then(); }); return false; }
-    ov.classList.remove('on'); clearInterval(timer);
-    searchQ = ''; found = null; chatQ = '';
-    clearTimeout(hideT); hideT = setTimeout(function () { ov.hidden = true; view = 'list'; anketaFrom = 'friends'; openFrom = 'chats'; ov.style.transform = ''; ov.style.transition = ''; ov.classList.remove('as-tab', 'from-l', 'scrolled'); }, ov.classList.contains('as-tab') ? 220 : 360);
-    if (last && last.focus) last.focus();
-    (typeof closeSubs !== 'undefined' ? closeSubs : []).forEach(function (f) { try { f(); } catch (e) {} });
-  }
-  var closeSubs = [];
-  API.open = open; API.close = close;
-  API.mode = function () { return view === 'nick' && anketaFrom === 'profile' ? 'anketa' : openFrom === 'profile' ? 'profile' : 'friends'; };
-  API.openFriends = function () { openFrom = 'profile'; ov.classList.remove('as-tab', 'from-l'); open(); };
-  /* «Чаты» — обычная вкладка: без шторки справа, въезжает как остальные страницы */
-  API.openTab = function (dir) {
-    openFrom = 'chats'; anketaFrom = 'friends';
-    if (!ov.hidden && ov.classList.contains('on')) { var c = ov.querySelector('.soc-page.cur'); if (c) c.scrollTo({ top: 0, behavior: 'smooth' }); if (view !== 'list') { view = 'list'; render(); } return; }
-    ov.classList.add('as-tab'); ov.classList.toggle('from-l', dir === 'l'); open();
-  };
-  /* смах вправо: со второй страницы — назад, с первой — закрыть; экран идёт за пальцем */
-  (function () {
-    var sx = null, sy = 0, dx = 0, t0 = 0, on = false;
-    ov.addEventListener('touchstart', function (e) { var t = e.touches[0]; on = false; dx = 0; sx = e.target.closest('input, textarea, .crop-ov, .soc-skill, [data-noswipe]') ? null : t.clientX; sy = t.clientY; t0 = Date.now(); }, { passive: true });
-    ov.addEventListener('touchmove', function (e) {
-      if (sx == null) return; var t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy;
-      if (!on) { if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { sx = null; return; } if (mx > 14 && mx > Math.abs(my) * 1.6) on = true; else return; }
-      dx = Math.max(0, mx);
-      var deep = view === 'profile' || view === 'nick';
-      if (deep) { var w = ov.querySelector('.soc-wrap'); if (w) { w.style.transition = 'none'; w.style.transform = 'translateX(calc(-50% + ' + dx + 'px))'; } }
-      else if (!ov.classList.contains('as-tab')) { ov.style.transition = 'none'; ov.style.transform = 'translateX(' + dx + 'px)'; }
-    }, { passive: true });
-    ov.addEventListener('touchend', function () {
-      if (sx == null || !on) { sx = null; return; } sx = null; on = false;
-      var go = dx > ov.clientWidth * 0.3 || (dx > 60 && Date.now() - t0 < 260), deep = view === 'profile' || view === 'nick';
-      var w = ov.querySelector('.soc-wrap');
-      if (deep && view === 'nick' && anketaFrom === 'profile') { if (w) { w.style.transition = ''; w.style.transform = ''; } if (go) { ov.style.transition = 'none'; ov.style.transform = 'translateX(' + dx + 'px)'; void ov.offsetWidth; ov.style.transition = ''; ov.style.transform = ''; if (window.kHaptic) window.kHaptic(6); close(); } }
-      else if (deep) { if (w) { w.style.transition = ''; w.style.transform = go ? 'translateX(0)' : ''; }
-        if (go) { if (window.kHaptic) window.kHaptic(6); setTimeout(function () { if (w) w.style.transform = ''; view = 'list'; render(); }, 340); } }
-      else if (!ov.classList.contains('as-tab')) { ov.style.transition = ''; ov.style.transform = ''; if (go) { if (window.kHaptic) window.kHaptic(6); close(); } }
-    });
-  })();
-  /* потянул вниз — обновить друзей и оценки */
-  setTimeout(function () { if (window.KPull) window.KPull(ov, function (done) { lastHTML = ''; refresh().then(done, done); }, function () { var c = ov.querySelector('.soc-page.cur'); return c ? c.scrollTop : 0; }); }, 0);
-  API.isOpen = function () { return !ov.hidden && ov.classList.contains('on'); };
-  API.onClose = function (f) { closeSubs.push(f); };
-  API.openAnketa = function (sect) { anketaFrom = 'profile'; anqSect = SECT[sect] ? sect : 'me'; nickMsg = ''; fd = null; saveFd(); anqSnap = null; try { bodySnap = JSON.stringify(window.KBody ? window.KBody.get() : {}); } catch (e) { bodySnap = null; } lastHTML = ''; ov.classList.remove('as-tab', 'from-l'); open('#anketa'); };
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) { if (view === 'profile' || (view === 'nick' && anketaFrom === 'friends')) { view = 'list'; render(); } else close(); } });
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
-  API.enabled = true;
-
-  /* старт: подтянуть всё; нет ника — один раз показать экран друзей */
-  if (S.user()) refresh().then(function () {
-    if (!me) open(); else acceptPending();
-  });
-  else { var inv0 = null; try { inv0 = localStorage.getItem(IKEY); } catch (e) {} if (inv0) setTimeout(function () { if (window.KukingSettings) window.KukingSettings.open('account'); }, 700); }
+  Z.social = { load: load, on: on, uid: uid, nick: nick, av: av, color: color, friends: friends, incoming: incoming, outgoing: outgoing, feed: function () { return feed; }, loaded: function () { return loaded; },
+    people: function () { return st.people; }, me: function () { return st.me; }, info: function (id) { return st.info[id || uid()] || null; }, reviewsOf: function (id) { return st.reviews[id] || {}; },
+    myNick: function () { return st.me && st.me.nick; }, recipeHTML: recipeHTML, loadRecipe: loadRecipe, recipeClick: recipeClick,
+    unread: unread, threads: threads, msgs: function () { return msgs; }, send: send, markRead: markRead, openShared: openShared, shareRecipe: shareRecipe,
+    act: act, search: search, setNick: setNick, saveInfo: saveInfo, pushState: pushState, enablePush: enablePush, testPush: function () { return fn('test'); } };
 })();

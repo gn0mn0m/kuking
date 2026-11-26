@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Жарко</title>
+<meta name="description" content="Книга рецептов, план недели, покупки и готовка по шагам.">
+<meta name="theme-color" content="#F2F1EC">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Жарко">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/app.css">
+<script>/* тема до первой отрисовки — без вспышки белого */(function(){try{var t=JSON.parse(localStorage.getItem('kuking:theme')||'"auto"'),a=JSON.parse(localStorage.getItem('kuking:accent')||'"saffron"');}catch(e){t='auto';a='saffron'}var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.setAttribute('data-theme',d?'dark':'light');if(a==='beet'||a==='sorrel')document.documentElement.setAttribute('data-accent',a)})();</script>
+</head>
+<body>
+<div id="boot" aria-hidden="true"><b>Жарко</b></div>
+<div id="app">
+  <main id="view" class="view" tabindex="-1"></main>
+</div>
+<nav class="tabs" id="tabs" aria-label="Разделы">
+  <div class="tabs-in">
+    <button type="button" class="tab" data-tab="today"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-8z"/></svg>Сегодня</button>
+    <button type="button" class="tab" data-tab="book"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></svg>Книга</button>
+    <button type="button" class="tab" data-tab="plan"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>План<span class="badge" id="shopBadge" hidden></span></button>
+    <button type="button" class="tab" data-tab="friends"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5 0 4.5 1.8 4.5 4.5"/></svg>Друзья</button>
+  </div>
+</nav>
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<script src="js/lib/config.js"></script>
+<script src="js/lib/store.js"></script>
+<script src="js/lib/ai.js"></script>
+<script src="js/recipes/stroganoff.js"></script>
+<script src="js/recipes/chashushuli-pasta.js"></script>
+<script src="js/recipes/tikka-masala.js"></script>
+<script src="js/recipes/sichuan-beef.js"></script>
+<script src="js/recipes/shawarma-bowl.js"></script>
+<script src="js/recipes/smash-night.js"></script>
+<script src="js/recipes/taco-night.js"></script>
+<script src="js/recipes/chicken-potato-tray.js"></script>
+<script src="js/recipes/buckwheat-merchant.js"></script>
+<script src="js/recipes/teriyaki-chicken.js"></script>
+<script src="js/core.js"></script>
+<script src="js/data.js"></script>
+<script src="js/img.js"></script>
+<script src="js/social.js"></script>
+<script src="js/gen.js"></script>
+<script src="js/ui/today.js"></script>
+<script src="js/ui/book.js"></script>
+<script src="js/ui/recipe.js"></script>
+<script src="js/ui/cook.js"></script>
+<script src="js/ui/plan.js"></script>
+<script src="js/ui/friends.js"></script>
+<script src="js/ui/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

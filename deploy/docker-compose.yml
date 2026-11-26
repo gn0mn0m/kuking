@@ -1,0 +1,188 @@
+# Жарко — свой сервер вместо облачного Supabase. «Лёгкий Supabase»: только то, чем пользуется приложение.
+#   db        — PostgreSQL (образ supabase/postgres: роли anon/authenticated, схема auth, pg_cron, pg_net)
+#   auth      — вход по почте и паролю (GoTrue, тот же сервер, что в Supabase)      → /auth/v1/*
+#   rest      — REST над таблицами (PostgREST, как в Supabase)                     → /rest/v1/*
+#   functions — функции ai и birthday-push (edge-runtime Supabase, Deno)           → /functions/v1/*
+#   caddy     — HTTPS (Let's Encrypt), раздача фронтенда и раскладка путей вместо Kong/Envoy
+# Без Studio, Realtime, Storage, Analytics, пулера — им нужно 4+ ГБ, а приложению они не нужны.
+# Версии образов взяты из официального supabase/docker/docker-compose.yml (ноябрь 2026).
+name: zharko
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }   # логи не съедят диск
+
+services:
+  db:
+    image: supabase/postgres:17.6.1.136
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      - ./db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+      - ./db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
+      - db-data:/var/lib/postgresql/data
+      - db-config:/etc/postgresql-custom
+      - ./sql:/sql:ro
+      - ./backups:/backups
+      - ./migrate:/migrate
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "log_min_messages=fatal"]
+
+  auth:
+    image: supabase/gotrue:v2.198.0
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 256m
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: https://${DOMAIN}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_ISSUER: https://${DOMAIN}/auth/v1
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      # true — регистрация без письма (почтовый сервер не нужен). Для подтверждения почты см. README, раздел «Почта».
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-true}
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      # --- почта (необязательно): раскомментируй 6 строк и заполни SMTP_* в .env ---
+      # GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
+      # GOTRUE_SMTP_HOST: ${SMTP_HOST}
+      # GOTRUE_SMTP_PORT: ${SMTP_PORT}
+      # GOTRUE_SMTP_USER: ${SMTP_USER}
+      # GOTRUE_SMTP_PASS: ${SMTP_PASS}
+      # GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME}
+
+  rest:
+    image: postgrest/postgrest:v14.18
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 256m
+    depends_on:
+      db: { condition: service_healthy }
+      auth: { condition: service_healthy }   # схема auth должна быть создана до старта
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_MAX_ROWS: 1000
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_ADMIN_SERVER_HOST: localhost
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+    command: ["postgrest"]
+
+  functions:
+    image: supabase/edge-runtime:v1.79.2
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 768m
+    depends_on:
+      db: { condition: service_healthy }
+    volumes:
+      - ./functions:/home/deno/functions:z
+      - deno-cache:/root/.cache/deno
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/9000'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      # внутренний адрес API (Caddy слушает :8000 только внутри docker-сети) — по нему функции проверяют вход
+      SUPABASE_URL: http://caddy:8000
+      SUPABASE_PUBLIC_URL: https://${DOMAIN}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      # service-ключ: только для удаления аккаунта через admin API GoTrue (action delete_me)
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      # вход проверяют сами функции (ai — обязательно, birthday-push init — без входа), как было в облаке
+      VERIFY_JWT: "false"
+      # нейросеть — Yandex AI Studio (ключ сервисного аккаунта и ID каталога)
+      # CORS ответов функций — тот же адрес, что у Caddy (по умолчанию https://DOMAIN)
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://${DOMAIN}}
+      YANDEX_API_KEY: ${YANDEX_API_KEY}
+      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID}
+      AI_MODELS: ${AI_MODELS:-deepseek-v4.1-flash}
+      AI_IMAGE_MODEL: ${AI_IMAGE_MODEL:-aliceai-image-art-3.0}
+      AI_IMAGE_SIZE: ${AI_IMAGE_SIZE:-1024x1024}
+      AI_MAX_TOKENS: ${AI_MAX_TOKENS:-16000}
+      AI_DAILY_TEXT_LIMIT: ${AI_DAILY_TEXT_LIMIT:-60}
+      AI_DAILY_IMAGE_LIMIT: ${AI_DAILY_IMAGE_LIMIT:-20}
+      AI_FN_MAX_ATTEMPTS: ${AI_FN_MAX_ATTEMPTS:-3}
+    command:
+      - start
+      - --user-worker-request-idle-timeout
+      - "300000"           # 5 минут: строгий рецепт DeepSeek может думать долго
+      - --event-worker
+      - /home/deno/functions/main/events
+      - --main-service
+      - /home/deno/functions/main
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    depends_on:
+      auth: { condition: service_healthy }
+      rest: { condition: service_healthy }
+      functions: { condition: service_started }
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      # CORS: по умолчанию разрешён только адрес самого приложения (тот же сервер)
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://${DOMAIN}}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${WEB_ROOT:-/srv/zharko-web}:/srv/www:ro   # фронтенд; кладёт scripts/deploy-web.sh
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  db-config:
+  deno-cache:
+  caddy-data:
+  caddy-config:
